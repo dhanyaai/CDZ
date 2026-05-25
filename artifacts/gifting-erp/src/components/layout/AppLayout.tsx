@@ -89,10 +89,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       )}>
         <div className="flex items-center justify-between h-16 px-5 border-b border-sidebar-border/60">
           <span className="text-xl font-bold text-white flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-teal-500/30">
+            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
               <Gift className="w-5 h-5 text-white" />
             </span>
-            <span className="bg-gradient-to-r from-white to-teal-200 bg-clip-text text-transparent">GiftERP</span>
+            <span className="bg-gradient-to-r from-white to-amber-200 bg-clip-text text-transparent">GiftERP</span>
           </span>
           <Button variant="ghost" size="icon" className="lg:hidden text-white" onClick={() => setSidebarOpen(false)}>
             <X className="w-5 h-5" />

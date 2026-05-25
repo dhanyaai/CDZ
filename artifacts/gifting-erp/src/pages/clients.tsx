@@ -163,7 +163,7 @@ export function Clients() {
                   <TableRow key={client.id} className="cursor-pointer transition-colors hover:bg-primary/5 border-b border-border/40 last:border-0" onClick={() => setLocation(`/clients/${client.id}`)}>
                     <TableCell className="font-medium py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-100 to-emerald-100 text-teal-700 flex items-center justify-center text-xs font-bold ring-1 ring-teal-200">{initials}</div>
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-100 to-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold ring-1 ring-amber-300">{initials}</div>
                         <span>{client.companyName}</span>
                       </div>
                     </TableCell>

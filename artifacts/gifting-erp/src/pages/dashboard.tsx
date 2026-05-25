@@ -19,7 +19,7 @@ export function Dashboard() {
 
   const statCards = [
     { title: "Total Clients", value: stats?.totalClients || 0, icon: Users, tile: "stat-card-blue", iconBg: "bg-blue-500/10 text-blue-600", hint: "Active accounts" },
-    { title: "Active Orders", value: stats?.activeOrders || 0, icon: ShoppingCart, tile: "stat-card-green", iconBg: "bg-emerald-500/10 text-emerald-600", hint: "In progress" },
+    { title: "Active Orders", value: stats?.activeOrders || 0, icon: ShoppingCart, tile: "stat-card-green", iconBg: "bg-amber-500/10 text-amber-600", hint: "In progress" },
     { title: "Pending Assembly", value: stats?.pendingAssembly || 0, icon: Settings, tile: "stat-card-amber", iconBg: "bg-amber-500/10 text-amber-600", hint: "Awaiting build" },
     { title: "Overdue Invoices", value: stats?.overdueInvoices || 0, icon: FileText, tile: "stat-card-red", iconBg: "bg-red-500/10 text-red-600", hint: "Need follow-up" },
     { title: "Low Stock Items", value: stats?.lowStockItems || 0, icon: Package, tile: "stat-card-orange", iconBg: "bg-orange-500/10 text-orange-600", hint: "Reorder soon" },
@@ -82,7 +82,7 @@ export function Dashboard() {
                   contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
                   itemStyle={{ color: 'hsl(var(--foreground))' }}
                 />
-                <Area type="monotone" dataKey="revenue" stroke="#059669" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
+                <Area type="monotone" dataKey="revenue" stroke="#d97706" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
@@ -101,7 +101,7 @@ export function Dashboard() {
                 <Tooltip 
                   contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
                 />
-                <Bar dataKey="value" fill="#059669" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="value" fill="#d97706" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

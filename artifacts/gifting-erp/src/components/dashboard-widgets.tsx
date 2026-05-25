@@ -25,7 +25,7 @@ export function TopProductsCard() {
     <Card className="elev-1 hover:elev-2 transition-shadow">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <span className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center"><Package className="w-4 h-4 text-emerald-600" /></span>
+          <span className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center"><Package className="w-4 h-4 text-amber-600" /></span>
           Top products
         </CardTitle>
         <CardDescription>By revenue, all confirmed sales orders</CardDescription>
@@ -44,10 +44,10 @@ export function TopProductsCard() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{p.productName}</p>
                   </div>
-                  <div className="text-sm font-semibold text-emerald-600 whitespace-nowrap">₹{p.revenue.toLocaleString()}</div>
+                  <div className="text-sm font-semibold text-amber-600 whitespace-nowrap">₹{p.revenue.toLocaleString()}</div>
                 </div>
                 <div className="h-1 ml-7 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full" style={{ width: `${(p.revenue / max) * 100}%` }} />
+                  <div className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full" style={{ width: `${(p.revenue / max) * 100}%` }} />
                 </div>
                 <p className="text-[11px] text-muted-foreground ml-7">{p.qty.toLocaleString()} units sold</p>
               </div>
@@ -125,13 +125,13 @@ export function SalesLeaderboardCard() {
               return (
                 <div key={u.ownerId} className="flex items-center gap-3 group">
                   <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${medal} text-white flex items-center justify-center text-xs font-bold shadow-sm`}>{i + 1}</div>
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-100 to-emerald-100 text-teal-700 flex items-center justify-center text-xs font-bold ring-2 ring-white shadow-sm">{initials}</div>
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 text-amber-800 flex items-center justify-center text-xs font-bold ring-2 ring-white shadow-sm">{initials}</div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{u.name}</p>
                     <p className="text-[11px] text-muted-foreground">{u.role} · {u.openCount} open · {u.wonCount} won</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-bold text-emerald-600">₹{u.won.toLocaleString()}</div>
+                    <div className="text-sm font-bold text-amber-600">₹{u.won.toLocaleString()}</div>
                     {u.pipeline > 0 && <div className="text-[11px] text-muted-foreground">+₹{u.pipeline.toLocaleString()} pipe</div>}
                   </div>
                 </div>
