@@ -182,8 +182,8 @@ export function Products() {
                     </div>
                   </TableCell>
                   <TableCell>{product.category}</TableCell>
-                  <TableCell className="text-right">₹{product.costPrice.toFixed(2)}</TableCell>
-                  <TableCell className="text-right">₹{product.sellingPrice.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">₹{Number(product.costPrice ?? 0).toFixed(2)}</TableCell>
+                  <TableCell className="text-right">₹{Number(product.sellingPrice ?? 0).toFixed(2)}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant={product.stockLevel <= (product.lowStockThreshold ?? 10) ? "destructive" : "secondary"}>
                       {product.stockLevel}
