@@ -1,0 +1,297 @@
+Build a full-stack **Corporate Gifting ERP** web application with enterprise-grade architecture.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React + Tailwind CSS + shadcn/ui |
+| Backend | Node.js (Express.js) |
+| Database | PostgreSQL via Prisma ORM |
+| Authentication | JWT + Role-Based Access Control (RBAC) |
+| File Storage | Local filesystem (S3-compatible, cloud-ready) |
+| State Management | Zustand or Redux Toolkit |
+| API Style | RESTful (structured, versioned, scalable) |
+
+---
+
+## Core Requirement
+
+This ERP must manage **end-to-end corporate gifting operations**, covering CRM, product bundling, procurement, kitting (assembly), customization, logistics, and billing workflows.
+
+---
+
+## Modules
+
+---
+
+### 1. Auth & User Management
+
+- Roles: Admin, Sales, Purchase Manager, Warehouse, Production, Finance
+- Granular permissions per module
+- Features: login, logout, password reset, session management
+
+---
+
+### 2. CRM (Client Management)
+
+- Create and edit client profiles:
+  - Company name, contact person, GST number, billing and shipping addresses
+- Log and track client interactions (calls, emails, meetings)
+- Upload client requirement documents
+- Tag clients by industry and gifting occasion
+
+---
+
+### 3. Product Catalog
+
+**Individual Items (SKU-based)**
+- Fields: name, category, cost price, selling price, vendor, current stock level
+- Upload product images
+
+**Gift Bundles (Kits)**
+- A bundle consists of multiple individual items
+- Define item quantities within each bundle
+- Upload bundle images
+
+---
+
+### 4. Smart Gift Bundle Builder *(Important)*
+
+**Input Parameters:**
+- Budget per gift
+- Occasion (e.g., Diwali, New Year, Employee Anniversary)
+
+**Output:**
+- Best possible product combination within the defined budget
+
+**Logic:**
+- Optimise for margin while staying within budget
+- Allow manual override of AI-suggested combinations
+
+---
+
+### 5. Sales Order Management
+
+- Create and send quotations
+- Convert approved quotations to confirmed sales orders
+- Support multi-address delivery (bulk employee gifting)
+- Upload Excel file to parse and import multiple delivery addresses
+- Track order status through the full lifecycle:
+
+  `Draft → Confirmed → In Production → Ready → Dispatched → Delivered`
+
+---
+
+### 6. Procurement Module
+
+- Auto-generate purchase orders (POs) based on confirmed sales order demand
+- Vendor management:
+  - Vendor pricing tiers and lead times
+- Track PO status:
+
+  `Ordered → Partially Received → Fully Received → Pending`
+
+---
+
+### 7. Inventory Management
+
+- Real-time stock tracking (inward and outward movements)
+- Batch-level tracking
+- Low stock alerts with configurable thresholds
+
+---
+
+### 8. Kitting / Assembly Module *(Critical)*
+
+- Create assembly jobs linked to sales orders:
+  - Input: confirmed sales order line items
+  - Output: completed gift kits
+- Track kit status:
+  - Pending, In Progress, Completed, Rejected
+- QC workflow:
+  - If any item fails QC, the kit is flagged and the assembly process restarts for that unit
+
+---
+
+### 9. Customisation & Branding Workflow
+
+- Upload and manage client logos and brand assets
+- Manage artwork approval lifecycle:
+
+  `Pending → Client Approved → Sent to Vendor → Completed`
+
+---
+
+### 10. Logistics & Delivery
+
+- Create shipments linked to sales orders
+- Assign courier partners
+- Track shipment status per delivery address
+- Multi-location delivery support
+- Generate and download shipping labels
+
+---
+
+### 11. Finance Module
+
+- Generate GST-compliant invoices
+- Track payments:
+  - Advance received, balance due, payment date
+- Calculate profit margin per order
+- Payment status dashboard
+
+---
+
+### 12. Dashboard & Analytics
+
+- Sales performance dashboard
+- Inventory status dashboard
+- Order pipeline view (by status and date)
+- Vendor performance metrics
+- Seasonal demand trends and forecasting charts
+
+---
+
+## Database Schema (Key Tables)
+
+```
+Users
+Roles
+Clients
+ClientInteractions
+Products
+ProductBundles
+BundleItems
+Vendors
+PurchaseOrders
+PurchaseOrderItems
+Inventory
+InventoryMovements
+SalesOrders
+SalesOrderItems
+DeliveryAddresses
+AssemblyJobs
+AssemblyItems
+Shipments
+ShipmentItems
+Invoices
+Payments
+ArtworkApprovals
+```
+
+---
+
+## Advanced Features
+
+### 1. AI Recommendation Engine
+- Suggest gift bundles based on:
+  - Budget range
+  - Occasion type
+  - Client industry / profile
+
+### 2. Bulk Address Parser
+- Upload Excel → parse → validate → save delivery addresses to the sales order
+
+### 3. Workflow Automation Engine
+- Status-based triggers:
+  - Sales Order confirmed → auto-trigger procurement PO generation
+  - All PO items received → auto-trigger assembly job creation
+  - Assembly completed → notify logistics team
+
+### 4. Notifications System
+- Email notifications for:
+  - Order status changes
+  - Low stock alerts
+  - Pending artwork approvals
+  - Upcoming delivery deadlines
+
+---
+
+## UI / UX Requirements
+
+- Clean ERP dashboard layout
+- Collapsible sidebar navigation with module groupings
+- Module-specific pages with consistent layout
+- Data tables with column-level filters, keyword search, and pagination
+- Forms with client-side and server-side validation
+- Colour-coded status badges for order, assembly, and shipment statuses
+- Fully mobile-responsive layout
+
+---
+
+## API Structure
+
+```
+/api/v1/auth
+/api/v1/clients
+/api/v1/products
+/api/v1/bundles
+/api/v1/sales-orders
+/api/v1/purchase-orders
+/api/v1/inventory
+/api/v1/assembly
+/api/v1/shipments
+/api/v1/invoices
+/api/v1/payments
+/api/v1/analytics
+```
+
+All endpoints must be versioned (`/v1/`), return consistent JSON response envelopes, and include proper HTTP status codes.
+
+---
+
+## Code Quality Requirements
+
+- Reusable, composable React components
+- Clean, feature-based folder structure (not file-type-based)
+- Seed data to test the full order flow
+- Environment-based configuration (`.env`)
+- Global error handling middleware (backend)
+- Loading states and skeleton screens (frontend)
+- API response envelope:
+  ```json
+  { "success": true, "data": {}, "error": null, "meta": {} }
+  ```
+
+---
+
+## Deliverable
+
+A fully working ERP application that supports the following end-to-end test flow:
+
+```
+Create Client
+  → Build Gift Bundle
+    → Create Quotation
+      → Confirm Sales Order
+        → Auto-generate Purchase Order
+          → Receive Inventory
+            → Create Assembly Job
+              → Complete Kitting
+                → Create Shipment
+                  → Generate Invoice
+```
+
+---
+
+## Bonus: Simulation Mode
+
+Add a **"Simulation Mode"** feature:
+- Simulate a Diwali bulk order for 1,000 gift kits
+- Show live progress tracking across modules:
+  - Procurement status
+  - Assembly completion percentage
+  - Shipment dispatch count
+  - Invoice generation status
+
+---
+
+## Important Notes for the Developer
+
+- Code must be **modular, scalable, and production-ready**
+- Do not implement basic CRUD-only patterns — focus on **real ERP workflows, state machines, and business logic**
+- Use Prisma migrations for all schema changes
+- Separate business logic from route handlers (use a service layer)
+- All sensitive data must be environment-variable-driven — no hardcoded credentials
