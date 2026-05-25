@@ -145,7 +145,7 @@ export function Payments() {
                     <FormControl><SelectTrigger><SelectValue placeholder="Select invoice" /></SelectTrigger></FormControl>
                     <SelectContent>
                       {invoices?.map(inv => (
-                        <SelectItem key={inv.id} value={inv.id.toString()}>{inv.invoiceNumber} - Total: ${inv.totalAmount}</SelectItem>
+                        <SelectItem key={inv.id} value={inv.id.toString()}>{inv.invoiceNumber} - Total: ₹{Number(inv.totalAmount).toLocaleString("en-IN")}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

@@ -119,7 +119,7 @@ export function Invoices() {
                       </Link>
                     ) : "-"}
                   </TableCell>
-                  <TableCell className="text-right">${(invoice.totalAmount - invoice.gstAmount).toFixed(2)}</TableCell>
+                  <TableCell className="text-right">₹{(invoice.totalAmount - invoice.gstAmount).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   <TableCell className="text-right">₹{invoice.gstAmount.toFixed(2)}</TableCell>
                   <TableCell className="text-right font-bold">₹{invoice.totalAmount.toFixed(2)}</TableCell>
                   <TableCell><span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>{invoice.status}</span></TableCell>

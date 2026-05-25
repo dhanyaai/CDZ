@@ -164,7 +164,7 @@ export function Bundles() {
                       <TableCell className="font-medium">{bundle.name}</TableCell>
                       <TableCell>{bundle.occasion || "-"}</TableCell>
                       <TableCell>{bundle.items?.length || 0} items</TableCell>
-                      <TableCell className="text-right">${bundle.totalPrice?.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">₹{Number(bundle.totalPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(bundle)}><Edit className="w-4 h-4" /></Button>
                         <Button variant="ghost" size="icon" className="text-destructive" onClick={() => { if(confirm("Are you sure?")) deleteBundle.mutate({ id: bundle.id }) }}><Trash2 className="w-4 h-4" /></Button>
@@ -233,7 +233,7 @@ export function Bundles() {
                           <FormControl><SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger></FormControl>
                           <SelectContent>
                             {products?.map(p => (
-                              <SelectItem key={p.id} value={p.id.toString()}>{p.name} (${p.sellingPrice})</SelectItem>
+                              <SelectItem key={p.id} value={p.id.toString()}>{p.name} (₹{Number(p.sellingPrice).toLocaleString("en-IN")})</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
