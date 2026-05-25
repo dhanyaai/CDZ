@@ -118,7 +118,7 @@ export function PurchaseOrders() {
                   <TableCell>{order.salesOrderId ? `SO-${order.salesOrderId}` : "-"}</TableCell>
                   <TableCell><span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>{order.status}</span></TableCell>
                   <TableCell>{order.expectedDelivery ? format(new Date(order.expectedDelivery), "MMM d, yyyy") : "-"}</TableCell>
-                  <TableCell className="text-right">${order.totalAmount.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">₹{order.totalAmount.toFixed(2)}</TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" onClick={() => setLocation(`/purchase-orders/${order.id}`)}>
                       <Eye className="w-4 h-4" />

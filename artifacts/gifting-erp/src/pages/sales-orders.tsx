@@ -126,7 +126,7 @@ export function SalesOrders() {
                   <TableCell><span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>{order.status}</span></TableCell>
                   <TableCell>{order.occasion || "-"}</TableCell>
                   <TableCell>{format(new Date(order.createdAt), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="text-right">${order.totalAmount.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">₹{order.totalAmount.toFixed(2)}</TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" onClick={() => setLocation(`/sales-orders/${order.id}`)}>
                       <Eye className="w-4 h-4" />

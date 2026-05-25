@@ -59,7 +59,7 @@ function VariantsTab({ productId }: { productId: number }) {
               <TableCell>{v.variantName}</TableCell>
               <TableCell>{v.size ?? "—"}</TableCell>
               <TableCell>{v.color ?? "—"}</TableCell>
-              <TableCell className="text-right">${v.priceAdjustment.toFixed(2)}</TableCell>
+              <TableCell className="text-right">₹{v.priceAdjustment.toFixed(2)}</TableCell>
               <TableCell className="text-right">{v.stockLevel}</TableCell>
               <TableCell><Button size="icon" variant="ghost" onClick={() => del.mutate(v.id)}><Trash2 className="w-4 h-4" /></Button></TableCell>
             </TableRow>
@@ -103,7 +103,7 @@ function TiersTab({ productId }: { productId: number }) {
             <TableRow key={t.id}>
               <TableCell>{t.tierName}</TableCell>
               <TableCell className="text-right">{t.minQuantity}</TableCell>
-              <TableCell className="text-right">${t.unitPrice.toFixed(2)}</TableCell>
+              <TableCell className="text-right">₹{t.unitPrice.toFixed(2)}</TableCell>
               <TableCell><Button size="icon" variant="ghost" onClick={() => del.mutate(t.id)}><Trash2 className="w-4 h-4" /></Button></TableCell>
             </TableRow>
           ))}
@@ -143,7 +143,7 @@ function CustomTab({ productId }: { productId: number }) {
             <TableRow key={c.id}>
               <TableCell>{c.optionType}</TableCell>
               <TableCell>{c.optionName}</TableCell>
-              <TableCell className="text-right">${c.priceUplift.toFixed(2)}</TableCell>
+              <TableCell className="text-right">₹{c.priceUplift.toFixed(2)}</TableCell>
               <TableCell className="text-right">{c.leadTimeDays}</TableCell>
               <TableCell><Button size="icon" variant="ghost" onClick={() => del.mutate(c.id)}><Trash2 className="w-4 h-4" /></Button></TableCell>
             </TableRow>

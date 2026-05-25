@@ -120,8 +120,8 @@ export function Invoices() {
                     ) : "-"}
                   </TableCell>
                   <TableCell className="text-right">${(invoice.totalAmount - invoice.gstAmount).toFixed(2)}</TableCell>
-                  <TableCell className="text-right">${invoice.gstAmount.toFixed(2)}</TableCell>
-                  <TableCell className="text-right font-bold">${invoice.totalAmount.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">₹{invoice.gstAmount.toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-bold">₹{invoice.totalAmount.toFixed(2)}</TableCell>
                   <TableCell><span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>{invoice.status}</span></TableCell>
                   <TableCell>{invoice.dueDate ? format(new Date(invoice.dueDate), "MMM d, yyyy") : "-"}</TableCell>
                   <TableCell className="text-right">
@@ -149,7 +149,7 @@ export function Invoices() {
                     <FormControl><SelectTrigger><SelectValue placeholder="Select confirmed order" /></SelectTrigger></FormControl>
                     <SelectContent>
                       {eligibleOrders.map(so => (
-                        <SelectItem key={so.id} value={so.id.toString()}>{so.orderNumber} ({so.clientName}) - ${so.totalAmount}</SelectItem>
+                        <SelectItem key={so.id} value={so.id.toString()}>{so.orderNumber} ({so.clientName}) - ₹{so.totalAmount}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

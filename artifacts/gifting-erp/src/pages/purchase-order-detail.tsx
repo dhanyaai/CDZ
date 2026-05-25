@@ -91,7 +91,7 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
               <span className="text-muted-foreground">Total Amount</span>
-              <span className="font-bold text-lg">${order.totalAmount.toFixed(2)}</span>
+              <span className="font-bold text-lg">₹{order.totalAmount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center border-b pb-2">
               <span className="text-muted-foreground flex items-center gap-2"><Calendar className="w-4 h-4"/> Created</span>
@@ -132,7 +132,7 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.product?.name || item.productName}</TableCell>
-                      <TableCell className="text-right">${item.unitPrice.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">₹{item.unitPrice.toFixed(2)}</TableCell>
                       <TableCell className="w-[200px]">
                         <div className="space-y-2">
                           <div className="flex justify-between text-xs">
@@ -142,7 +142,7 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
                           <Progress value={progress} className="h-2" />
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">${item.totalPrice.toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-medium">₹{item.totalPrice.toFixed(2)}</TableCell>
                     </TableRow>
                   );
                 })}

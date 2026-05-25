@@ -120,7 +120,7 @@ export function Payments() {
                     </TableCell>
                     <TableCell>{invoice?.invoiceNumber || `INV-${payment.invoiceId}`}</TableCell>
                     <TableCell>{invoice?.clientName || "-"}</TableCell>
-                    <TableCell className="text-right font-bold text-green-700 dark:text-green-400">+${payment.amount.toFixed(2)}</TableCell>
+                    <TableCell className="text-right font-bold text-green-700 dark:text-green-400">+₹{payment.amount.toFixed(2)}</TableCell>
                     <TableCell>{getTypeBadge(payment.type)}</TableCell>
                     <TableCell>{format(new Date(payment.paymentDate), "MMM d, yyyy")}</TableCell>
                     <TableCell className="text-muted-foreground max-w-[200px] truncate" title={payment.notes ?? ""}>{payment.notes || "-"}</TableCell>
