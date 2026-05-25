@@ -83,37 +83,40 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 overflow-y-auto border-r border-sidebar-border",
+        "fixed inset-y-0 left-0 z-50 w-64 text-sidebar-foreground transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 overflow-y-auto border-r border-sidebar-border",
+        "bg-gradient-to-b from-[hsl(220_25%_13%)] via-[hsl(220_24%_15%)] to-[hsl(200_30%_12%)]",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
-          <span className="text-xl font-bold text-white flex items-center gap-2">
-            <Gift className="w-6 h-6 text-sidebar-primary" />
-            GiftERP
+        <div className="flex items-center justify-between h-16 px-5 border-b border-sidebar-border/60">
+          <span className="text-xl font-bold text-white flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-teal-500/30">
+              <Gift className="w-5 h-5 text-white" />
+            </span>
+            <span className="bg-gradient-to-r from-white to-teal-200 bg-clip-text text-transparent">GiftERP</span>
           </span>
           <Button variant="ghost" size="icon" className="lg:hidden text-white" onClick={() => setSidebarOpen(false)}>
             <X className="w-5 h-5" />
           </Button>
         </div>
 
-        <nav className="p-4 space-y-6">
+        <nav className="p-3 space-y-5">
           {navItems.map((group) => (
             <div key={group.group}>
-              <h3 className="mb-2 px-2 text-xs font-semibold text-sidebar-foreground/60 uppercase tracking-wider">
+              <h3 className="mb-1.5 px-3 text-[10px] font-bold text-sidebar-foreground/50 uppercase tracking-[0.12em]">
                 {group.group}
               </h3>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {group.items.map((item) => {
                   const isActive = location === item.href || location.startsWith(`${item.href}/`);
                   return (
                     <Link key={item.href} href={item.href}>
                       <span className={cn(
-                        "flex items-center gap-3 px-3 py-2 rounded-md transition-colors cursor-pointer text-sm font-medium",
-                        isActive 
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground" 
-                          : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-white"
+                        "group relative flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer text-sm font-medium",
+                        isActive
+                          ? "bg-gradient-to-r from-teal-500/20 to-transparent text-white shadow-[inset_2px_0_0_hsl(170_80%_50%)]"
+                          : "text-sidebar-foreground/80 hover:bg-white/[0.04] hover:text-white"
                       )}>
-                        <item.icon className={cn("w-4 h-4", isActive ? "text-sidebar-primary" : "text-sidebar-foreground/70")} />
+                        <item.icon className={cn("w-4 h-4 transition-colors", isActive ? "text-teal-300" : "text-sidebar-foreground/60 group-hover:text-teal-300")} />
                         {item.label}
                       </span>
                     </Link>
@@ -127,7 +130,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 flex items-center justify-between px-4 border-b bg-card">
+        <header className="h-16 flex items-center justify-between px-4 border-b border-border/60 glass-card sticky top-0 z-30">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </Button>

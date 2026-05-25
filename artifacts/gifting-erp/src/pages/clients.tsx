@@ -109,23 +109,26 @@ export function Clients() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Clients</h1>
-        <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" /> New Client</Button>
+      <div className="flex justify-between items-end flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight gradient-text">Clients</h1>
+          <p className="text-sm text-muted-foreground mt-1">{filteredClients.length} {filteredClients.length === 1 ? "company" : "companies"} in your CRM</p>
+        </div>
+        <Button onClick={openNew} className="shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 transition-shadow"><Plus className="w-4 h-4 mr-2" /> New Client</Button>
       </div>
 
-      <div className="flex gap-4">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex gap-3 flex-wrap">
+        <div className="relative flex-1 max-w-sm min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search clients..." 
-            value={search} 
-            onChange={(e) => setSearch(e.target.value)} 
-            className="pl-9"
+          <Input
+            placeholder="Search clients..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 bg-card elev-1 border-border/60"
           />
         </div>
         <Select value={industry} onValueChange={(v) => setIndustry(v === "all" ? undefined : v)}>
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-[200px] bg-card elev-1 border-border/60">
             <SelectValue placeholder="All Industries" />
           </SelectTrigger>
           <SelectContent>
@@ -137,35 +140,43 @@ export function Clients() {
         </Select>
       </div>
 
-      <div className="border rounded-md">
+      <div className="rounded-xl border border-border/60 bg-card elev-1 overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Company</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead>Industry</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+            <TableRow className="bg-muted/40 hover:bg-muted/40 border-b border-border/60">
+              <TableHead className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Company</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Contact</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Industry</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Email</TableHead>
+              <TableHead className="text-right font-semibold text-xs uppercase tracking-wider text-muted-foreground">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow><TableCell colSpan={5}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
             ) : filteredClients.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center">No clients found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center py-10 text-muted-foreground">No clients found · try adjusting your filters</TableCell></TableRow>
             ) : (
-              filteredClients.map(client => (
-                <TableRow key={client.id} className="cursor-pointer" onClick={() => setLocation(`/clients/${client.id}`)}>
-                  <TableCell className="font-medium">{client.companyName}</TableCell>
-                  <TableCell>{client.contactPerson}</TableCell>
-                  <TableCell><Badge variant="outline">{client.industry}</Badge></TableCell>
-                  <TableCell>{client.email}</TableCell>
-                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(client)}><Edit className="w-4 h-4" /></Button>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => { if(confirm("Are you sure?")) deleteClient.mutate({ id: client.id }) }}><Trash2 className="w-4 h-4" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))
+              filteredClients.map(client => {
+                const initials = client.companyName.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
+                return (
+                  <TableRow key={client.id} className="cursor-pointer transition-colors hover:bg-primary/5 border-b border-border/40 last:border-0" onClick={() => setLocation(`/clients/${client.id}`)}>
+                    <TableCell className="font-medium py-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-100 to-emerald-100 text-teal-700 flex items-center justify-center text-xs font-bold ring-1 ring-teal-200">{initials}</div>
+                        <span>{client.companyName}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">{client.contactPerson}</TableCell>
+                    <TableCell>{client.industry ? <Badge variant="outline" className="capitalize bg-secondary/50">{client.industry}</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{client.email}</TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="hover:bg-primary/10" onClick={() => openEdit(client)}><Edit className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => { if(confirm("Are you sure?")) deleteClient.mutate({ id: client.id }) }}><Trash2 className="w-4 h-4" /></Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

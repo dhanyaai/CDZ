@@ -127,5 +127,63 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(ellipse 800px 600px at 10% -10%, hsl(180 60% 92% / 0.55), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 110% 110%, hsl(160 60% 92% / 0.45), transparent 60%);
+    background-attachment: fixed;
+  }
+  .dark body {
+    background-image:
+      radial-gradient(ellipse 800px 600px at 10% -10%, hsl(180 50% 18% / 0.45), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 110% 110%, hsl(160 50% 18% / 0.35), transparent 60%);
   }
 }
+
+@layer utilities {
+  .glass-card {
+    background: hsl(var(--card) / 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .elev-1 { box-shadow: 0 1px 2px hsl(220 20% 15% / 0.04), 0 1px 3px hsl(220 20% 15% / 0.06); }
+  .elev-2 { box-shadow: 0 4px 12px hsl(220 20% 15% / 0.06), 0 2px 4px hsl(220 20% 15% / 0.04); }
+  .elev-3 { box-shadow: 0 10px 30px hsl(220 20% 15% / 0.08), 0 4px 8px hsl(220 20% 15% / 0.04); }
+  .glow-primary {
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.2), 0 8px 24px hsl(var(--primary) / 0.18);
+  }
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(180 80% 28%), hsl(160 70% 38%));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .bg-mesh {
+    background-image:
+      radial-gradient(circle at 20% 20%, hsl(180 80% 95%) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, hsl(160 70% 95%) 0%, transparent 50%);
+  }
+  .stat-card-blue   { background: linear-gradient(135deg, hsl(210 90% 97%), hsl(210 90% 99%)); border-color: hsl(210 80% 88%); }
+  .stat-card-green  { background: linear-gradient(135deg, hsl(150 60% 96%), hsl(150 60% 99%)); border-color: hsl(150 50% 84%); }
+  .stat-card-amber  { background: linear-gradient(135deg, hsl(40 90% 95%), hsl(40 90% 99%));   border-color: hsl(40 85% 82%); }
+  .stat-card-red    { background: linear-gradient(135deg, hsl(0 80% 97%), hsl(0 80% 99%));      border-color: hsl(0 75% 88%); }
+  .stat-card-orange { background: linear-gradient(135deg, hsl(20 90% 96%), hsl(20 90% 99%));   border-color: hsl(20 85% 84%); }
+  .stat-card-purple { background: linear-gradient(135deg, hsl(265 70% 97%), hsl(265 70% 99%)); border-color: hsl(265 65% 88%); }
+  .dark .stat-card-blue,
+  .dark .stat-card-green,
+  .dark .stat-card-amber,
+  .dark .stat-card-red,
+  .dark .stat-card-orange,
+  .dark .stat-card-purple { background: hsl(var(--card)); border-color: hsl(var(--border)); }
+  .dark .text-blue-600    { color: hsl(210 90% 70%); }
+  .dark .text-emerald-600 { color: hsl(150 70% 65%); }
+  .dark .text-amber-600   { color: hsl(40 90% 65%); }
+  .dark .text-red-600     { color: hsl(0 80% 70%); }
+  .dark .text-orange-600  { color: hsl(20 90% 65%); }
+  .dark .text-violet-600  { color: hsl(265 80% 75%); }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(220 15% 80%); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: hsl(220 15% 65%); background-clip: padding-box; border: 2px solid transparent; }
+.dark ::-webkit-scrollbar-thumb { background: hsl(220 15% 30%); background-clip: padding-box; border: 2px solid transparent; }

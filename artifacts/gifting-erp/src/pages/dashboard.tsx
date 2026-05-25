@@ -18,18 +18,21 @@ export function Dashboard() {
   }
 
   const statCards = [
-    { title: "Total Clients", value: stats?.totalClients || 0, icon: Users, color: "text-blue-600" },
-    { title: "Active Orders", value: stats?.activeOrders || 0, icon: ShoppingCart, color: "text-green-600" },
-    { title: "Pending Assembly", value: stats?.pendingAssembly || 0, icon: Settings, color: "text-amber-600" },
-    { title: "Overdue Invoices", value: stats?.overdueInvoices || 0, icon: FileText, color: "text-red-600" },
-    { title: "Low Stock Items", value: stats?.lowStockItems || 0, icon: Package, color: "text-orange-600" },
-    { title: "Pending POs", value: stats?.pendingPOs || 0, icon: Briefcase, color: "text-purple-600" },
+    { title: "Total Clients", value: stats?.totalClients || 0, icon: Users, tile: "stat-card-blue", iconBg: "bg-blue-500/10 text-blue-600", hint: "Active accounts" },
+    { title: "Active Orders", value: stats?.activeOrders || 0, icon: ShoppingCart, tile: "stat-card-green", iconBg: "bg-emerald-500/10 text-emerald-600", hint: "In progress" },
+    { title: "Pending Assembly", value: stats?.pendingAssembly || 0, icon: Settings, tile: "stat-card-amber", iconBg: "bg-amber-500/10 text-amber-600", hint: "Awaiting build" },
+    { title: "Overdue Invoices", value: stats?.overdueInvoices || 0, icon: FileText, tile: "stat-card-red", iconBg: "bg-red-500/10 text-red-600", hint: "Need follow-up" },
+    { title: "Low Stock Items", value: stats?.lowStockItems || 0, icon: Package, tile: "stat-card-orange", iconBg: "bg-orange-500/10 text-orange-600", hint: "Reorder soon" },
+    { title: "Pending POs", value: stats?.pendingPOs || 0, icon: Briefcase, tile: "stat-card-purple", iconBg: "bg-violet-500/10 text-violet-600", hint: "Open with vendors" },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
+      <div className="flex items-end justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight gradient-text">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">Live overview of your gifting operations · {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+        </div>
         <Select value={String(months)} onValueChange={(v) => setMonths(Number(v))}>
           <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -43,13 +46,16 @@ export function Dashboard() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {statCards.map((stat, i) => (
-          <Card key={i} className="shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
+          <Card key={i} className={`elev-1 border ${stat.tile} transition-all hover:elev-2 hover:-translate-y-0.5`}>
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${stat.iconBg}`}>
+                  <stat.icon className="h-5 w-5" />
+                </div>
+              </div>
+              <div className="mt-4 text-3xl font-bold tracking-tight">{stat.value}</div>
+              <div className="text-xs font-medium text-muted-foreground mt-1">{stat.title}</div>
+              <div className="text-[11px] text-muted-foreground/70 mt-0.5">{stat.hint}</div>
             </CardContent>
           </Card>
         ))}
