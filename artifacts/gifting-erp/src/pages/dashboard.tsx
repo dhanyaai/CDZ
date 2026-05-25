@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useGetDashboardStats, useGetTopClients, useGetRevenueTrend, useGetSalesPipeline } from "@workspace/api-client-react";
 import { Users, ShoppingCart, Settings, FileText, Package, Briefcase } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 export function Dashboard() {
+  const [months, setMonths] = useState(6);
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats();
   const { data: topClients, isLoading: clientsLoading } = useGetTopClients();
-  const { data: revenueTrend, isLoading: revenueLoading } = useGetRevenueTrend({ months: 6 });
+  const { data: revenueTrend, isLoading: revenueLoading } = useGetRevenueTrend({ months });
   const { data: pipeline, isLoading: pipelineLoading } = useGetSalesPipeline();
 
   if (statsLoading || clientsLoading || revenueLoading || pipelineLoading) {
@@ -26,6 +29,15 @@ export function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
+        <Select value={String(months)} onValueChange={(v) => setMonths(Number(v))}>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="3">Last 3 months</SelectItem>
+            <SelectItem value="6">Last 6 months</SelectItem>
+            <SelectItem value="12">Last 12 months</SelectItem>
+            <SelectItem value="24">Last 24 months</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

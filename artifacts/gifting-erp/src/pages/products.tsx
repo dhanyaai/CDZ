@@ -14,8 +14,9 @@ import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search, Plus, Edit, Trash2 } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ProductManager } from "@/components/product-manager";
 
 const formSchema = z.object({
   name: z.string().min(1),
@@ -36,6 +37,7 @@ export function Products() {
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [managerProductId, setManagerProductId] = useState<number | null>(null);
 
   const { data: products, isLoading } = useListProducts({ 
     search: search || undefined,
@@ -189,6 +191,7 @@ export function Products() {
                   </TableCell>
                   <TableCell>{product.vendorName || "-"}</TableCell>
                   <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => setManagerProductId(product.id)} title="Variants / pricing / customizations"><Settings2 className="w-4 h-4" /></Button>
                     <Button variant="ghost" size="icon" onClick={() => openEdit(product)}><Edit className="w-4 h-4" /></Button>
                     <Button variant="ghost" size="icon" className="text-destructive" onClick={() => { if(confirm("Are you sure?")) deleteProduct.mutate({ id: product.id }) }}><Trash2 className="w-4 h-4" /></Button>
                   </TableCell>
@@ -260,6 +263,14 @@ export function Products() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {managerProductId && (
+        <ProductManager
+          productId={managerProductId}
+          open={!!managerProductId}
+          onOpenChange={(v) => !v && setManagerProductId(null)}
+        />
+      )}
     </div>
   );
 }

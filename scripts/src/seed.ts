@@ -1,5 +1,12 @@
 import { db, usersTable, clientsTable, clientInteractionsTable, vendorsTable, productsTable, bundlesTable, bundleItemsTable, salesOrdersTable, salesOrderItemsTable, deliveryAddressesTable, purchaseOrdersTable, purchaseOrderItemsTable, inventoryMovementsTable, assemblyJobsTable, artworkApprovalsTable, shipmentsTable, shipmentItemsTable, invoicesTable, paymentsTable } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { randomBytes, scryptSync } from "node:crypto";
+
+function hashPassword(password: string): string {
+  const salt = randomBytes(16);
+  const derived = scryptSync(password, salt, 64);
+  return `scrypt$${salt.toString("hex")}$${derived.toString("hex")}`;
+}
 
 async function truncate() {
   // Truncate in reverse dependency order
@@ -13,11 +20,11 @@ async function seed() {
   // Users
   console.log("Seeding users...");
   const [admin, sales1, sales2, warehouse, finance] = await db.insert(usersTable).values([
-    { name: "Rajesh Mehta", email: "admin@gifterp.com", passwordHash: "admin123", role: "Admin" },
-    { name: "Priya Sharma", email: "priya@gifterp.com", passwordHash: "sales123", role: "Sales" },
-    { name: "Arjun Nair", email: "arjun@gifterp.com", passwordHash: "sales123", role: "Sales" },
-    { name: "Vikram Singh", email: "vikram@gifterp.com", passwordHash: "wh123", role: "Warehouse" },
-    { name: "Anita Patel", email: "anita@gifterp.com", passwordHash: "fin123", role: "Finance" },
+    { name: "Rajesh Mehta", email: "admin@gifterp.com", passwordHash: hashPassword("admin123"), role: "Admin" },
+    { name: "Priya Sharma", email: "priya@gifterp.com", passwordHash: hashPassword("sales123"), role: "Sales" },
+    { name: "Arjun Nair", email: "arjun@gifterp.com", passwordHash: hashPassword("sales123"), role: "Sales" },
+    { name: "Vikram Singh", email: "vikram@gifterp.com", passwordHash: hashPassword("wh123"), role: "Warehouse" },
+    { name: "Anita Patel", email: "anita@gifterp.com", passwordHash: hashPassword("fin123"), role: "Finance" },
   ]).returning();
 
   // Clients

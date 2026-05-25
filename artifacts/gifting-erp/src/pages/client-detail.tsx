@@ -16,6 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Phone, Mail, MapPin, Building, Calendar, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { ContactsCard, ActivitiesCard } from "@/components/client-extras";
 
 const interactionSchema = z.object({
   type: z.enum(["call", "email", "meeting"]),
@@ -117,9 +118,12 @@ export function ClientDetail({ id }: { id: number }) {
               </CardContent>
             </Card>
           )}
+
+          <ContactsCard clientId={id} />
         </div>
 
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 space-y-6">
+          <ActivitiesCard clientId={id} />
           <Card className="h-full">
             <CardHeader>
               <CardTitle>Interaction Log</CardTitle>

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, usersTable } from "@workspace/db";
+import { hashPassword } from "../lib/password";
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.post("/v1/users", async (req, res): Promise<void> => {
 
   const [user] = await db
     .insert(usersTable)
-    .values({ name, email, passwordHash: password, role })
+    .values({ name, email, passwordHash: hashPassword(password), role })
     .returning();
 
   res.status(201).json(serializeUser(user));

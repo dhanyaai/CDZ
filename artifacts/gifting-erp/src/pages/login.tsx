@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Gift } from "lucide-react";
+import { setToken } from "@/lib/api";
+import { setStoredUser, type AuthUser } from "@/lib/auth";
 
 export function Login() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [email, setEmail] = useState("admin@gifterp.com");
-  const [password, setPassword] = useState("admin");
+  const [password, setPassword] = useState("admin123");
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
@@ -22,6 +24,9 @@ export function Login() {
         body: JSON.stringify({ email, password }),
       });
       if (!res.ok) throw new Error("Invalid credentials");
+      const data = (await res.json()) as { token: string; user: AuthUser };
+      setToken(data.token);
+      setStoredUser(data.user);
       toast({ title: "Welcome back" });
       navigate("/dashboard");
     } catch (e) {
@@ -48,10 +53,11 @@ export function Login() {
           </div>
           <div>
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submit()} />
           </div>
-          <Button onClick={submit} disabled={loading} className="w-full">{loading ? "Signing in..." : "Sign in"}</Button>
-          <p className="text-xs text-center text-muted-foreground">Demo: admin@gifterp.com / admin</p>
+          <Button onClick={submit} disabled={loading} className="w-full" data-testid="button-login">{loading ? "Signing in..." : "Sign in"}</Button>
+          <p className="text-xs text-center text-muted-foreground">Demo: admin@gifterp.com / admin123</p>
         </CardContent>
       </Card>
     </div>
