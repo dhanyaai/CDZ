@@ -33,6 +33,7 @@ import { Grn } from "@/pages/grn";
 import { CreditNotes } from "@/pages/credit-notes";
 import { Locations } from "@/pages/locations";
 import { Login } from "@/pages/login";
+import { Settings } from "@/pages/settings";
 
 initAuth();
 
@@ -91,6 +92,7 @@ function Router() {
         <Route path="/payments" component={Payments} />
         <Route path="/credit-notes" component={CreditNotes} />
         <Route path="/users" component={Users} />
+        <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>
     </AuthGate>

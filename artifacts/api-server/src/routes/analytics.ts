@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { eq, count, sum, and, gte, lte, sql } from "drizzle-orm";
-import { db, clientsTable, salesOrdersTable, assemblyJobsTable, invoicesTable, productsTable, purchaseOrdersTable, vendorsTable, purchaseOrderItemsTable } from "@workspace/db";
+import { eq, count, sum, and, gte, lte, sql, desc } from "drizzle-orm";
+import { db, clientsTable, salesOrdersTable, salesOrderItemsTable, assemblyJobsTable, invoicesTable, productsTable, purchaseOrdersTable, vendorsTable, purchaseOrderItemsTable, opportunitiesTable, usersTable, paymentsTable } from "@workspace/db";
 
 const router = Router();
 
@@ -161,6 +161,109 @@ router.get("/v1/analytics/top-clients", async (_req, res): Promise<void> => {
   );
   results.sort((a, b) => b.totalRevenue - a.totalRevenue);
   res.json(results.slice(0, 10));
+});
+
+router.get("/v1/analytics/top-products", async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      productId: salesOrderItemsTable.productId,
+      productName: productsTable.name,
+      qty: sql<number>`COALESCE(SUM(${salesOrderItemsTable.quantity}), 0)::int`,
+      revenue: sql<string>`COALESCE(SUM(${salesOrderItemsTable.quantity} * ${salesOrderItemsTable.unitPrice}), 0)`,
+    })
+    .from(salesOrderItemsTable)
+    .innerJoin(productsTable, eq(productsTable.id, salesOrderItemsTable.productId))
+    .innerJoin(salesOrdersTable, eq(salesOrdersTable.id, salesOrderItemsTable.salesOrderId))
+    .where(sql`${salesOrdersTable.status} != 'Draft'`)
+    .groupBy(salesOrderItemsTable.productId, productsTable.name)
+    .orderBy(desc(sql`SUM(${salesOrderItemsTable.quantity} * ${salesOrderItemsTable.unitPrice})`))
+    .limit(8);
+
+  res.json(rows.map((r) => ({
+    productId: r.productId,
+    productName: r.productName,
+    qty: Number(r.qty),
+    revenue: Number(r.revenue),
+  })));
+});
+
+router.get("/v1/analytics/ar-aging", async (_req, res): Promise<void> => {
+  const now = new Date();
+  const invoices = await db
+    .select({
+      id: invoicesTable.id,
+      invoiceNumber: invoicesTable.invoiceNumber,
+      clientId: invoicesTable.clientId,
+      grandTotal: invoicesTable.grandTotal,
+      dueDate: invoicesTable.dueDate,
+      status: invoicesTable.status,
+    })
+    .from(invoicesTable)
+    .where(sql`${invoicesTable.status} != 'Paid'`);
+
+  // sum paid per invoice
+  const paid = await db
+    .select({
+      invoiceId: paymentsTable.invoiceId,
+      total: sql<string>`COALESCE(SUM(${paymentsTable.amount}), 0)`,
+    })
+    .from(paymentsTable)
+    .groupBy(paymentsTable.invoiceId);
+  const paidMap = new Map(paid.map((p) => [p.invoiceId, Number(p.total)]));
+
+  const buckets = { current: 0, "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
+  const detail: Array<{ bucket: string; invoiceNumber: string; balance: number; daysOverdue: number; clientId: number }> = [];
+
+  for (const inv of invoices) {
+    const balance = Number(inv.grandTotal) - (paidMap.get(inv.id) ?? 0);
+    if (balance <= 0) continue;
+    if (!inv.dueDate) continue;
+    const daysOverdue = Math.floor((now.getTime() - inv.dueDate.getTime()) / (24 * 60 * 60 * 1000));
+    let bucket: keyof typeof buckets;
+    if (daysOverdue <= 0) bucket = "current";
+    else if (daysOverdue <= 30) bucket = "1-30";
+    else if (daysOverdue <= 60) bucket = "31-60";
+    else if (daysOverdue <= 90) bucket = "61-90";
+    else bucket = "90+";
+    buckets[bucket] += balance;
+    detail.push({ bucket, invoiceNumber: inv.invoiceNumber, balance, daysOverdue, clientId: inv.clientId });
+  }
+
+  res.json({
+    buckets: Object.entries(buckets).map(([bucket, value]) => ({ bucket, value })),
+    total: Object.values(buckets).reduce((a, b) => a + b, 0),
+    detail: detail.sort((a, b) => b.daysOverdue - a.daysOverdue).slice(0, 10),
+  });
+});
+
+router.get("/v1/analytics/sales-leaderboard", async (_req, res): Promise<void> => {
+  const users = await db.select().from(usersTable);
+  const rows = await db
+    .select({
+      ownerId: opportunitiesTable.ownerId,
+      stage: opportunitiesTable.stage,
+      total: sql<string>`COALESCE(SUM(${opportunitiesTable.value}), 0)`,
+      cnt: count(),
+    })
+    .from(opportunitiesTable)
+    .groupBy(opportunitiesTable.ownerId, opportunitiesTable.stage);
+
+  const byUser = new Map<number, { ownerId: number; name: string; role: string; pipeline: number; won: number; openCount: number; wonCount: number }>();
+  for (const u of users) {
+    byUser.set(u.id, { ownerId: u.id, name: u.name, role: u.role, pipeline: 0, won: 0, openCount: 0, wonCount: 0 });
+  }
+  for (const r of rows) {
+    if (r.ownerId == null) continue;
+    const entry = byUser.get(r.ownerId);
+    if (!entry) continue;
+    const v = Number(r.total);
+    if (r.stage === "closed_won") { entry.won += v; entry.wonCount += r.cnt; }
+    else if (r.stage !== "closed_lost") { entry.pipeline += v; entry.openCount += r.cnt; }
+  }
+  const out = Array.from(byUser.values())
+    .filter((u) => u.pipeline > 0 || u.won > 0)
+    .sort((a, b) => b.won + b.pipeline - (a.won + a.pipeline));
+  res.json(out);
 });
 
 export default router;

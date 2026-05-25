@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useGetDashboardStats, useGetTopClients, useGetRevenueTrend, useGetSalesPipeline } from "@workspace/api-client-react";
 import { Users, ShoppingCart, Settings, FileText, Package, Briefcase } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { DashboardWidgets } from "@/components/dashboard-widgets";
 
 export function Dashboard() {
   const [months, setMonths] = useState(6);
@@ -100,6 +101,8 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <DashboardWidgets />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-3 shadow-sm">

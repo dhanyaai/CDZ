@@ -20,6 +20,8 @@ import quotesRouter from "./quotes";
 import activitiesRouter from "./activities";
 import catalogRouter from "./catalog";
 import operationsRouter from "./operations";
+import notificationsRouter from "./notifications";
+import settingsRouter from "./settings";
 
 const router: IRouter = Router();
 
@@ -44,5 +46,7 @@ router.use(quotesRouter);
 router.use(activitiesRouter);
 router.use(catalogRouter);
 router.use(operationsRouter);
+router.use(notificationsRouter);
+router.use(settingsRouter);
 
 export default router;

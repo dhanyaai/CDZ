@@ -24,10 +24,11 @@ import {
   Inbox,
   Receipt
 } from "lucide-react";
-import { LogOut } from "lucide-react";
+import { LogOut, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { getStoredUser, logout } from "@/lib/auth";
+import { NotificationsBell } from "@/components/notifications-bell";
 
 const navItems = [
   { group: "Overview", items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }] },
@@ -60,7 +61,10 @@ const navItems = [
     { label: "Payments", href: "/payments", icon: CreditCard },
     { label: "Credit Notes", href: "/credit-notes", icon: Receipt },
   ]},
-  { group: "Admin", items: [{ label: "Users", href: "/users", icon: Users }] }
+  { group: "Admin", items: [
+    { label: "Users", href: "/users", icon: Users },
+    { label: "Settings", href: "/settings", icon: Settings },
+  ]}
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -128,13 +132,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Menu className="w-5 h-5" />
           </Button>
           <div className="flex-1" />
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <NotificationsBell />
+            <Link href="/settings">
+              <Button variant="ghost" size="icon" title="Settings"><SettingsIcon className="w-4 h-4" /></Button>
+            </Link>
             {(() => {
               const u = getStoredUser();
               const initials = u ? u.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase() : "??";
               return (
                 <>
-                  <div className="text-right hidden sm:block">
+                  <div className="text-right hidden sm:block ml-2">
                     <div className="text-sm font-medium leading-tight">{u?.name ?? "Guest"}</div>
                     <div className="text-xs text-muted-foreground capitalize">{u?.role ?? ""}</div>
                   </div>
