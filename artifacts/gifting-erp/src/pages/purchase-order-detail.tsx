@@ -128,21 +128,25 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
               </TableHeader>
               <TableBody>
                 {order.items?.map((item: any) => {
-                  const progress = item.quantity > 0 ? (item.receivedQuantity / item.quantity) * 100 : 0;
+                  const qty = Number(item.quantity ?? 0);
+                  const received = Number(item.receivedQty ?? item.receivedQuantity ?? 0);
+                  const unitPrice = Number(item.unitPrice ?? 0);
+                  const lineTotal = Number(item.totalPrice ?? unitPrice * qty);
+                  const progress = qty > 0 ? (received / qty) * 100 : 0;
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.product?.name || item.productName}</TableCell>
-                      <TableCell className="text-right">₹{Number(item.unitPrice ?? 0).toFixed(2)}</TableCell>
+                      <TableCell className="text-right">₹{unitPrice.toFixed(2)}</TableCell>
                       <TableCell className="w-[200px]">
                         <div className="space-y-2">
                           <div className="flex justify-between text-xs">
-                            <span>{item.receivedQuantity}</span>
-                            <span>{item.quantity}</span>
+                            <span>{received}</span>
+                            <span>{qty}</span>
                           </div>
                           <Progress value={progress} className="h-2" />
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">₹{Number(item.totalPrice ?? 0).toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-medium">₹{lineTotal.toFixed(2)}</TableCell>
                     </TableRow>
                   );
                 })}

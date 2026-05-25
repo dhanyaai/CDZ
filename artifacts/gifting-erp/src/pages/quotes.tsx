@@ -94,7 +94,7 @@ export function Quotes() {
                   </Select>
                 </TableCell>
                 <TableCell>{q.validUntil ? new Date(q.validUntil).toLocaleDateString() : "—"}</TableCell>
-                <TableCell className="text-right font-semibold">₹{q.totalAmount.toLocaleString()}</TableCell>
+                <TableCell className="text-right font-semibold">₹{Number(q.totalAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                 <TableCell>
                   <Button size="icon" variant="ghost" onClick={() => del.mutate(q.id)}><Trash2 className="w-4 h-4" /></Button>
                 </TableCell>
@@ -130,7 +130,7 @@ export function Quotes() {
               <Button variant="outline" size="sm" onClick={() => setItems([...items, { description: "", quantity: 1, unitPrice: 0 }])}>Add line</Button>
             </div>
             <div className="border-t pt-3 space-y-1 text-sm">
-              <div className="flex justify-between"><span>Subtotal</span><span>₹{subtotal.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span>Subtotal</span><span>₹{Number(subtotal ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
               <div className="flex justify-between text-muted-foreground"><span>GST (18%)</span><span>₹{gst.toFixed(2)}</span></div>
               <div className="flex justify-between font-bold text-base"><span>Total</span><span>₹{total.toFixed(2)}</span></div>
             </div>

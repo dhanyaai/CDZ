@@ -119,7 +119,7 @@ export function Invoices() {
                       </Link>
                     ) : "-"}
                   </TableCell>
-                  <TableCell className="text-right">₹{(invoice.totalAmount - invoice.gstAmount).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                  <TableCell className="text-right">₹{(Number(invoice.totalAmount ?? 0) - Number(invoice.gstAmount ?? 0)).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   <TableCell className="text-right">₹{Number(invoice.gstAmount ?? 0).toFixed(2)}</TableCell>
                   <TableCell className="text-right font-bold">₹{Number(invoice.totalAmount ?? 0).toFixed(2)}</TableCell>
                   <TableCell><span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>{invoice.status}</span></TableCell>
@@ -149,7 +149,7 @@ export function Invoices() {
                     <FormControl><SelectTrigger><SelectValue placeholder="Select confirmed order" /></SelectTrigger></FormControl>
                     <SelectContent>
                       {eligibleOrders.map(so => (
-                        <SelectItem key={so.id} value={so.id.toString()}>{so.orderNumber} ({so.clientName}) - ₹{so.totalAmount}</SelectItem>
+                        <SelectItem key={so.id} value={so.id.toString()}>{so.orderNumber} ({so.clientName}) - ₹{Number(so.totalAmount ?? 0).toLocaleString("en-IN")}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
