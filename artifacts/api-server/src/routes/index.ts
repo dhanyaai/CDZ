@@ -14,6 +14,12 @@ import artworkRouter from "./artwork";
 import shipmentsRouter from "./shipments";
 import invoicesRouter from "./invoices";
 import analyticsRouter from "./analytics";
+import contactsRouter from "./contacts";
+import leadsRouter from "./leads";
+import quotesRouter from "./quotes";
+import activitiesRouter from "./activities";
+import catalogRouter from "./catalog";
+import operationsRouter from "./operations";
 
 const router: IRouter = Router();
 
@@ -32,5 +38,11 @@ router.use(artworkRouter);
 router.use(shipmentsRouter);
 router.use(invoicesRouter);
 router.use(analyticsRouter);
+router.use(contactsRouter);
+router.use(leadsRouter);
+router.use(quotesRouter);
+router.use(activitiesRouter);
+router.use(catalogRouter);
+router.use(operationsRouter);
 
 export default router;

@@ -1,0 +1,31 @@
+import { pgTable, serial, text, timestamp, integer, numeric } from "drizzle-orm/pg-core";
+import { clientsTable } from "./clients";
+import { opportunitiesTable } from "./leads";
+
+export const quotesTable = pgTable("quotes", {
+  id: serial("id").primaryKey(),
+  quoteNumber: text("quote_number").notNull().unique(),
+  clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
+  opportunityId: integer("opportunity_id").references(() => opportunitiesTable.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("draft"),
+  validUntil: timestamp("valid_until", { withTimezone: true }),
+  subtotal: numeric("subtotal", { precision: 12, scale: 2 }).notNull().default("0"),
+  discountPct: numeric("discount_pct", { precision: 5, scale: 2 }).notNull().default("0"),
+  gstAmount: numeric("gst_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const quoteItemsTable = pgTable("quote_items", {
+  id: serial("id").primaryKey(),
+  quoteId: integer("quote_id").notNull().references(() => quotesTable.id, { onDelete: "cascade" }),
+  description: text("description").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull(),
+  lineTotal: numeric("line_total", { precision: 12, scale: 2 }).notNull(),
+});
+
+export type Quote = typeof quotesTable.$inferSelect;
+export type QuoteItem = typeof quoteItemsTable.$inferSelect;

@@ -22,6 +22,14 @@ import { Shipments } from "@/pages/shipments";
 import { Invoices } from "@/pages/invoices";
 import { Payments } from "@/pages/payments";
 import { Users } from "@/pages/users";
+import { Leads } from "@/pages/leads";
+import { Opportunities } from "@/pages/opportunities";
+import { Quotes } from "@/pages/quotes";
+import { Categories } from "@/pages/categories";
+import { Grn } from "@/pages/grn";
+import { CreditNotes } from "@/pages/credit-notes";
+import { Locations } from "@/pages/locations";
+import { Login } from "@/pages/login";
 
 const queryClient = new QueryClient();
 
@@ -47,11 +55,16 @@ function Router() {
         <Route path="/" component={() => <Redirect to="/dashboard" />} />
         <Route path="/dashboard" component={Dashboard} />
         
+        <Route path="/login" component={Login} />
         <Route path="/clients" component={Clients} />
         <Route path="/clients/:id" component={ClientDetailWrapper} />
+        <Route path="/leads" component={Leads} />
+        <Route path="/opportunities" component={Opportunities} />
+        <Route path="/quotes" component={Quotes} />
         
         <Route path="/products" component={Products} />
         <Route path="/bundles" component={Bundles} />
+        <Route path="/categories" component={Categories} />
         <Route path="/vendors" component={Vendors} />
         
         <Route path="/sales-orders" component={SalesOrders} />
@@ -61,12 +74,15 @@ function Router() {
         <Route path="/purchase-orders/:id" component={PurchaseOrderDetailWrapper} />
         
         <Route path="/inventory" component={Inventory} />
+        <Route path="/locations" component={Locations} />
+        <Route path="/grn" component={Grn} />
         <Route path="/assembly" component={Assembly} />
         <Route path="/artwork" component={Artwork} />
         <Route path="/shipments" component={Shipments} />
         
         <Route path="/invoices" component={Invoices} />
         <Route path="/payments" component={Payments} />
+        <Route path="/credit-notes" component={CreditNotes} />
         <Route path="/users" component={Users} />
         
         <Route component={NotFound} />

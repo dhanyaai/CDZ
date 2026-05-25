@@ -15,17 +15,30 @@ import {
   FileText, 
   CreditCard,
   Menu,
-  X
+  X,
+  Target,
+  TrendingUp,
+  FileSpreadsheet,
+  FolderTree,
+  MapPin,
+  Inbox,
+  Receipt
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
   { group: "Overview", items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }] },
-  { group: "CRM", items: [{ label: "Clients", href: "/clients", icon: Users }] },
+  { group: "CRM", items: [
+    { label: "Clients", href: "/clients", icon: Users },
+    { label: "Leads", href: "/leads", icon: Target },
+    { label: "Opportunities", href: "/opportunities", icon: TrendingUp },
+    { label: "Quotes", href: "/quotes", icon: FileSpreadsheet },
+  ]},
   { group: "Catalog", items: [
     { label: "Products", href: "/products", icon: Package },
-    { label: "Bundles", href: "/bundles", icon: Gift }
+    { label: "Bundles", href: "/bundles", icon: Gift },
+    { label: "Categories", href: "/categories", icon: FolderTree },
   ]},
   { group: "Orders", items: [
     { label: "Sales Orders", href: "/sales-orders", icon: ShoppingCart },
@@ -34,13 +47,16 @@ const navItems = [
   ]},
   { group: "Operations", items: [
     { label: "Inventory", href: "/inventory", icon: Box },
+    { label: "Locations", href: "/locations", icon: MapPin },
+    { label: "Goods Receipts", href: "/grn", icon: Inbox },
     { label: "Assembly", href: "/assembly", icon: Settings },
     { label: "Artwork", href: "/artwork", icon: Palette }
   ]},
   { group: "Logistics", items: [{ label: "Shipments", href: "/shipments", icon: Truck }] },
   { group: "Finance", items: [
     { label: "Invoices", href: "/invoices", icon: FileText },
-    { label: "Payments", href: "/payments", icon: CreditCard }
+    { label: "Payments", href: "/payments", icon: CreditCard },
+    { label: "Credit Notes", href: "/credit-notes", icon: Receipt },
   ]},
   { group: "Admin", items: [{ label: "Users", href: "/users", icon: Users }] }
 ];
