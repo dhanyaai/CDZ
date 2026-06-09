@@ -173,18 +173,8 @@ para(
   "The platform spans 8 functional areas and 21 modules. This document is the authoritative reference: it explains what each module does, the workflow and key actions it supports, the statuses records move through, and the exact data fields captured."
 );
 
-// ---------------- ARCHITECTURE & STACK ----------------
-h1("2. Architecture & Technology");
-h2("Technology stack");
-kvTable([
-  ["Frontend", "React + Vite, TypeScript, Tailwind CSS, shadcn/ui components"],
-  ["Backend", "Express 5 (Node.js 24), session-based authentication"],
-  ["Database", "PostgreSQL with Drizzle ORM"],
-  ["Validation", "Zod schemas (drizzle-zod) shared across client and server"],
-  ["API contract", "OpenAPI spec with Orval-generated React Query hooks"],
-  ["Structure", "pnpm monorepo \u2014 separate API, web and shared library packages"],
-]);
-h2("Conventions");
+// ---------------- CONVENTIONS ----------------
+h1("2. Conventions & Standards");
 bullets([
   ["Currency", "Indian Rupee (\u20b9) formatted with the en-IN locale throughout"],
   ["Numbering", "Documents use prefixes \u2014 invoices 'INV', quotes 'QT' (configurable in Settings)"],
