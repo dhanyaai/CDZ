@@ -12,3 +12,9 @@ id = "Q4k03xRRb8K1-dEIUMTqU"
 uri = "file://exports/GiftERP-Application-Overview.pdf"
 type = "pdf"
 title = "GiftERP — Application Overview (PDF)"
+
+[[outputs]]
+id = "Kfp_SBRyYlZLNWLE4AvIJ"
+uri = "file://exports/GiftERP-Module-Reference.pdf"
+type = "pdf"
+title = "GiftERP — Module Reference Guide (PDF)"
