@@ -1,0 +1,31 @@
+kind = "slides"
+previewPath = "/gifting-erp-deck/"
+title = "Customize Duniya ERP — App Walkthrough"
+version = "1.0.0"
+id = "artifacts/gifting-erp-deck"
+router = "path"
+
+[[integratedSkills]]
+name = "slides"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/gifting-erp-deck/" ]
+localPort = 18296
+
+[services.development]
+run = "pnpm --filter @workspace/gifting-erp-deck run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/gifting-erp-deck", "run", "build" ]
+publicDir = "artifacts/gifting-erp-deck/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18296"
+BASE_PATH = "/gifting-erp-deck/"
