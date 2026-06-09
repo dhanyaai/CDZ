@@ -95,21 +95,31 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Sidebar */}
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-50 text-sidebar-foreground transition-[width,transform] duration-300 ease-in-out lg:static lg:translate-x-0 overflow-y-auto overflow-x-hidden border-r border-sidebar-border",
-            "bg-gradient-to-b from-[hsl(220_25%_13%)] via-[hsl(220_24%_15%)] to-[hsl(200_30%_12%)]",
+            "fixed inset-y-0 left-0 z-50 flex flex-col text-sidebar-foreground transition-[width,transform] duration-300 ease-in-out lg:static lg:translate-x-0 overflow-hidden border-r border-white/[0.07]",
+            "bg-gradient-to-b from-[hsl(243_44%_11%)] via-[hsl(246_40%_13%)] to-[hsl(263_44%_12%)]",
             collapsed ? "lg:w-[76px]" : "lg:w-64",
             "w-64",
             sidebarOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
+          {/* ambient brand glow */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-72 opacity-80"
+            style={{
+              backgroundImage:
+                "radial-gradient(130% 80% at 0% 0%, hsl(243 85% 55% / 0.18), transparent 60%), radial-gradient(120% 70% at 100% 0%, hsl(38 90% 55% / 0.06), transparent 55%)",
+            }}
+          />
+
           <div
             className={cn(
-              "flex items-center h-16 border-b border-sidebar-border/60",
+              "relative flex items-center h-16 shrink-0 border-b border-white/[0.06]",
               collapsed ? "lg:justify-center lg:px-0 px-5 justify-between" : "px-5 justify-between",
             )}
           >
             <span className="text-xl font-bold text-white flex items-center gap-2.5">
-              <span className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
+              <span className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/30 ring-1 ring-amber-300/30">
                 <Gift className="w-5 h-5 text-white" />
               </span>
               <span
@@ -131,17 +141,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
 
-          <nav className={cn("py-3 space-y-5", collapsed ? "lg:px-2 px-3" : "px-3")}>
+          <nav
+            className={cn(
+              "relative flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-6",
+              collapsed ? "lg:px-2 px-3" : "px-3",
+            )}
+          >
             {navItems.map((group) => (
               <div key={group.group}>
                 <h3
                   className={cn(
-                    "mb-1.5 px-3 text-[10px] font-bold text-sidebar-foreground/50 uppercase tracking-[0.12em]",
-                    collapsed && "lg:hidden",
+                    "mb-2 px-3 text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-[0.14em]",
+                    collapsed ? "lg:hidden" : "",
                   )}
                 >
                   {group.group}
                 </h3>
+                {collapsed && (
+                  <div className="hidden lg:block mx-2 mb-2 h-px bg-white/[0.06]" />
+                )}
                 <div className="space-y-0.5">
                   {group.items.map((item) => {
                     const isActive =
@@ -154,8 +172,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             "group relative flex items-center gap-3 rounded-lg transition-all cursor-pointer text-sm font-medium",
                             collapsed ? "lg:justify-center lg:px-0 lg:h-10 px-3 py-2" : "px-3 py-2",
                             isActive
-                              ? "bg-gradient-to-r from-indigo-500/25 to-transparent text-white shadow-[inset_2px_0_0_hsl(243_85%_68%)]"
-                              : "text-sidebar-foreground/80 hover:bg-white/[0.04] hover:text-white",
+                              ? "bg-indigo-500/15 text-white ring-1 ring-inset ring-indigo-400/25 shadow-[inset_2px_0_0_hsl(243_90%_70%)]"
+                              : "text-sidebar-foreground/75 hover:bg-white/[0.05] hover:text-white",
                           )}
                         >
                           <item.icon
@@ -163,7 +181,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                               "w-4 h-4 shrink-0 transition-colors",
                               isActive
                                 ? "text-indigo-300"
-                                : "text-sidebar-foreground/60 group-hover:text-indigo-300",
+                                : "text-sidebar-foreground/55 group-hover:text-indigo-300",
                             )}
                           />
                           <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
@@ -185,6 +203,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             ))}
           </nav>
+
+          {/* Footer: quick search */}
+          <div className="relative shrink-0 border-t border-white/[0.06] p-3">
+            {collapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setCmdOpen(true)}
+                    className="hidden lg:flex w-full h-10 items-center justify-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-white/[0.05] hover:text-white"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Quick search · ⌘K</TooltipContent>
+              </Tooltip>
+            ) : null}
+            <button
+              onClick={() => setCmdOpen(true)}
+              className={cn(
+                "group flex w-full items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 h-10 text-sm text-sidebar-foreground/70 transition-colors hover:bg-white/[0.06] hover:text-white",
+                collapsed && "lg:hidden",
+              )}
+            >
+              <Search className="w-4 h-4" />
+              <span>Quick search</span>
+              <Kbd className="ml-auto border-white/15 bg-white/10 text-white/70">⌘K</Kbd>
+            </button>
+          </div>
         </aside>
 
         {/* Main Content */}
