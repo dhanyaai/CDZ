@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "tTQAMHCaAKT8F31PTx3ld"
+uri = "file://exports/Dashboard-Notes.pdf"
+type = "pdf"
+title = "Dashboard — Detailed Notes (PDF)"
