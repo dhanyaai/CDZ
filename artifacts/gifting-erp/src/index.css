@@ -60,35 +60,35 @@
   --popover-foreground: 220 20% 15%;
   --popover-border: 220 15% 90%;
   
-  /* Rich deep teal for the brand */
-  --primary: 180 80% 20%;
+  /* Rich royal indigo for the brand */
+  --primary: 243 64% 48%;
   --primary-foreground: 0 0% 100%;
   
-  --secondary: 180 20% 90%;
-  --secondary-foreground: 180 80% 20%;
+  --secondary: 243 32% 92%;
+  --secondary-foreground: 243 64% 40%;
   
   --muted: 220 15% 94%;
   --muted-foreground: 220 15% 45%;
   
-  --accent: 180 20% 90%;
-  --accent-foreground: 180 80% 20%;
+  --accent: 243 32% 92%;
+  --accent-foreground: 243 64% 40%;
   
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
   
   --border: 220 15% 90%;
   --input: 220 15% 90%;
-  --ring: 180 80% 20%;
+  --ring: 243 64% 48%;
   --radius: 0.5rem;
 
-  --sidebar-background: 220 20% 15%;
+  --sidebar-background: 232 28% 14%;
   --sidebar-foreground: 220 15% 85%;
-  --sidebar-primary: 180 80% 40%;
+  --sidebar-primary: 243 75% 66%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 20% 22%;
+  --sidebar-accent: 232 26% 21%;
   --sidebar-accent-foreground: 220 15% 95%;
-  --sidebar-border: 220 20% 20%;
-  --sidebar-ring: 180 80% 40%;
+  --sidebar-border: 232 24% 19%;
+  --sidebar-ring: 243 75% 66%;
 }
 
 .dark {
@@ -101,8 +101,8 @@
   --popover-foreground: 0 0% 95%;
   --popover-border: 220 20% 20%;
   
-  --primary: 180 80% 40%;
-  --primary-foreground: 0 0% 100%;
+  --primary: 245 82% 70%;
+  --primary-foreground: 232 40% 12%;
   
   --secondary: 220 20% 20%;
   --secondary-foreground: 0 0% 95%;
@@ -118,7 +118,7 @@
   
   --border: 220 20% 20%;
   --input: 220 20% 20%;
-  --ring: 180 80% 40%;
+  --ring: 245 82% 70%;
 }
 
 @layer base {
@@ -128,14 +128,14 @@
   body {
     @apply bg-background text-foreground;
     background-image:
-      radial-gradient(ellipse 800px 600px at 10% -10%, hsl(180 60% 92% / 0.55), transparent 60%),
+      radial-gradient(ellipse 800px 600px at 10% -10%, hsl(243 70% 93% / 0.6), transparent 60%),
       radial-gradient(ellipse 700px 500px at 110% 110%, hsl(38 90% 92% / 0.5), transparent 60%);
     background-attachment: fixed;
   }
   .dark body {
     background-image:
-      radial-gradient(ellipse 800px 600px at 10% -10%, hsl(180 50% 18% / 0.45), transparent 60%),
-      radial-gradient(ellipse 700px 500px at 110% 110%, hsl(160 50% 18% / 0.35), transparent 60%);
+      radial-gradient(ellipse 800px 600px at 10% -10%, hsl(243 55% 20% / 0.5), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 110% 110%, hsl(262 50% 18% / 0.38), transparent 60%);
   }
 }
 
@@ -152,14 +152,14 @@
     box-shadow: 0 0 0 1px hsl(var(--primary) / 0.2), 0 8px 24px hsl(var(--primary) / 0.18);
   }
   .gradient-text {
-    background: linear-gradient(135deg, hsl(180 80% 28%), hsl(38 90% 50%));
+    background: linear-gradient(135deg, hsl(243 64% 52%), hsl(38 92% 50%));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
   .bg-mesh {
     background-image:
-      radial-gradient(circle at 20% 20%, hsl(180 80% 95%) 0%, transparent 50%),
+      radial-gradient(circle at 20% 20%, hsl(243 75% 96%) 0%, transparent 50%),
       radial-gradient(circle at 80% 80%, hsl(38 90% 95%) 0%, transparent 50%);
   }
   .stat-card-blue   { background: linear-gradient(135deg, hsl(210 90% 97%), hsl(210 90% 99%)); border-color: hsl(210 80% 88%); }

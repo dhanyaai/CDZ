@@ -45,12 +45,12 @@ export function Login() {
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
       {/* Brand panel */}
-      <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-12 text-white bg-gradient-to-br from-[hsl(220_25%_13%)] via-[hsl(195_45%_15%)] to-[hsl(180_70%_14%)]">
+      <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-12 text-white bg-gradient-to-br from-[hsl(232_35%_12%)] via-[hsl(243_45%_16%)] to-[hsl(262_55%_15%)]">
         <div
           className="absolute inset-0 opacity-60"
           style={{
             backgroundImage:
-              "radial-gradient(ellipse 600px 400px at 15% 10%, hsl(170 80% 40% / 0.25), transparent 60%), radial-gradient(ellipse 500px 400px at 90% 90%, hsl(38 90% 55% / 0.22), transparent 60%)",
+              "radial-gradient(ellipse 600px 400px at 15% 10%, hsl(243 85% 55% / 0.28), transparent 60%), radial-gradient(ellipse 500px 400px at 90% 90%, hsl(38 90% 55% / 0.22), transparent 60%)",
           }}
         />
         <div className="relative flex items-center gap-3">
@@ -78,7 +78,7 @@ export function Login() {
             {highlights.map((h) => (
               <div key={h.title} className="flex items-start gap-3">
                 <span className="mt-0.5 w-9 h-9 shrink-0 rounded-xl bg-white/10 flex items-center justify-center ring-1 ring-white/15">
-                  <h.icon className="w-4 h-4 text-teal-300" />
+                  <h.icon className="w-4 h-4 text-indigo-300" />
                 </span>
                 <div>
                   <div className="font-semibold">{h.title}</div>

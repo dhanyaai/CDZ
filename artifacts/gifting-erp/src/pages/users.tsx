@@ -106,7 +106,7 @@ export function Users() {
       case "Purchase Manager": return "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300";
       case "Warehouse": return "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300";
       case "Production": return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300";
-      case "Finance": return "bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300";
+      case "Finance": return "bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300";
       default: return "";
     }
   };

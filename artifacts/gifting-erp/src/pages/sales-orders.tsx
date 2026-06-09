@@ -76,7 +76,7 @@ export function SalesOrders() {
       case "In Production": return "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300";
       case "Ready": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
       case "Dispatched": return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300";
-      case "Delivered": return "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300";
+      case "Delivered": return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300";
       default: return "";
     }
   };

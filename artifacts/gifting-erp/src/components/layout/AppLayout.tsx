@@ -154,7 +154,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             "group relative flex items-center gap-3 rounded-lg transition-all cursor-pointer text-sm font-medium",
                             collapsed ? "lg:justify-center lg:px-0 lg:h-10 px-3 py-2" : "px-3 py-2",
                             isActive
-                              ? "bg-gradient-to-r from-teal-500/20 to-transparent text-white shadow-[inset_2px_0_0_hsl(170_80%_50%)]"
+                              ? "bg-gradient-to-r from-indigo-500/25 to-transparent text-white shadow-[inset_2px_0_0_hsl(243_85%_68%)]"
                               : "text-sidebar-foreground/80 hover:bg-white/[0.04] hover:text-white",
                           )}
                         >
@@ -162,8 +162,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             className={cn(
                               "w-4 h-4 shrink-0 transition-colors",
                               isActive
-                                ? "text-teal-300"
-                                : "text-sidebar-foreground/60 group-hover:text-teal-300",
+                                ? "text-indigo-300"
+                                : "text-sidebar-foreground/60 group-hover:text-indigo-300",
                             )}
                           />
                           <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
@@ -250,7 +250,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-lg px-1.5 py-1 transition-colors hover:bg-muted/60">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[hsl(180_80%_30%)] flex items-center justify-center text-primary-foreground font-bold text-sm shadow-sm">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[hsl(262_70%_55%)] flex items-center justify-center text-primary-foreground font-bold text-sm shadow-sm">
                     {initials}
                   </div>
                   <div className="text-left hidden sm:block leading-tight">
