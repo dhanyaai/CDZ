@@ -1,1 +1,72 @@
-[]
+[
+  {
+    "id": "slide-01-title",
+    "position": 1,
+    "filepath": "pages/slides/slide01-title.tsx",
+    "title": "Title — Customize Duniya ERP",
+    "description": "Opening title slide introducing the Corporate Gifting ERP platform."
+  },
+  {
+    "id": "slide-02-problem",
+    "position": 2,
+    "filepath": "pages/slides/slide02-problem.tsx",
+    "title": "The Challenge",
+    "description": "The pain points gifting businesses face without proper tooling."
+  },
+  {
+    "id": "slide-03-dashboard",
+    "position": 3,
+    "filepath": "pages/slides/slide03-dashboard.tsx",
+    "title": "Dashboard Overview",
+    "description": "Live KPIs, revenue trends, AR aging, and top clients at a glance."
+  },
+  {
+    "id": "slide-04-crm",
+    "position": 4,
+    "filepath": "pages/slides/slide04-crm.tsx",
+    "title": "CRM Pipeline",
+    "description": "Kanban pipeline from Leads through Opportunities, Quotes to Won orders."
+  },
+  {
+    "id": "slide-05-orders",
+    "position": 5,
+    "filepath": "pages/slides/slide05-orders.tsx",
+    "title": "Sales Orders & Invoices",
+    "description": "6-stage order lifecycle with invoicing and payment tracking."
+  },
+  {
+    "id": "slide-06-inventory",
+    "position": 6,
+    "filepath": "pages/slides/slide06-inventory.tsx",
+    "title": "Inventory & Products",
+    "description": "Live stock levels, fill-rate bars, low-stock alerts, and movement log."
+  },
+  {
+    "id": "slide-07-purchasing",
+    "position": 7,
+    "filepath": "pages/slides/slide07-purchasing.tsx",
+    "title": "Purchasing & Vendor Management",
+    "description": "Purchase orders, vendor fulfilment tracking, and delivery monitoring."
+  },
+  {
+    "id": "slide-08-clients",
+    "position": 8,
+    "filepath": "pages/slides/slide08-clients.tsx",
+    "title": "Clients & Contacts",
+    "description": "Client profiles, order history, industry filters, and contact logs."
+  },
+  {
+    "id": "slide-09-features",
+    "position": 9,
+    "filepath": "pages/slides/slide09-features.tsx",
+    "title": "Complete Platform",
+    "description": "All 12 integrated ERP modules overview with key statistics."
+  },
+  {
+    "id": "slide-10-cta",
+    "position": 10,
+    "filepath": "pages/slides/slide10-cta.tsx",
+    "title": "Get Started",
+    "description": "Demo access credentials and call to action."
+  }
+]
