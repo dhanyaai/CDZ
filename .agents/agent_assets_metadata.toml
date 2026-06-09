@@ -1,5 +1,22 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "Z2BTnRhQRhj-5P923eN_z"
+uri = "file://artifacts/gifting-erp-promo/public/images/logo.png"
+type = "image"
+title = "Premium gift box logo"
+
+[[generated]]
+id = "FN5TE3W_nitizX7inXxRS"
+uri = "file://artifacts/gifting-erp-promo/public/images/dashboard.png"
+type = "image"
+title = "Abstract ERP dashboard UI"
+
+[[generated]]
+id = "IKaumn9p8bWfwGaePUl7t"
+uri = "file://artifacts/gifting-erp-promo/public/images/bg-texture.png"
+type = "image"
+title = "Cinematic dark indigo background"
 
 [[outputs]]
 id = "tTQAMHCaAKT8F31PTx3ld"
@@ -24,3 +41,9 @@ id = "IzHKFAEU2rUp8eVZ8CsrK"
 uri = "file://exports/CustomizeDuniya-Detailed-Notes.pdf"
 type = "pdf"
 title = "Customize Duniya — Detailed Notes (Complete Handbook)"
+
+[[outputs]]
+id = "ONEjcBowZC__-dd8vUZIm"
+uri = "file://artifacts/gifting-erp-promo/public/audio/bg_music.mp3"
+type = "audio"
+title = "background music"

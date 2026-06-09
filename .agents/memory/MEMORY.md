@@ -1,0 +1,1 @@
+- [video-js scaffold typecheck](video-js-scaffold.md) — `pnpm typecheck` fails on scaffold files (animations.ts/hooks.ts/main.tsx); verify videos with validate-recording.sh + Vite logs, not tsc.

@@ -1,0 +1,31 @@
+kind = "video"
+previewPath = "/gifting-erp-promo/"
+title = "Customize Duniya — Promo"
+version = "1.0.0"
+id = "artifacts/gifting-erp-promo"
+router = "path"
+
+[[integratedSkills]]
+name = "video-js"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/gifting-erp-promo/" ]
+localPort = 21977
+
+[services.development]
+run = "pnpm --filter @workspace/gifting-erp-promo run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/gifting-erp-promo", "run", "build" ]
+publicDir = "artifacts/gifting-erp-promo/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21977"
+BASE_PATH = "/gifting-erp-promo/"
