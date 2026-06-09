@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { initAuth } from "@/lib/auth";
+import { initTheme } from "@/lib/theme";
 import { getToken } from "@/lib/api";
 
 import { Dashboard } from "@/pages/dashboard";
@@ -36,6 +37,7 @@ import { Login } from "@/pages/login";
 import { Settings } from "@/pages/settings";
 
 initAuth();
+initTheme();
 
 const queryClient = new QueryClient();
 
