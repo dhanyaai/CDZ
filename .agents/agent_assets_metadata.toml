@@ -18,3 +18,9 @@ id = "Kfp_SBRyYlZLNWLE4AvIJ"
 uri = "file://exports/GiftERP-Module-Reference.pdf"
 type = "pdf"
 title = "GiftERP — Module Reference Guide (with data fields)"
+
+[[outputs]]
+id = "IzHKFAEU2rUp8eVZ8CsrK"
+uri = "file://exports/CustomizeDuniya-Detailed-Notes.pdf"
+type = "pdf"
+title = "Customize Duniya — Detailed Notes (Complete Handbook)"
