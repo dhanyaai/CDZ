@@ -35,6 +35,7 @@ import { CreditNotes } from "@/pages/credit-notes";
 import { Locations } from "@/pages/locations";
 import { Login } from "@/pages/login";
 import { Settings } from "@/pages/settings";
+import { Contacts } from "@/pages/contacts";
 
 initAuth();
 initTheme();
@@ -73,6 +74,7 @@ function Router() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/clients" component={Clients} />
         <Route path="/clients/:id" component={ClientDetailWrapper} />
+        <Route path="/contacts" component={Contacts} />
         <Route path="/leads" component={Leads} />
         <Route path="/opportunities" component={Opportunities} />
         <Route path="/quotes" component={Quotes} />

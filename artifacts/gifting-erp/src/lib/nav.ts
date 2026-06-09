@@ -19,6 +19,7 @@ import {
   MapPin,
   Inbox,
   Receipt,
+  UserCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -39,6 +40,7 @@ export const navItems: NavGroup[] = [
     group: "CRM",
     items: [
       { label: "Clients", href: "/clients", icon: Users },
+      { label: "Contacts", href: "/contacts", icon: UserCheck },
       { label: "Leads", href: "/leads", icon: Target },
       { label: "Opportunities", href: "/opportunities", icon: TrendingUp },
       { label: "Quotes", href: "/quotes", icon: FileSpreadsheet },
