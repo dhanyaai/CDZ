@@ -6,3 +6,9 @@ id = "tTQAMHCaAKT8F31PTx3ld"
 uri = "file://exports/Dashboard-Notes.pdf"
 type = "pdf"
 title = "Dashboard — Detailed Notes (PDF)"
+
+[[outputs]]
+id = "Q4k03xRRb8K1-dEIUMTqU"
+uri = "file://exports/GiftERP-Application-Overview.pdf"
+type = "pdf"
+title = "GiftERP — Application Overview (PDF)"
