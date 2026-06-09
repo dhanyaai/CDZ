@@ -8,25 +8,33 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import {
   Users, ShoppingCart, Settings, FileText, Package, Briefcase,
-  TrendingUp, AlertTriangle, IndianRupee, Clock, Medal, CheckCircle2,
+  TrendingUp, AlertTriangle, Medal, CheckCircle2,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { DashboardWidgets } from "@/components/dashboard-widgets";
-
-type ArAging = { bucket: string; count: number; amount: number };
+type ArAgingBucket = { bucket: string; value: number };
+type ArAgingRaw = { buckets: ArAgingBucket[]; total: number; detail: unknown[] };
 type Leaderboard = { userId: number; userName: string; totalRevenue: number; orderCount: number };
 type TopProduct = { productId: number; productName: string; totalQty: number; totalRevenue: number };
 type VendorPerf = { vendorId: number; vendorName: string; totalOrders: number; totalAmount: number; fulfilmentRate: number };
-type InventoryStatus = { status: string; count: number };
+type InventoryStatusRaw = { totalProducts: number; lowStockCount: number; outOfStockCount: number; totalValue: number };
+type InventoryStatusItem = { status: string; count: number };
 
+const AR_BUCKET_LABELS: Record<string, string> = {
+  current: "Current",
+  "1-30": "1–30 days",
+  "31-60": "31–60 days",
+  "61-90": "61–90 days",
+  "90+": "90+ days",
+};
 const AR_COLORS: Record<string, string> = {
-  "Current": "#10b981",
-  "1–30 days": "#f59e0b",
-  "31–60 days": "#f97316",
-  "61+ days": "#ef4444",
+  current: "#10b981",
+  "1-30": "#f59e0b",
+  "31-60": "#f97316",
+  "61-90": "#ef4444",
+  "90+": "#7c3aed",
 };
 const PIE_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 
@@ -36,11 +44,20 @@ export function Dashboard() {
   const { data: topClients } = useGetTopClients();
   const { data: revenueTrend, isLoading: revenueLoading } = useGetRevenueTrend({ months });
   const { data: pipeline } = useGetSalesPipeline();
-  const { data: arAging } = useQuery({ queryKey: ["ar-aging"], queryFn: () => api<ArAging[]>("/v1/analytics/ar-aging") });
+  const { data: arAgingRaw } = useQuery({ queryKey: ["ar-aging"], queryFn: () => api<ArAgingRaw>("/v1/analytics/ar-aging") });
+  const arAging = arAgingRaw?.buckets;
   const { data: leaderboard } = useQuery({ queryKey: ["sales-leaderboard"], queryFn: () => api<Leaderboard[]>("/v1/analytics/sales-leaderboard") });
   const { data: topProducts } = useQuery({ queryKey: ["top-products"], queryFn: () => api<TopProduct[]>("/v1/analytics/top-products") });
   const { data: vendorPerf } = useQuery({ queryKey: ["vendor-performance"], queryFn: () => api<VendorPerf[]>("/v1/analytics/vendor-performance") });
-  const { data: inventoryStatus } = useQuery({ queryKey: ["inventory-status"], queryFn: () => api<InventoryStatus[]>("/v1/analytics/inventory-status") });
+  const { data: inventoryStatusRaw } = useQuery({ queryKey: ["inventory-status"], queryFn: () => api<InventoryStatusRaw>("/v1/analytics/inventory-status") });
+
+  const inventoryStatus: InventoryStatusItem[] | undefined = inventoryStatusRaw
+    ? [
+        { status: "In Stock", count: Math.max(0, (inventoryStatusRaw.totalProducts ?? 0) - (inventoryStatusRaw.lowStockCount ?? 0) - (inventoryStatusRaw.outOfStockCount ?? 0)) },
+        { status: "Low Stock", count: inventoryStatusRaw.lowStockCount ?? 0 },
+        { status: "Out of Stock", count: inventoryStatusRaw.outOfStockCount ?? 0 },
+      ].filter(item => item.count > 0)
+    : undefined;
 
   const statCards = [
     { title: "Total Clients", value: stats?.totalClients ?? 0, icon: Users, tile: "stat-card-blue", iconBg: "bg-blue-500/10 text-blue-500", hint: "Active accounts" },
@@ -144,9 +161,6 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* Advanced analytics widgets */}
-      <DashboardWidgets />
-
       {/* AR Aging + Inventory Status */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4 elev-1">
@@ -159,22 +173,20 @@ export function Dashboard() {
           <CardContent>
             {!arAging ? (
               <Skeleton className="h-32 w-full" />
-            ) : arAging.length === 0 ? (
+            ) : arAging.every(b => b.value === 0) ? (
               <div className="text-center py-8 text-muted-foreground text-sm">No outstanding invoices</div>
             ) : (
               <div className="space-y-3">
                 {arAging.map(bucket => {
-                  const total = arAging.reduce((s, b) => s + b.amount, 0);
-                  const pct = total > 0 ? Math.round((bucket.amount / total) * 100) : 0;
+                  const total = arAging.reduce((s, b) => s + b.value, 0);
+                  const pct = total > 0 ? Math.round((bucket.value / total) * 100) : 0;
                   const color = AR_COLORS[bucket.bucket] ?? "#8b5cf6";
+                  const label = AR_BUCKET_LABELS[bucket.bucket] ?? bucket.bucket;
                   return (
                     <div key={bucket.bucket} className="space-y-1">
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{bucket.bucket}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground">{bucket.count} invoices</span>
-                          <span className="font-semibold">₹{bucket.amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
-                        </div>
+                        <span className="text-muted-foreground">{label}</span>
+                        <span className="font-semibold">₹{bucket.value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
