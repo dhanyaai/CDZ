@@ -43,7 +43,7 @@ export function Login() {
           <div className="mx-auto w-12 h-12 rounded-full bg-primary flex items-center justify-center mb-2">
             <Gift className="w-6 h-6 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl">GiftERP</CardTitle>
+          <CardTitle className="text-2xl">Customize Duniya</CardTitle>
           <p className="text-sm text-muted-foreground">Sign in to your account</p>
         </CardHeader>
         <CardContent className="space-y-4">

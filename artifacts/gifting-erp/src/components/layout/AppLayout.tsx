@@ -92,7 +92,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
               <Gift className="w-5 h-5 text-white" />
             </span>
-            <span className="bg-gradient-to-r from-white to-amber-200 bg-clip-text text-transparent">GiftERP</span>
+            <span className="bg-gradient-to-r from-white to-amber-200 bg-clip-text text-transparent">Customize Duniya</span>
           </span>
           <Button variant="ghost" size="icon" className="lg:hidden text-white" onClick={() => setSidebarOpen(false)}>
             <X className="w-5 h-5" />

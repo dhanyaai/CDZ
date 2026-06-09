@@ -93,7 +93,7 @@ function table(headers, rows, widths) {
 
 // ---------- COVER / TITLE ----------
 doc.rect(0, 0, PAGE_W, 130).fill(C.teal);
-doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(26).text("GiftERP", ML, 38);
+doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(26).text("Customize Duniya", ML, 38);
 doc.fillColor("#fcd34d").font("Helvetica-Bold").fontSize(13).text("Dashboard — Detailed Notes", ML, 72);
 doc.fillColor("#d1fae5").font("Helvetica").fontSize(9).text(
   "Corporate Gifting ERP · Reference guide to everything available on the Dashboard page",
@@ -109,7 +109,7 @@ doc.moveDown(0.5);
 // ---------- OVERVIEW ----------
 h1("Overview");
 para(
-  "The Dashboard is the landing page of GiftERP and provides a live, at-a-glance overview of your entire gifting operation. It pulls real-time data from the analytics API and is organized into four zones: a header with a global time-range filter, a row of six KPI stat cards, a pair of analytics charts (Revenue Overview and Sales Pipeline), three insight widgets (Top Products, Sales Leaderboard, AR Aging), and a Top Clients list. All monetary values are shown in Indian Rupees (₹) using the en-IN number format."
+  "The Dashboard is the landing page of Customize Duniya and provides a live, at-a-glance overview of your entire gifting operation. It pulls real-time data from the analytics API and is organized into four zones: a header with a global time-range filter, a row of six KPI stat cards, a pair of analytics charts (Revenue Overview and Sales Pipeline), three insight widgets (Top Products, Sales Leaderboard, AR Aging), and a Top Clients list. All monetary values are shown in Indian Rupees (₹) using the en-IN number format."
 );
 
 // ---------- HEADER ----------
@@ -177,7 +177,7 @@ for (let i = 0; i < range.count; i++) {
   const fy = doc.page.height - 38;
   doc.moveTo(ML, fy).lineTo(ML + CW, fy).lineWidth(0.5).strokeColor(C.line).stroke();
   doc.fillColor(C.sub).font("Helvetica").fontSize(8);
-  doc.text("GiftERP · Dashboard Notes", ML, fy + 6, { width: CW / 2, align: "left" });
+  doc.text("Customize Duniya · Dashboard Notes", ML, fy + 6, { width: CW / 2, align: "left" });
   doc.text("Page " + (i + 1) + " of " + range.count, ML + CW / 2, fy + 6, { width: CW / 2, align: "right" });
 }
 

@@ -2,7 +2,7 @@ import PDFDocument from "pdfkit";
 import fs from "node:fs";
 import path from "node:path";
 
-const OUT = path.resolve("exports/GiftERP-Module-Reference.pdf");
+const OUT = path.resolve("exports/CustomizeDuniya-Module-Reference.pdf");
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 
 const C = {
@@ -98,7 +98,7 @@ function moduleCard(name, route, purpose, features, fieldGroups) {
 
 // ---------- TITLE ----------
 doc.rect(0, 0, PAGE_W, 130).fill(C.teal);
-doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(26).text("GiftERP", ML, 38);
+doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(26).text("Customize Duniya", ML, 38);
 doc.fillColor("#fcd34d").font("Helvetica-Bold").fontSize(14).text("Module Reference Guide", ML, 74);
 doc.fillColor("#d1fae5").font("Helvetica").fontSize(9.5).text(
   "Every module \u2014 purpose, key actions, statuses and data fields.",
@@ -519,7 +519,7 @@ moduleCard("Settings", "/settings",
   "Global company configuration.",
   [],
   [{ title: "Company settings fields", fields: [
-    ["companyName / legalName", "text", "Defaults 'GiftERP'"],
+    ["companyName / legalName", "text", "Defaults 'Customize Duniya'"],
     ["gstNumber / pan", "text", "Tax IDs"],
     ["email / phone / website", "text", ""],
     ["address / city / state / pincode", "text", ""],
@@ -538,7 +538,7 @@ for (let i = 0; i < range.count; i++) {
   const fy = doc.page.height - 38;
   doc.moveTo(ML, fy).lineTo(ML + CW, fy).lineWidth(0.5).strokeColor(C.line).stroke();
   doc.fillColor(C.sub).font("Helvetica").fontSize(8);
-  doc.text("GiftERP \u00b7 Module Reference", ML, fy + 6, { width: CW / 2, align: "left" });
+  doc.text("Customize Duniya \u00b7 Module Reference", ML, fy + 6, { width: CW / 2, align: "left" });
   doc.text("Page " + (i + 1) + " of " + range.count, ML + CW / 2, fy + 6, { width: CW / 2, align: "right" });
 }
 

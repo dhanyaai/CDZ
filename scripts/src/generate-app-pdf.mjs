@@ -2,7 +2,7 @@ import PDFDocument from "pdfkit";
 import fs from "node:fs";
 import path from "node:path";
 
-const OUT = path.resolve("exports/GiftERP-Application-Overview.pdf");
+const OUT = path.resolve("exports/CustomizeDuniya-Application-Overview.pdf");
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 
 const C = {
@@ -96,7 +96,7 @@ function table(headers, rows, widths) {
 
 // ---------- TITLE BANNER ----------
 doc.rect(0, 0, PAGE_W, 140).fill(C.teal);
-doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(28).text("GiftERP", ML, 40);
+doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(28).text("Customize Duniya", ML, 40);
 doc.fillColor("#fcd34d").font("Helvetica-Bold").fontSize(14).text("Application Overview", ML, 78);
 doc.fillColor("#d1fae5").font("Helvetica").fontSize(9.5).text(
   "An end-to-end ERP for running a corporate gifting business — CRM, catalog, orders, warehouse, logistics and finance in one place.",
@@ -110,9 +110,9 @@ doc.fillColor(C.sub).font("Helvetica").fontSize(9).text(
 doc.moveDown(0.5);
 
 // ---------- WHAT IS IT ----------
-h1("What is GiftERP?");
+h1("What is Customize Duniya?");
 para(
-  "GiftERP is a full-stack ERP purpose-built for corporate gifting companies. It covers the complete commercial workflow — from finding and qualifying a lead, quoting and winning the deal, sourcing and assembling the gift kits, to shipping, invoicing and collecting payment. Everything runs in a single web application with a live analytics dashboard, so sales, operations and finance teams work off the same real-time data."
+  "Customize Duniya is a full-stack ERP purpose-built for corporate gifting companies. It covers the complete commercial workflow — from finding and qualifying a lead, quoting and winning the deal, sourcing and assembling the gift kits, to shipping, invoicing and collecting payment. Everything runs in a single web application with a live analytics dashboard, so sales, operations and finance teams work off the same real-time data."
 );
 para(
   "The system is organised into eight functional areas spanning twenty-plus modules. All monetary values use Indian Rupees (₹) with GST-aware tax handling, making it suited to Indian operations."
@@ -202,7 +202,7 @@ for (let i = 0; i < range.count; i++) {
   const fy = doc.page.height - 38;
   doc.moveTo(ML, fy).lineTo(ML + CW, fy).lineWidth(0.5).strokeColor(C.line).stroke();
   doc.fillColor(C.sub).font("Helvetica").fontSize(8);
-  doc.text("GiftERP · Application Overview", ML, fy + 6, { width: CW / 2, align: "left" });
+  doc.text("Customize Duniya · Application Overview", ML, fy + 6, { width: CW / 2, align: "left" });
   doc.text("Page " + (i + 1) + " of " + range.count, ML + CW / 2, fy + 6, { width: CW / 2, align: "right" });
 }
 
