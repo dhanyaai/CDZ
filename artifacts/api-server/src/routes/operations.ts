@@ -31,6 +31,9 @@ router.post("/v1/grn", async (req, res): Promise<void> => {
   if (!purchaseOrderId || !Array.isArray(items)) {
     res.status(400).json({ error: "purchaseOrderId and items[] required" }); return;
   }
+  const [po] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable)
+    .where(and(eq(purchaseOrdersTable.id, purchaseOrderId), eq(purchaseOrdersTable.companyId, req.companyId)));
+  if (!po) { res.status(404).json({ error: "Purchase order not found" }); return; }
   const grnNumber = `GRN-${Date.now()}`;
   const grn = await db.transaction(async (tx) => {
     const [g] = await tx.insert(grnTable).values({ companyId: req.companyId, grnNumber, purchaseOrderId, notes }).returning();
@@ -78,6 +81,14 @@ router.get("/v1/credit-notes", async (req, res): Promise<void> => {
 router.post("/v1/credit-notes", async (req, res): Promise<void> => {
   const { invoiceId, clientId, amount, reason } = req.body ?? {};
   if (!clientId || amount == null || !reason) { res.status(400).json({ error: "clientId, amount, reason required" }); return; }
+  const [client] = await db.select({ id: clientsTable.id }).from(clientsTable)
+    .where(and(eq(clientsTable.id, clientId), eq(clientsTable.companyId, req.companyId)));
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+  if (invoiceId != null) {
+    const [invoice] = await db.select({ id: invoicesTable.id }).from(invoicesTable)
+      .where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.companyId, req.companyId)));
+    if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
+  }
   const creditNoteNumber = `CN-${Date.now()}`;
   const [cn] = await db.insert(creditNotesTable).values({
     companyId: req.companyId, creditNoteNumber, invoiceId, clientId, amount: amount.toString(), reason,

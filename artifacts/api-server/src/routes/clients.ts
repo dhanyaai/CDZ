@@ -83,6 +83,10 @@ router.delete("/v1/clients/:id", async (req, res): Promise<void> => {
 
 router.get("/v1/clients/:id/interactions", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
+  const [client] = await db.select({ id: clientsTable.id }).from(clientsTable)
+    .where(and(eq(clientsTable.id, id), eq(clientsTable.companyId, req.companyId)));
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+
   const interactions = await db
     .select()
     .from(clientInteractionsTable)
@@ -100,6 +104,10 @@ router.get("/v1/clients/:id/interactions", async (req, res): Promise<void> => {
 
 router.post("/v1/clients/:id/interactions", async (req, res): Promise<void> => {
   const clientId = parseInt(req.params.id as string, 10);
+  const [client] = await db.select({ id: clientsTable.id }).from(clientsTable)
+    .where(and(eq(clientsTable.id, clientId), eq(clientsTable.companyId, req.companyId)));
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+
   const { type, notes } = req.body ?? {};
   if (!type || !notes) {
     res.status(400).json({ error: "type and notes are required" });
