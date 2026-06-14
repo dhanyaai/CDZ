@@ -33,10 +33,11 @@ interface CompanyForm {
   city: string;
   state: string;
   pincode: string;
+  logoUrl: string;
 }
 
 function blankForm(): CompanyForm {
-  return { name: "", gstin: "", gstAddress: "", city: "", state: "", pincode: "" };
+  return { name: "", gstin: "", gstAddress: "", city: "", state: "", pincode: "", logoUrl: "" };
 }
 
 function useCompanies() {
@@ -109,6 +110,7 @@ export function Companies() {
       city: c.city ?? "",
       state: c.state ?? "",
       pincode: c.pincode ?? "",
+      logoUrl: c.logoUrl ?? "",
     });
     setDialogOpen(true);
   };
@@ -225,6 +227,10 @@ export function Companies() {
             <div className="space-y-1.5">
               <Label>Pincode</Label>
               <Input placeholder="400001" value={form.pincode} onChange={setField("pincode")} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Logo URL</Label>
+              <Input placeholder="https://example.com/logo.png" value={form.logoUrl} onChange={setField("logoUrl")} />
             </div>
             <Button
               className="w-full"

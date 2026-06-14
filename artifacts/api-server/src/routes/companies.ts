@@ -100,6 +100,12 @@ router.delete("/v1/companies/:id", requireAdmin, async (req, res): Promise<void>
     res.status(400).json({ error: "Cannot delete the currently active company" });
     return;
   }
+  const [membership] = await db.select().from(userCompaniesTable)
+    .where(and(eq(userCompaniesTable.userId, req.userId), eq(userCompaniesTable.companyId, id)));
+  if (!membership) {
+    res.status(403).json({ error: "You are not a member of this company" });
+    return;
+  }
   await db.delete(companiesTable).where(eq(companiesTable.id, id));
   res.sendStatus(204);
 });
