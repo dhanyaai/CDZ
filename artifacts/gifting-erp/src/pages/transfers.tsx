@@ -115,12 +115,12 @@ export function Transfers() {
       t.fromLocationName.toLowerCase().includes(q) ||
       t.toLocationName.toLowerCase().includes(q) ||
       (t.reference ?? "").toLowerCase().includes(q) ||
-      t.items.some((i) => i.productName.toLowerCase().includes(q))
+      (t.items ?? []).some((i) => i.productName.toLowerCase().includes(q))
     );
   });
 
   const totalTransfers = transfers?.length ?? 0;
-  const totalUnits = transfers?.reduce((s, t) => s + t.items.reduce((is, i) => is + i.quantity, 0), 0) ?? 0;
+  const totalUnits = transfers?.reduce((s, t) => s + (t.items ?? []).reduce((is, i) => is + i.quantity, 0), 0) ?? 0;
 
   return (
     <div className="space-y-6">
@@ -201,13 +201,14 @@ export function Transfers() {
               filtered.map((t, idx) => {
                 const key = t.batch ?? `__${idx}`;
                 const expanded = expandedBatches.has(key);
-                const totalQty = t.items.reduce((s, i) => s + i.quantity, 0);
+                const items = t.items ?? [];
+                const totalQty = items.reduce((s, i) => s + i.quantity, 0);
                 return (
                   <>
                     <TableRow
                       key={key}
-                      className={t.items.length > 1 ? "cursor-pointer hover:bg-muted/30" : ""}
-                      onClick={() => t.items.length > 1 && toggleExpand(t.batch)}
+                      className={items.length > 1 ? "cursor-pointer hover:bg-muted/30" : ""}
+                      onClick={() => items.length > 1 && toggleExpand(t.batch)}
                     >
                       <TableCell className="whitespace-nowrap text-muted-foreground text-sm align-top pt-3">
                         {format(new Date(t.createdAt), "MMM d, yyyy")}
@@ -225,23 +226,23 @@ export function Transfers() {
                         </div>
                       </TableCell>
                       <TableCell className="align-top pt-3">
-                        {t.items.length === 1 ? (
-                          <span className="text-sm">{t.items[0].productName}</span>
+                        {items.length === 1 ? (
+                          <span className="text-sm">{items[0].productName}</span>
                         ) : (
-                          <span className="text-sm text-muted-foreground">{t.items.length} products</span>
+                          <span className="text-sm text-muted-foreground">{items.length} products</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right font-bold tabular-nums align-top pt-3">{totalQty}</TableCell>
                       <TableCell className="text-muted-foreground text-sm align-top pt-3">{t.reference ?? "—"}</TableCell>
                       <TableCell className="align-top pt-2">
-                        {t.items.length > 1 && (
+                        {items.length > 1 && (
                           expanded
                             ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
                             : <ChevronDown className="w-4 h-4 text-muted-foreground" />
                         )}
                       </TableCell>
                     </TableRow>
-                    {expanded && t.items.map((item, ii) => (
+                    {expanded && items.map((item, ii) => (
                       <TableRow key={`${key}-item-${ii}`} className="bg-muted/20 border-t-0">
                         <TableCell />
                         <TableCell />
