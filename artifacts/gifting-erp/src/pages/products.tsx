@@ -299,10 +299,10 @@ export function Products() {
               </div>
               <FormField control={form.control} name="vendorId" render={({ field }) => (
                 <FormItem><FormLabel>Vendor</FormLabel>
-                  <Select onValueChange={v => field.onChange(v ? Number(v) : null)} value={field.value?.toString() || ""}>
+                  <Select onValueChange={v => field.onChange(v === "none" ? null : Number(v))} value={field.value?.toString() || "none"}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select vendor" /></SelectTrigger></FormControl>
                     <SelectContent>
-                      <SelectItem value="">No vendor</SelectItem>
+                      <SelectItem value="none">No vendor</SelectItem>
                       {vendors?.map(v => <SelectItem key={v.id} value={v.id.toString()}>{v.name}</SelectItem>)}
                     </SelectContent>
                   </Select>

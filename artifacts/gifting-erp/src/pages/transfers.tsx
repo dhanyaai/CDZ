@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -204,9 +204,8 @@ export function Transfers() {
                 const items = t.items ?? [];
                 const totalQty = items.reduce((s, i) => s + i.quantity, 0);
                 return (
-                  <>
+                  <Fragment key={key}>
                     <TableRow
-                      key={key}
                       className={items.length > 1 ? "cursor-pointer hover:bg-muted/30" : ""}
                       onClick={() => items.length > 1 && toggleExpand(t.batch)}
                     >
@@ -254,7 +253,7 @@ export function Transfers() {
                         <TableCell colSpan={2} />
                       </TableRow>
                     ))}
-                  </>
+                  </Fragment>
                 );
               })
             )}
