@@ -1,10 +1,12 @@
-import { pgTable, serial, text, integer, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { productsTable } from "./products";
+import { companiesTable } from "./companies";
 
 export const bundlesTable = pgTable("bundles", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().default(1).references(() => companiesTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
   occasion: text("occasion"),
@@ -20,7 +22,7 @@ export const bundleItemsTable = pgTable("bundle_items", {
   quantity: integer("quantity").notNull().default(1),
 });
 
-export const insertBundleSchema = createInsertSchema(bundlesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertBundleSchema = createInsertSchema(bundlesTable).omit({ id: true, createdAt: true, updatedAt: true, companyId: true });
 export const insertBundleItemSchema = createInsertSchema(bundleItemsTable).omit({ id: true });
 export type InsertBundle = z.infer<typeof insertBundleSchema>;
 export type Bundle = typeof bundlesTable.$inferSelect;

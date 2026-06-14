@@ -3,9 +3,11 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { clientsTable } from "./clients";
 import { salesOrdersTable } from "./salesOrders";
+import { companiesTable } from "./companies";
 
 export const artworkApprovalsTable = pgTable("artwork_approvals", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().default(1).references(() => companiesTable.id, { onDelete: "cascade" }),
   clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "cascade" }),
   salesOrderId: integer("sales_order_id").references(() => salesOrdersTable.id, { onDelete: "set null" }),
   assetName: text("asset_name").notNull(),
@@ -16,6 +18,6 @@ export const artworkApprovalsTable = pgTable("artwork_approvals", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const insertArtworkApprovalSchema = createInsertSchema(artworkApprovalsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertArtworkApprovalSchema = createInsertSchema(artworkApprovalsTable).omit({ id: true, createdAt: true, updatedAt: true, companyId: true });
 export type InsertArtworkApproval = z.infer<typeof insertArtworkApprovalSchema>;
 export type ArtworkApproval = typeof artworkApprovalsTable.$inferSelect;

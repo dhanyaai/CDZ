@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   db, categoriesTable, productVariantsTable, pricingTiersTable, customizationOptionsTable,
 } from "@workspace/db";
@@ -7,15 +7,15 @@ import {
 const router = Router();
 
 // Categories
-router.get("/v1/categories", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(categoriesTable).orderBy(categoriesTable.name);
+router.get("/v1/categories", async (req, res): Promise<void> => {
+  const rows = await db.select().from(categoriesTable).where(eq(categoriesTable.companyId, req.companyId)).orderBy(categoriesTable.name);
   res.json(rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })));
 });
 
 router.post("/v1/categories", async (req, res): Promise<void> => {
   const { name, slug, parentId, description } = req.body ?? {};
   if (!name || !slug) { res.status(400).json({ error: "name and slug required" }); return; }
-  const [c] = await db.insert(categoriesTable).values({ name, slug, parentId, description }).returning();
+  const [c] = await db.insert(categoriesTable).values({ companyId: req.companyId, name, slug, parentId, description }).returning();
   res.status(201).json(c);
 });
 
@@ -25,14 +25,14 @@ router.patch("/v1/categories/:id", async (req, res): Promise<void> => {
   for (const f of ["name", "slug", "parentId", "description"] as const) {
     if (req.body[f] !== undefined) updates[f] = req.body[f];
   }
-  const [c] = await db.update(categoriesTable).set(updates).where(eq(categoriesTable.id, id)).returning();
+  const [c] = await db.update(categoriesTable).set(updates).where(and(eq(categoriesTable.id, id), eq(categoriesTable.companyId, req.companyId))).returning();
   if (!c) { res.status(404).json({ error: "Not found" }); return; }
   res.json(c);
 });
 
 router.delete("/v1/categories/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  await db.delete(categoriesTable).where(eq(categoriesTable.id, id));
+  await db.delete(categoriesTable).where(and(eq(categoriesTable.id, id), eq(categoriesTable.companyId, req.companyId)));
   res.sendStatus(204);
 });
 

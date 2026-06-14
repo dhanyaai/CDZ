@@ -1,7 +1,9 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { companiesTable } from "./companies";
 
 export const companySettingsTable = pgTable("company_settings", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().default(1).references(() => companiesTable.id, { onDelete: "cascade" }),
   companyName: text("company_name").notNull().default("Customize Duniya"),
   legalName: text("legal_name"),
   gstNumber: text("gst_number"),

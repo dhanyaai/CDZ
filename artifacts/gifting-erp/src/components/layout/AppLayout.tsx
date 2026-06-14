@@ -12,6 +12,8 @@ import {
   PanelLeftOpen,
   Settings as SettingsIcon,
   ChevronsUpDown,
+  Building2,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -30,11 +32,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getStoredUser, logout } from "@/lib/auth";
+import { getStoredUser, logout, getStoredCompanyId, setStoredCompanyId } from "@/lib/auth";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { CommandPalette } from "@/components/command-palette";
 import { navItems, flatNavItems } from "@/lib/nav";
 import { useTheme } from "@/lib/theme";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+
+interface Company { id: number; name: string; createdAt: string; isCurrent: boolean }
 
 const COLLAPSE_KEY = "cd-sidebar-collapsed";
 
@@ -46,6 +52,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   );
   const [cmdOpen, setCmdOpen] = useState(false);
   const { theme, toggle } = useTheme();
+  const queryClient = useQueryClient();
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -67,17 +74,32 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   const user = getStoredUser();
+  const currentCompanyId = getStoredCompanyId();
+
   const initials = user
-    ? user.name
-        .split(" ")
-        .map((p) => p[0])
-        .slice(0, 2)
-        .join("")
-        .toUpperCase()
+    ? user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
     : "??";
+
   const current = flatNavItems.find(
     (i) => location === i.href || location.startsWith(`${i.href}/`),
   );
+
+  // Company data for switcher
+  const { data: companies } = useQuery<Company[]>({
+    queryKey: ["companies"],
+    queryFn: () => api<Company[]>("/v1/companies"),
+  });
+
+  const currentCompany = companies?.find(c => c.id === currentCompanyId) ?? companies?.[0];
+
+  const switchMutation = useMutation({
+    mutationFn: (id: number) =>
+      api<{ success: boolean; companyId: number; companyName: string }>(`/v1/companies/${id}/switch`, { method: "POST" }),
+    onSuccess: (data) => {
+      setStoredCompanyId(data.companyId);
+      queryClient.clear();
+    },
+  });
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -140,6 +162,52 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <X className="w-5 h-5" />
             </Button>
           </div>
+
+          {/* Company switcher */}
+          {companies && companies.length > 0 && (
+            <div className={cn("relative border-b border-white/[0.06]", collapsed ? "lg:px-2 px-3 py-2" : "px-3 py-2")}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  {collapsed ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button className="hidden lg:flex w-full h-9 items-center justify-center rounded-lg text-white/70 hover:bg-white/[0.06] hover:text-white transition-colors">
+                          <Building2 className="w-4 h-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{currentCompany?.name ?? "Company"}</TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <button className={cn(
+                      "flex w-full items-center gap-2 rounded-lg px-2.5 h-9 text-sm text-white/80 hover:bg-white/[0.06] hover:text-white transition-colors",
+                      collapsed && "lg:hidden"
+                    )}>
+                      <Building2 className="w-3.5 h-3.5 shrink-0 text-indigo-300/70" />
+                      <span className="truncate flex-1 text-left">{currentCompany?.name ?? "…"}</span>
+                      {companies.length > 1 && <ChevronsUpDown className="w-3 h-3 text-white/40 shrink-0" />}
+                    </button>
+                  )}
+                </DropdownMenuTrigger>
+                {companies.length > 1 && (
+                  <DropdownMenuContent side="right" align="start" className="w-52">
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Switch Company</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {companies.map((c) => (
+                      <DropdownMenuItem
+                        key={c.id}
+                        className="cursor-pointer"
+                        onClick={() => { if (c.id !== currentCompanyId) switchMutation.mutate(c.id); }}
+                      >
+                        <Building2 className="w-4 h-4" />
+                        <span className="flex-1 truncate">{c.name}</span>
+                        {c.id === currentCompanyId && <Check className="w-3.5 h-3.5 text-primary" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                )}
+              </DropdownMenu>
+            </div>
+          )}
 
           <nav
             className={cn(

@@ -22,11 +22,13 @@ import catalogRouter from "./catalog";
 import operationsRouter from "./operations";
 import notificationsRouter from "./notifications";
 import settingsRouter from "./settings";
+import companiesRouter from "./companies";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(companiesRouter);
 router.use(usersRouter);
 router.use(clientsRouter);
 router.use(vendorsRouter);

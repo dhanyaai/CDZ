@@ -8,12 +8,12 @@ function padId(id: number) {
   return `SO-${String(id).padStart(5, "0")}`;
 }
 
-async function getOrderDetail(id: number) {
+async function getOrderDetail(id: number, companyId: number) {
   const [order] = await db
     .select({ order: salesOrdersTable, clientName: clientsTable.companyName })
     .from(salesOrdersTable)
     .leftJoin(clientsTable, eq(salesOrdersTable.clientId, clientsTable.id))
-    .where(eq(salesOrdersTable.id, id));
+    .where(and(eq(salesOrdersTable.id, id), eq(salesOrdersTable.companyId, companyId)));
 
   if (!order) return null;
 
@@ -58,7 +58,7 @@ async function getOrderDetail(id: number) {
 
 router.get("/v1/sales-orders", async (req, res): Promise<void> => {
   const { status, clientId } = req.query as { status?: string; clientId?: string };
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(salesOrdersTable.companyId, req.companyId)];
   if (status) conditions.push(eq(salesOrdersTable.status, status));
   if (clientId) conditions.push(eq(salesOrdersTable.clientId, parseInt(clientId, 10)));
 
@@ -66,7 +66,7 @@ router.get("/v1/sales-orders", async (req, res): Promise<void> => {
     .select({ order: salesOrdersTable, clientName: clientsTable.companyName })
     .from(salesOrdersTable)
     .leftJoin(clientsTable, eq(salesOrdersTable.clientId, clientsTable.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(salesOrdersTable.createdAt);
 
   res.json(rows.map((r) => ({
@@ -92,6 +92,7 @@ router.post("/v1/sales-orders", async (req, res): Promise<void> => {
   const totalAmount = items.reduce((s: number, i: { quantity: number; unitPrice: number }) => s + i.quantity * i.unitPrice, 0);
 
   const [order] = await db.insert(salesOrdersTable).values({
+    companyId: req.companyId,
     orderNumber: `SO-TEMP`,
     clientId,
     occasion,
@@ -100,7 +101,6 @@ router.post("/v1/sales-orders", async (req, res): Promise<void> => {
     status: "Draft",
   }).returning();
 
-  // Update order number after insert
   await db.update(salesOrdersTable)
     .set({ orderNumber: padId(order.id) })
     .where(eq(salesOrdersTable.id, order.id));
@@ -126,13 +126,13 @@ router.post("/v1/sales-orders", async (req, res): Promise<void> => {
     );
   }
 
-  const detail = await getOrderDetail(order.id);
+  const detail = await getOrderDetail(order.id, req.companyId);
   res.status(201).json(detail);
 });
 
 router.get("/v1/sales-orders/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const detail = await getOrderDetail(id);
+  const detail = await getOrderDetail(id, req.companyId);
   if (!detail) {
     res.status(404).json({ error: "Sales order not found" });
     return;
@@ -146,12 +146,12 @@ router.patch("/v1/sales-orders/:id", async (req, res): Promise<void> => {
   if (req.body.occasion != null) updates.occasion = req.body.occasion;
   if (req.body.notes != null) updates.notes = req.body.notes;
 
-  const [order] = await db.update(salesOrdersTable).set(updates).where(eq(salesOrdersTable.id, id)).returning();
+  const [order] = await db.update(salesOrdersTable).set(updates).where(and(eq(salesOrdersTable.id, id), eq(salesOrdersTable.companyId, req.companyId))).returning();
   if (!order) {
     res.status(404).json({ error: "Sales order not found" });
     return;
   }
-  const detail = await getOrderDetail(id);
+  const detail = await getOrderDetail(id, req.companyId);
   res.json(detail);
 });
 
@@ -163,7 +163,7 @@ router.patch("/v1/sales-orders/:id/status", async (req, res): Promise<void> => {
     return;
   }
 
-  const [order] = await db.update(salesOrdersTable).set({ status }).where(eq(salesOrdersTable.id, id)).returning();
+  const [order] = await db.update(salesOrdersTable).set({ status }).where(and(eq(salesOrdersTable.id, id), eq(salesOrdersTable.companyId, req.companyId))).returning();
   if (!order) {
     res.status(404).json({ error: "Sales order not found" });
     return;

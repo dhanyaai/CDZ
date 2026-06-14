@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 const TTL_MS = 1000 * 60 * 60 * 24 * 7;
 
-type Session = { userId: number; expiresAt: number };
+type Session = { userId: number; companyId: number; expiresAt: number };
 
 const store = new Map<string, Session>();
 
@@ -10,20 +10,31 @@ export function generateToken(): string {
   return randomBytes(32).toString("hex");
 }
 
-export function createSession(userId: number): string {
+export function createSession(userId: number, companyId: number): string {
   const token = generateToken();
-  store.set(token, { userId, expiresAt: Date.now() + TTL_MS });
+  store.set(token, { userId, companyId, expiresAt: Date.now() + TTL_MS });
   return token;
 }
 
-export function getSessionUserId(token: string): number | null {
+export function getSession(token: string): { userId: number; companyId: number } | null {
   const s = store.get(token);
   if (!s) return null;
   if (s.expiresAt < Date.now()) {
     store.delete(token);
     return null;
   }
-  return s.userId;
+  return { userId: s.userId, companyId: s.companyId };
+}
+
+export function updateSessionCompany(token: string, companyId: number): boolean {
+  const s = store.get(token);
+  if (!s) return false;
+  s.companyId = companyId;
+  return true;
+}
+
+export function getSessionUserId(token: string): number | null {
+  return getSession(token)?.userId ?? null;
 }
 
 export function destroySession(token: string): void {
@@ -36,6 +47,6 @@ setInterval(() => {
 }, 1000 * 60 * 60).unref();
 
 export const sessions = {
-  get: (t: string) => getSessionUserId(t),
+  get: (t: string) => getSession(t),
   delete: destroySession,
 };

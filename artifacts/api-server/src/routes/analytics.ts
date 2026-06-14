@@ -1,52 +1,48 @@
 import { Router } from "express";
 import { eq, count, sum, and, gte, lte, sql, desc } from "drizzle-orm";
-import { db, clientsTable, salesOrdersTable, salesOrderItemsTable, assemblyJobsTable, invoicesTable, productsTable, purchaseOrdersTable, vendorsTable, purchaseOrderItemsTable, opportunitiesTable, usersTable, paymentsTable } from "@workspace/db";
+import { db, clientsTable, salesOrdersTable, salesOrderItemsTable, assemblyJobsTable, invoicesTable, productsTable, purchaseOrdersTable, vendorsTable, opportunitiesTable, usersTable, paymentsTable } from "@workspace/db";
 
 const router = Router();
 
-router.get("/v1/analytics/dashboard", async (_req, res): Promise<void> => {
-  const [clientCount] = await db.select({ count: count() }).from(clientsTable);
+router.get("/v1/analytics/dashboard", async (req, res): Promise<void> => {
+  const cid = req.companyId;
+
+  const [clientCount] = await db.select({ count: count() }).from(clientsTable).where(eq(clientsTable.companyId, cid));
 
   const [activeOrders] = await db
     .select({ count: count() })
     .from(salesOrdersTable)
-    .where(sql`${salesOrdersTable.status} NOT IN ('Delivered', 'Draft')`);
+    .where(and(eq(salesOrdersTable.companyId, cid), sql`${salesOrdersTable.status} NOT IN ('Delivered', 'Draft')`));
 
   const [pendingAssembly] = await db
     .select({ count: count() })
     .from(assemblyJobsTable)
-    .where(sql`${assemblyJobsTable.status} IN ('Pending', 'In Progress')`);
+    .where(and(eq(assemblyJobsTable.companyId, cid), sql`${assemblyJobsTable.status} IN ('Pending', 'In Progress')`));
 
   const now = new Date();
   const [overdueInvoices] = await db
     .select({ count: count() })
     .from(invoicesTable)
-    .where(and(
-      sql`${invoicesTable.status} != 'Paid'`,
-      lte(invoicesTable.dueDate, now)
-    ));
+    .where(and(eq(invoicesTable.companyId, cid), sql`${invoicesTable.status} != 'Paid'`, lte(invoicesTable.dueDate, now)));
 
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const [revenueThisMonth] = await db
     .select({ total: sum(salesOrdersTable.totalAmount) })
     .from(salesOrdersTable)
-    .where(and(
-      gte(salesOrdersTable.createdAt, startOfMonth),
-      sql`${salesOrdersTable.status} NOT IN ('Draft')`
-    ));
+    .where(and(eq(salesOrdersTable.companyId, cid), gte(salesOrdersTable.createdAt, startOfMonth), sql`${salesOrdersTable.status} NOT IN ('Draft')`));
 
   const [totalRevenue] = await db
     .select({ total: sum(salesOrdersTable.totalAmount) })
     .from(salesOrdersTable)
-    .where(sql`${salesOrdersTable.status} NOT IN ('Draft')`);
+    .where(and(eq(salesOrdersTable.companyId, cid), sql`${salesOrdersTable.status} NOT IN ('Draft')`));
 
-  const products = await db.select().from(productsTable);
+  const products = await db.select().from(productsTable).where(eq(productsTable.companyId, cid));
   const lowStockItems = products.filter((p) => p.stockLevel <= p.lowStockThreshold).length;
 
   const [pendingPOs] = await db
     .select({ count: count() })
     .from(purchaseOrdersTable)
-    .where(sql`${purchaseOrdersTable.status} IN ('Ordered', 'Partially Received')`);
+    .where(and(eq(purchaseOrdersTable.companyId, cid), sql`${purchaseOrdersTable.status} IN ('Ordered', 'Partially Received')`));
 
   res.json({
     totalClients: clientCount.count,
@@ -60,51 +56,35 @@ router.get("/v1/analytics/dashboard", async (_req, res): Promise<void> => {
   });
 });
 
-router.get("/v1/analytics/sales-pipeline", async (_req, res): Promise<void> => {
+router.get("/v1/analytics/sales-pipeline", async (req, res): Promise<void> => {
   const statuses = ["Draft", "Confirmed", "In Production", "Ready", "Dispatched", "Delivered"];
   const results = await Promise.all(
     statuses.map(async (status) => {
       const [row] = await db
         .select({ count: count(), total: sum(salesOrdersTable.totalAmount) })
         .from(salesOrdersTable)
-        .where(eq(salesOrdersTable.status, status));
-      return {
-        status,
-        count: row.count,
-        value: Number(row.total ?? 0),
-      };
+        .where(and(eq(salesOrdersTable.companyId, req.companyId), eq(salesOrdersTable.status, status)));
+      return { status, count: row.count, value: Number(row.total ?? 0) };
     })
   );
   res.json(results);
 });
 
-router.get("/v1/analytics/inventory-status", async (_req, res): Promise<void> => {
-  const products = await db.select().from(productsTable);
+router.get("/v1/analytics/inventory-status", async (req, res): Promise<void> => {
+  const products = await db.select().from(productsTable).where(eq(productsTable.companyId, req.companyId));
   const lowStockCount = products.filter((p) => p.stockLevel > 0 && p.stockLevel <= p.lowStockThreshold).length;
   const outOfStockCount = products.filter((p) => p.stockLevel === 0).length;
   const totalValue = products.reduce((s, p) => s + p.stockLevel * Number(p.costPrice), 0);
-
-  res.json({
-    totalProducts: products.length,
-    lowStockCount,
-    outOfStockCount,
-    totalValue,
-  });
+  res.json({ totalProducts: products.length, lowStockCount, outOfStockCount, totalValue });
 });
 
-router.get("/v1/analytics/vendor-performance", async (_req, res): Promise<void> => {
-  const vendors = await db.select().from(vendorsTable);
+router.get("/v1/analytics/vendor-performance", async (req, res): Promise<void> => {
+  const vendors = await db.select().from(vendorsTable).where(eq(vendorsTable.companyId, req.companyId));
   const results = await Promise.all(
     vendors.map(async (vendor) => {
-      const pos = await db.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.vendorId, vendor.id));
+      const pos = await db.select().from(purchaseOrdersTable).where(and(eq(purchaseOrdersTable.vendorId, vendor.id), eq(purchaseOrdersTable.companyId, req.companyId)));
       const completedPOs = pos.filter((p) => p.status === "Fully Received").length;
-      return {
-        vendorId: vendor.id,
-        vendorName: vendor.name,
-        totalPOs: pos.length,
-        completedPOs,
-        avgLeadDays: vendor.leadTimeDays,
-      };
+      return { vendorId: vendor.id, vendorName: vendor.name, totalPOs: pos.length, completedPOs, avgLeadDays: vendor.leadTimeDays };
     })
   );
   res.json(results);
@@ -124,6 +104,7 @@ router.get("/v1/analytics/revenue-trend", async (req, res): Promise<void> => {
       .select({ total: sum(salesOrdersTable.totalAmount), cnt: count() })
       .from(salesOrdersTable)
       .where(and(
+        eq(salesOrdersTable.companyId, req.companyId),
         gte(salesOrdersTable.createdAt, start),
         lte(salesOrdersTable.createdAt, end),
         sql`${salesOrdersTable.status} != 'Draft'`
@@ -135,35 +116,26 @@ router.get("/v1/analytics/revenue-trend", async (req, res): Promise<void> => {
       orders: row.cnt,
     });
   }
-
   res.json(results);
 });
 
-router.get("/v1/analytics/top-clients", async (_req, res): Promise<void> => {
-  const clients = await db.select().from(clientsTable);
+router.get("/v1/analytics/top-clients", async (req, res): Promise<void> => {
+  const clients = await db.select().from(clientsTable).where(eq(clientsTable.companyId, req.companyId));
   const results = await Promise.all(
     clients.map(async (client) => {
       const orders = await db
         .select()
         .from(salesOrdersTable)
-        .where(and(
-          eq(salesOrdersTable.clientId, client.id),
-          sql`${salesOrdersTable.status} != 'Draft'`
-        ));
+        .where(and(eq(salesOrdersTable.companyId, req.companyId), eq(salesOrdersTable.clientId, client.id), sql`${salesOrdersTable.status} != 'Draft'`));
       const totalRevenue = orders.reduce((s, o) => s + Number(o.totalAmount), 0);
-      return {
-        clientId: client.id,
-        clientName: client.companyName,
-        totalOrders: orders.length,
-        totalRevenue,
-      };
+      return { clientId: client.id, clientName: client.companyName, totalOrders: orders.length, totalRevenue };
     })
   );
   results.sort((a, b) => b.totalRevenue - a.totalRevenue);
   res.json(results.slice(0, 10));
 });
 
-router.get("/v1/analytics/top-products", async (_req, res): Promise<void> => {
+router.get("/v1/analytics/top-products", async (req, res): Promise<void> => {
   const rows = await db
     .select({
       productId: salesOrderItemsTable.productId,
@@ -172,8 +144,8 @@ router.get("/v1/analytics/top-products", async (_req, res): Promise<void> => {
       revenue: sql<string>`COALESCE(SUM(${salesOrderItemsTable.quantity} * ${salesOrderItemsTable.unitPrice}), 0)`,
     })
     .from(salesOrderItemsTable)
-    .innerJoin(productsTable, eq(productsTable.id, salesOrderItemsTable.productId))
-    .innerJoin(salesOrdersTable, eq(salesOrdersTable.id, salesOrderItemsTable.salesOrderId))
+    .innerJoin(productsTable, and(eq(productsTable.id, salesOrderItemsTable.productId), eq(productsTable.companyId, req.companyId)))
+    .innerJoin(salesOrdersTable, and(eq(salesOrdersTable.id, salesOrderItemsTable.salesOrderId), eq(salesOrdersTable.companyId, req.companyId)))
     .where(sql`${salesOrdersTable.status} != 'Draft'`)
     .groupBy(salesOrderItemsTable.productId, productsTable.name)
     .orderBy(desc(sql`SUM(${salesOrderItemsTable.quantity} * ${salesOrderItemsTable.unitPrice})`))
@@ -187,7 +159,7 @@ router.get("/v1/analytics/top-products", async (_req, res): Promise<void> => {
   })));
 });
 
-router.get("/v1/analytics/ar-aging", async (_req, res): Promise<void> => {
+router.get("/v1/analytics/ar-aging", async (req, res): Promise<void> => {
   const now = new Date();
   const invoices = await db
     .select({
@@ -199,9 +171,8 @@ router.get("/v1/analytics/ar-aging", async (_req, res): Promise<void> => {
       status: invoicesTable.status,
     })
     .from(invoicesTable)
-    .where(sql`${invoicesTable.status} != 'Paid'`);
+    .where(and(eq(invoicesTable.companyId, req.companyId), sql`${invoicesTable.status} != 'Paid'`));
 
-  // sum paid per invoice
   const paid = await db
     .select({
       invoiceId: paymentsTable.invoiceId,
@@ -236,8 +207,8 @@ router.get("/v1/analytics/ar-aging", async (_req, res): Promise<void> => {
   });
 });
 
-router.get("/v1/analytics/sales-leaderboard", async (_req, res): Promise<void> => {
-  const users = await db.select().from(usersTable);
+router.get("/v1/analytics/sales-leaderboard", async (req, res): Promise<void> => {
+  const users = await db.select().from(usersTable).where(eq(usersTable.companyId, req.companyId));
   const rows = await db
     .select({
       ownerId: opportunitiesTable.ownerId,
@@ -246,6 +217,7 @@ router.get("/v1/analytics/sales-leaderboard", async (_req, res): Promise<void> =
       cnt: count(),
     })
     .from(opportunitiesTable)
+    .where(eq(opportunitiesTable.companyId, req.companyId))
     .groupBy(opportunitiesTable.ownerId, opportunitiesTable.stage);
 
   const byUser = new Map<number, { ownerId: number; name: string; role: string; pipeline: number; won: number; openCount: number; wonCount: number }>();

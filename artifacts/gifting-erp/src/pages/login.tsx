@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Gift, Mail, Lock, ArrowRight, ShieldCheck, Boxes, BarChart3 } from "lucide-react";
 import { setToken } from "@/lib/api";
-import { setStoredUser, type AuthUser } from "@/lib/auth";
+import { setStoredUser, setStoredCompanyId, type AuthUser } from "@/lib/auth";
 
 export function Login() {
   const [, navigate] = useLocation();
@@ -24,9 +24,10 @@ export function Login() {
         body: JSON.stringify({ email, password }),
       });
       if (!res.ok) throw new Error("Invalid credentials");
-      const data = (await res.json()) as { token: string; user: AuthUser };
+      const data = (await res.json()) as { token: string; user: AuthUser; companyId: number };
       setToken(data.token);
       setStoredUser(data.user);
+      if (data.companyId) setStoredCompanyId(data.companyId);
       toast({ title: "Welcome back" });
       navigate("/dashboard");
     } catch (e) {

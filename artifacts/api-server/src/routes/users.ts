@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, usersTable } from "@workspace/db";
 import { hashPassword } from "../lib/password";
 
@@ -11,13 +11,14 @@ function serializeUser(u: typeof usersTable.$inferSelect) {
     name: u.name,
     email: u.email,
     role: u.role,
+    companyId: u.companyId,
     isActive: u.isActive,
     createdAt: u.createdAt.toISOString(),
   };
 }
 
-router.get("/v1/users", async (_req, res): Promise<void> => {
-  const users = await db.select().from(usersTable).orderBy(usersTable.createdAt);
+router.get("/v1/users", async (req, res): Promise<void> => {
+  const users = await db.select().from(usersTable).where(eq(usersTable.companyId, req.companyId)).orderBy(usersTable.createdAt);
   res.json(users.map(serializeUser));
 });
 
@@ -30,7 +31,7 @@ router.post("/v1/users", async (req, res): Promise<void> => {
 
   const [user] = await db
     .insert(usersTable)
-    .values({ name, email, passwordHash: hashPassword(password), role })
+    .values({ companyId: req.companyId, name, email, passwordHash: hashPassword(password), role })
     .returning();
 
   res.status(201).json(serializeUser(user));
@@ -38,7 +39,7 @@ router.post("/v1/users", async (req, res): Promise<void> => {
 
 router.get("/v1/users/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+  const [user] = await db.select().from(usersTable).where(and(eq(usersTable.id, id), eq(usersTable.companyId, req.companyId)));
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
@@ -59,7 +60,7 @@ router.patch("/v1/users/:id", async (req, res): Promise<void> => {
   const [user] = await db
     .update(usersTable)
     .set(updates)
-    .where(eq(usersTable.id, id))
+    .where(and(eq(usersTable.id, id), eq(usersTable.companyId, req.companyId)))
     .returning();
 
   if (!user) {
@@ -71,7 +72,7 @@ router.patch("/v1/users/:id", async (req, res): Promise<void> => {
 
 router.delete("/v1/users/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const [user] = await db.delete(usersTable).where(eq(usersTable.id, id)).returning();
+  const [user] = await db.delete(usersTable).where(and(eq(usersTable.id, id), eq(usersTable.companyId, req.companyId))).returning();
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;

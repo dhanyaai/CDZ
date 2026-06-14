@@ -1,12 +1,13 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { salesOrdersTable } from "./salesOrders";
-import { deliveryAddressesTable } from "./salesOrders";
+import { salesOrdersTable, deliveryAddressesTable } from "./salesOrders";
+import { companiesTable } from "./companies";
 
 export const shipmentsTable = pgTable("shipments", {
   id: serial("id").primaryKey(),
-  shipmentNumber: text("shipment_number").notNull().unique(),
+  companyId: integer("company_id").notNull().default(1).references(() => companiesTable.id, { onDelete: "cascade" }),
+  shipmentNumber: text("shipment_number").notNull(),
   salesOrderId: integer("sales_order_id").notNull().references(() => salesOrdersTable.id, { onDelete: "restrict" }),
   courierPartner: text("courier_partner").notNull(),
   status: text("status").notNull().default("Preparing"),
@@ -14,7 +15,9 @@ export const shipmentsTable = pgTable("shipments", {
   dispatchDate: timestamp("dispatch_date", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  uniqueIndex("shipments_company_number_idx").on(t.companyId, t.shipmentNumber),
+]);
 
 export const shipmentItemsTable = pgTable("shipment_items", {
   id: serial("id").primaryKey(),
@@ -26,7 +29,7 @@ export const shipmentItemsTable = pgTable("shipment_items", {
   trackingNumber: text("tracking_number"),
 });
 
-export const insertShipmentSchema = createInsertSchema(shipmentsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertShipmentSchema = createInsertSchema(shipmentsTable).omit({ id: true, createdAt: true, updatedAt: true, companyId: true });
 export const insertShipmentItemSchema = createInsertSchema(shipmentItemsTable).omit({ id: true });
 export type InsertShipment = z.infer<typeof insertShipmentSchema>;
 export type Shipment = typeof shipmentsTable.$inferSelect;

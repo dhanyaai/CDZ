@@ -22,18 +22,11 @@ function serializeClient(c: typeof clientsTable.$inferSelect) {
 
 router.get("/v1/clients", async (req, res): Promise<void> => {
   const { search, industry } = req.query as { search?: string; industry?: string };
-  const conditions: SQL[] = [];
-  if (search) {
-    conditions.push(ilike(clientsTable.companyName, `%${search}%`));
-  }
-  if (industry) {
-    conditions.push(eq(clientsTable.industry, industry));
-  }
+  const conditions: SQL[] = [eq(clientsTable.companyId, req.companyId)];
+  if (search) conditions.push(ilike(clientsTable.companyName, `%${search}%`));
+  if (industry) conditions.push(eq(clientsTable.industry, industry));
 
-  const clients = conditions.length > 0
-    ? await db.select().from(clientsTable).where(and(...conditions)).orderBy(clientsTable.companyName)
-    : await db.select().from(clientsTable).orderBy(clientsTable.companyName);
-
+  const clients = await db.select().from(clientsTable).where(and(...conditions)).orderBy(clientsTable.companyName);
   res.json(clients.map(serializeClient));
 });
 
@@ -46,7 +39,7 @@ router.post("/v1/clients", async (req, res): Promise<void> => {
 
   const [client] = await db
     .insert(clientsTable)
-    .values({ companyName, contactPerson, email, phone, gstNumber, industry, tags, billingAddress, shippingAddress })
+    .values({ companyId: req.companyId, companyName, contactPerson, email, phone, gstNumber, industry, tags, billingAddress, shippingAddress })
     .returning();
 
   res.status(201).json(serializeClient(client));
@@ -54,7 +47,7 @@ router.post("/v1/clients", async (req, res): Promise<void> => {
 
 router.get("/v1/clients/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const [client] = await db.select().from(clientsTable).where(eq(clientsTable.id, id));
+  const [client] = await db.select().from(clientsTable).where(and(eq(clientsTable.id, id), eq(clientsTable.companyId, req.companyId)));
   if (!client) {
     res.status(404).json({ error: "Client not found" });
     return;
@@ -70,7 +63,7 @@ router.patch("/v1/clients/:id", async (req, res): Promise<void> => {
     if (req.body[f] != null) updates[f] = req.body[f];
   }
 
-  const [client] = await db.update(clientsTable).set(updates).where(eq(clientsTable.id, id)).returning();
+  const [client] = await db.update(clientsTable).set(updates).where(and(eq(clientsTable.id, id), eq(clientsTable.companyId, req.companyId))).returning();
   if (!client) {
     res.status(404).json({ error: "Client not found" });
     return;
@@ -80,7 +73,7 @@ router.patch("/v1/clients/:id", async (req, res): Promise<void> => {
 
 router.delete("/v1/clients/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const [client] = await db.delete(clientsTable).where(eq(clientsTable.id, id)).returning();
+  const [client] = await db.delete(clientsTable).where(and(eq(clientsTable.id, id), eq(clientsTable.companyId, req.companyId))).returning();
   if (!client) {
     res.status(404).json({ error: "Client not found" });
     return;

@@ -22,19 +22,16 @@ function serializeProduct(p: typeof productsTable.$inferSelect, vendorName?: str
 
 router.get("/v1/products", async (req, res): Promise<void> => {
   const { search, category, lowStock } = req.query as { search?: string; category?: string; lowStock?: string };
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(productsTable.companyId, req.companyId)];
   if (search) conditions.push(ilike(productsTable.name, `%${search}%`));
   if (category) conditions.push(eq(productsTable.category, category));
   if (lowStock === "true") conditions.push(lte(productsTable.stockLevel, productsTable.lowStockThreshold));
 
   const rows = await db
-    .select({
-      product: productsTable,
-      vendorName: vendorsTable.name,
-    })
+    .select({ product: productsTable, vendorName: vendorsTable.name })
     .from(productsTable)
     .leftJoin(vendorsTable, eq(productsTable.vendorId, vendorsTable.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(productsTable.name);
 
   res.json(rows.map((r) => serializeProduct(r.product, r.vendorName)));
@@ -50,6 +47,7 @@ router.post("/v1/products", async (req, res): Promise<void> => {
   const [product] = await db
     .insert(productsTable)
     .values({
+      companyId: req.companyId,
       name,
       category,
       costPrice: String(costPrice),
@@ -74,7 +72,7 @@ router.get("/v1/products/:id", async (req, res): Promise<void> => {
     .select({ product: productsTable, vendorName: vendorsTable.name })
     .from(productsTable)
     .leftJoin(vendorsTable, eq(productsTable.vendorId, vendorsTable.id))
-    .where(eq(productsTable.id, id));
+    .where(and(eq(productsTable.id, id), eq(productsTable.companyId, req.companyId)));
 
   if (!row) {
     res.status(404).json({ error: "Product not found" });
@@ -95,7 +93,7 @@ router.patch("/v1/products/:id", async (req, res): Promise<void> => {
   if (req.body.vendorId != null) updates.vendorId = req.body.vendorId;
   if (req.body.imageUrl != null) updates.imageUrl = req.body.imageUrl;
 
-  const [product] = await db.update(productsTable).set(updates).where(eq(productsTable.id, id)).returning();
+  const [product] = await db.update(productsTable).set(updates).where(and(eq(productsTable.id, id), eq(productsTable.companyId, req.companyId))).returning();
   if (!product) {
     res.status(404).json({ error: "Product not found" });
     return;
@@ -110,7 +108,7 @@ router.patch("/v1/products/:id", async (req, res): Promise<void> => {
 
 router.delete("/v1/products/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const [product] = await db.delete(productsTable).where(eq(productsTable.id, id)).returning();
+  const [product] = await db.delete(productsTable).where(and(eq(productsTable.id, id), eq(productsTable.companyId, req.companyId))).returning();
   if (!product) {
     res.status(404).json({ error: "Product not found" });
     return;

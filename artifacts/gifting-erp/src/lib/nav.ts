@@ -20,6 +20,7 @@ import {
   Inbox,
   Receipt,
   UserCheck,
+  Building2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -85,6 +86,7 @@ export const navItems: NavGroup[] = [
     group: "Admin",
     items: [
       { label: "Users", href: "/users", icon: Users },
+      { label: "Companies", href: "/companies", icon: Building2 },
       { label: "Settings", href: "/settings", icon: Settings },
     ],
   },

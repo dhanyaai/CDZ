@@ -13,11 +13,12 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  const userId = sessions.get(auth.slice(7));
-  if (userId == null) {
+  const session = sessions.get(auth.slice(7));
+  if (session == null) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  (req as Request & { userId?: number }).userId = userId;
+  req.userId = session.userId;
+  req.companyId = session.companyId;
   next();
 }

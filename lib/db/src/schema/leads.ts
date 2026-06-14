@@ -1,9 +1,11 @@
 import { pgTable, serial, text, timestamp, integer, numeric } from "drizzle-orm/pg-core";
 import { clientsTable } from "./clients";
 import { usersTable } from "./users";
+import { companiesTable } from "./companies";
 
 export const leadsTable = pgTable("leads", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().default(1).references(() => companiesTable.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
   companyName: text("company_name"),
@@ -21,6 +23,7 @@ export const leadsTable = pgTable("leads", {
 
 export const opportunitiesTable = pgTable("opportunities", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().default(1).references(() => companiesTable.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
   leadId: integer("lead_id").references(() => leadsTable.id, { onDelete: "set null" }),

@@ -2,9 +2,11 @@ import { pgTable, serial, text, integer, numeric, timestamp } from "drizzle-orm/
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { vendorsTable } from "./vendors";
+import { companiesTable } from "./companies";
 
 export const productsTable = pgTable("products", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().default(1).references(() => companiesTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   category: text("category").notNull(),
   costPrice: numeric("cost_price", { precision: 12, scale: 2 }).notNull(),
@@ -17,6 +19,6 @@ export const productsTable = pgTable("products", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const insertProductSchema = createInsertSchema(productsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertProductSchema = createInsertSchema(productsTable).omit({ id: true, createdAt: true, updatedAt: true, companyId: true });
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof productsTable.$inferSelect;

@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, quotesTable, quoteItemsTable, clientsTable } from "@workspace/db";
 
 const router = Router();
 
-router.get("/v1/quotes", async (_req, res): Promise<void> => {
+router.get("/v1/quotes", async (req, res): Promise<void> => {
   const rows = await db
     .select({
       id: quotesTable.id, quoteNumber: quotesTable.quoteNumber,
@@ -17,6 +17,7 @@ router.get("/v1/quotes", async (_req, res): Promise<void> => {
     })
     .from(quotesTable)
     .leftJoin(clientsTable, eq(quotesTable.clientId, clientsTable.id))
+    .where(eq(quotesTable.companyId, req.companyId))
     .orderBy(quotesTable.createdAt);
   res.json(rows.map((r) => ({
     ...r,
@@ -29,7 +30,7 @@ router.get("/v1/quotes", async (_req, res): Promise<void> => {
 
 router.get("/v1/quotes/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const [quote] = await db.select().from(quotesTable).where(eq(quotesTable.id, id));
+  const [quote] = await db.select().from(quotesTable).where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId)));
   if (!quote) { res.status(404).json({ error: "Not found" }); return; }
   const items = await db.select().from(quoteItemsTable).where(eq(quoteItemsTable.quoteId, id));
   res.json({
@@ -55,7 +56,7 @@ router.post("/v1/quotes", async (req, res): Promise<void> => {
   const quoteNumber = `QT-${Date.now()}`;
   const quote = await db.transaction(async (tx) => {
     const [q] = await tx.insert(quotesTable).values({
-      quoteNumber, clientId, opportunityId,
+      companyId: req.companyId, quoteNumber, clientId, opportunityId,
       validUntil: validUntil ? new Date(validUntil) : null,
       subtotal: subtotal.toFixed(2), discountPct: disc.toFixed(2),
       gstAmount: gst.toFixed(2), totalAmount: total.toFixed(2), notes,
@@ -74,14 +75,14 @@ router.patch("/v1/quotes/:id", async (req, res): Promise<void> => {
   const updates: Record<string, unknown> = {};
   if (req.body.status) updates.status = req.body.status;
   if (req.body.notes !== undefined) updates.notes = req.body.notes;
-  const [q] = await db.update(quotesTable).set(updates).where(eq(quotesTable.id, id)).returning();
+  const [q] = await db.update(quotesTable).set(updates).where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId))).returning();
   if (!q) { res.status(404).json({ error: "Not found" }); return; }
   res.json(q);
 });
 
 router.delete("/v1/quotes/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  await db.delete(quotesTable).where(eq(quotesTable.id, id));
+  await db.delete(quotesTable).where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId)));
   res.sendStatus(204);
 });
 

@@ -23,7 +23,7 @@ function serializeInvoice(inv: typeof invoicesTable.$inferSelect, clientName: st
 
 router.get("/v1/invoices", async (req, res): Promise<void> => {
   const { status, clientId } = req.query as { status?: string; clientId?: string };
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(invoicesTable.companyId, req.companyId)];
   if (status) conditions.push(eq(invoicesTable.status, status));
   if (clientId) conditions.push(eq(invoicesTable.clientId, parseInt(clientId, 10)));
 
@@ -32,7 +32,7 @@ router.get("/v1/invoices", async (req, res): Promise<void> => {
     .from(invoicesTable)
     .leftJoin(clientsTable, eq(invoicesTable.clientId, clientsTable.id))
     .leftJoin(salesOrdersTable, eq(invoicesTable.salesOrderId, salesOrdersTable.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(invoicesTable.createdAt);
 
   res.json(rows.map((r) => serializeInvoice(r.invoice, r.clientName, r.orderNumber)));
@@ -48,7 +48,7 @@ router.post("/v1/invoices", async (req, res): Promise<void> => {
   const [order] = await db
     .select({ order: salesOrdersTable, clientId: salesOrdersTable.clientId })
     .from(salesOrdersTable)
-    .where(eq(salesOrdersTable.id, salesOrderId));
+    .where(and(eq(salesOrdersTable.id, salesOrderId), eq(salesOrdersTable.companyId, req.companyId)));
 
   if (!order) {
     res.status(404).json({ error: "Sales order not found" });
@@ -60,6 +60,7 @@ router.post("/v1/invoices", async (req, res): Promise<void> => {
   const grandTotal = totalAmount + gstAmount;
 
   const [invoice] = await db.insert(invoicesTable).values({
+    companyId: req.companyId,
     invoiceNumber: "INV-TEMP",
     salesOrderId,
     clientId: order.clientId,
@@ -89,7 +90,7 @@ router.get("/v1/invoices/:id", async (req, res): Promise<void> => {
     .from(invoicesTable)
     .leftJoin(clientsTable, eq(invoicesTable.clientId, clientsTable.id))
     .leftJoin(salesOrdersTable, eq(invoicesTable.salesOrderId, salesOrdersTable.id))
-    .where(eq(invoicesTable.id, id));
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, req.companyId)));
 
   if (!row) {
     res.status(404).json({ error: "Invoice not found" });
@@ -98,7 +99,6 @@ router.get("/v1/invoices/:id", async (req, res): Promise<void> => {
   res.json(serializeInvoice(row.invoice, row.clientName, row.orderNumber));
 });
 
-// Payments
 router.get("/v1/payments", async (req, res): Promise<void> => {
   const { invoiceId } = req.query as { invoiceId?: string };
   const payments = invoiceId
@@ -131,7 +131,6 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
     notes,
   }).returning();
 
-  // Check if invoice is now fully paid
   const allPayments = await db.select().from(paymentsTable).where(eq(paymentsTable.invoiceId, invoiceId));
   const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, invoiceId));
   if (invoice) {

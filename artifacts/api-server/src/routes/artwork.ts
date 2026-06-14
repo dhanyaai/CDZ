@@ -20,7 +20,7 @@ function serializeArtwork(a: typeof artworkApprovalsTable.$inferSelect, clientNa
 
 router.get("/v1/artwork", async (req, res): Promise<void> => {
   const { clientId, status } = req.query as { clientId?: string; status?: string };
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(artworkApprovalsTable.companyId, req.companyId)];
   if (clientId) conditions.push(eq(artworkApprovalsTable.clientId, parseInt(clientId, 10)));
   if (status) conditions.push(eq(artworkApprovalsTable.status, status));
 
@@ -28,7 +28,7 @@ router.get("/v1/artwork", async (req, res): Promise<void> => {
     .select({ artwork: artworkApprovalsTable, clientName: clientsTable.companyName })
     .from(artworkApprovalsTable)
     .leftJoin(clientsTable, eq(artworkApprovalsTable.clientId, clientsTable.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(artworkApprovalsTable.createdAt);
 
   res.json(rows.map((r) => serializeArtwork(r.artwork, r.clientName)));
@@ -43,7 +43,7 @@ router.post("/v1/artwork", async (req, res): Promise<void> => {
 
   const [artwork] = await db
     .insert(artworkApprovalsTable)
-    .values({ clientId, salesOrderId: salesOrderId ?? null, assetName, assetUrl, notes, status: "Pending" })
+    .values({ companyId: req.companyId, clientId, salesOrderId: salesOrderId ?? null, assetName, assetUrl, notes, status: "Pending" })
     .returning();
 
   const [row] = await db
@@ -66,7 +66,7 @@ router.patch("/v1/artwork/:id/status", async (req, res): Promise<void> => {
   const updates: Record<string, unknown> = { status };
   if (notes != null) updates.notes = notes;
 
-  const [artwork] = await db.update(artworkApprovalsTable).set(updates).where(eq(artworkApprovalsTable.id, id)).returning();
+  const [artwork] = await db.update(artworkApprovalsTable).set(updates).where(and(eq(artworkApprovalsTable.id, id), eq(artworkApprovalsTable.companyId, req.companyId))).returning();
   if (!artwork) {
     res.status(404).json({ error: "Artwork approval not found" });
     return;

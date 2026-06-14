@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, bundlesTable, bundleItemsTable, productsTable } from "@workspace/db";
 
 const router = Router();
@@ -35,8 +35,8 @@ async function getBundleWithItems(id: number) {
   };
 }
 
-router.get("/v1/bundles", async (_req, res): Promise<void> => {
-  const bundles = await db.select().from(bundlesTable).orderBy(bundlesTable.name);
+router.get("/v1/bundles", async (req, res): Promise<void> => {
+  const bundles = await db.select().from(bundlesTable).where(eq(bundlesTable.companyId, req.companyId)).orderBy(bundlesTable.name);
   const results = await Promise.all(bundles.map((b) => getBundleWithItems(b.id)));
   res.json(results.filter(Boolean));
 });
@@ -48,7 +48,7 @@ router.post("/v1/bundles", async (req, res): Promise<void> => {
     return;
   }
 
-  const [bundle] = await db.insert(bundlesTable).values({ name, description, occasion, imageUrl }).returning();
+  const [bundle] = await db.insert(bundlesTable).values({ companyId: req.companyId, name, description, occasion, imageUrl }).returning();
 
   if (Array.isArray(items) && items.length > 0) {
     await db.insert(bundleItemsTable).values(
@@ -85,7 +85,7 @@ router.patch("/v1/bundles/:id", async (req, res): Promise<void> => {
   if (imageUrl != null) updates.imageUrl = imageUrl;
 
   if (Object.keys(updates).length > 0) {
-    await db.update(bundlesTable).set(updates).where(eq(bundlesTable.id, id));
+    await db.update(bundlesTable).set(updates).where(and(eq(bundlesTable.id, id), eq(bundlesTable.companyId, req.companyId)));
   }
 
   if (Array.isArray(items)) {
@@ -111,7 +111,7 @@ router.patch("/v1/bundles/:id", async (req, res): Promise<void> => {
 
 router.delete("/v1/bundles/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const [bundle] = await db.delete(bundlesTable).where(eq(bundlesTable.id, id)).returning();
+  const [bundle] = await db.delete(bundlesTable).where(and(eq(bundlesTable.id, id), eq(bundlesTable.companyId, req.companyId))).returning();
   if (!bundle) {
     res.status(404).json({ error: "Bundle not found" });
     return;
@@ -119,7 +119,6 @@ router.delete("/v1/bundles/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-// Smart bundle suggester
 router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
   const { budget, occasion } = req.body ?? {};
   if (!budget || !occasion) {
@@ -127,13 +126,11 @@ router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
     return;
   }
 
-  // Get all products and optimize for margin within budget
   const products = await db
     .select()
     .from(productsTable)
-    .where(eq(productsTable.stockLevel, productsTable.stockLevel)); // all products with stock
+    .where(eq(productsTable.companyId, req.companyId));
 
-  // Sort by margin (sellingPrice - costPrice) descending
   const sorted = products
     .filter((p) => p.stockLevel > 0)
     .map((p) => ({

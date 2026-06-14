@@ -40,7 +40,7 @@ async function getShipmentDetail(id: number) {
 
 router.get("/v1/shipments", async (req, res): Promise<void> => {
   const { status, salesOrderId } = req.query as { status?: string; salesOrderId?: string };
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(shipmentsTable.companyId, req.companyId)];
   if (status) conditions.push(eq(shipmentsTable.status, status));
   if (salesOrderId) conditions.push(eq(shipmentsTable.salesOrderId, parseInt(salesOrderId, 10)));
 
@@ -48,7 +48,7 @@ router.get("/v1/shipments", async (req, res): Promise<void> => {
     .select({ shipment: shipmentsTable, orderNumber: salesOrdersTable.orderNumber })
     .from(shipmentsTable)
     .leftJoin(salesOrdersTable, eq(shipmentsTable.salesOrderId, salesOrdersTable.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(shipmentsTable.createdAt);
 
   res.json(rows.map((r) => ({
@@ -72,6 +72,7 @@ router.post("/v1/shipments", async (req, res): Promise<void> => {
   }
 
   const [shipment] = await db.insert(shipmentsTable).values({
+    companyId: req.companyId,
     shipmentNumber: "SH-TEMP",
     salesOrderId,
     courierPartner,
@@ -81,7 +82,6 @@ router.post("/v1/shipments", async (req, res): Promise<void> => {
 
   await db.update(shipmentsTable).set({ shipmentNumber: `SH-${String(shipment.id).padStart(5, "0")}` }).where(eq(shipmentsTable.id, shipment.id));
 
-  // Auto-create shipment items from delivery addresses
   const addresses = await db
     .select()
     .from(deliveryAddressesTable)
@@ -120,7 +120,7 @@ router.patch("/v1/shipments/:id", async (req, res): Promise<void> => {
   if (req.body.trackingNumber != null) updates.trackingNumber = req.body.trackingNumber;
   if (req.body.dispatchDate != null) updates.dispatchDate = new Date(req.body.dispatchDate);
 
-  await db.update(shipmentsTable).set(updates).where(eq(shipmentsTable.id, id));
+  await db.update(shipmentsTable).set(updates).where(and(eq(shipmentsTable.id, id), eq(shipmentsTable.companyId, req.companyId)));
   const detail = await getShipmentDetail(id);
   if (!detail) {
     res.status(404).json({ error: "Shipment not found" });
@@ -136,7 +136,7 @@ router.patch("/v1/shipments/:id/status", async (req, res): Promise<void> => {
     res.status(400).json({ error: "status is required" });
     return;
   }
-  const [shipment] = await db.update(shipmentsTable).set({ status }).where(eq(shipmentsTable.id, id)).returning();
+  const [shipment] = await db.update(shipmentsTable).set({ status }).where(and(eq(shipmentsTable.id, id), eq(shipmentsTable.companyId, req.companyId))).returning();
   if (!shipment) {
     res.status(404).json({ error: "Shipment not found" });
     return;

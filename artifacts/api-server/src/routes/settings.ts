@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, companySettingsTable, usersTable } from "@workspace/db";
 import { hashPassword, verifyPassword } from "../lib/password";
 import { getSessionUserId } from "../lib/sessions";
@@ -7,21 +7,20 @@ import { requireAdmin } from "../lib/requireAdmin";
 
 const router = Router();
 
-async function getOrCreateSettings() {
-  const [existing] = await db.select().from(companySettingsTable).limit(1);
+async function getOrCreateSettings(companyId: number) {
+  const [existing] = await db.select().from(companySettingsTable).where(eq(companySettingsTable.companyId, companyId)).limit(1);
   if (existing) return existing;
-  const [created] = await db.insert(companySettingsTable).values({}).returning();
+  const [created] = await db.insert(companySettingsTable).values({ companyId }).returning();
   return created;
 }
 
-// GET is readable by any authenticated user (used to brand invoices/quotes in UI).
-router.get("/v1/settings/company", async (_req, res): Promise<void> => {
-  const s = await getOrCreateSettings();
+router.get("/v1/settings/company", async (req, res): Promise<void> => {
+  const s = await getOrCreateSettings(req.companyId);
   res.json(s);
 });
 
 router.patch("/v1/settings/company", requireAdmin, async (req, res): Promise<void> => {
-  const current = await getOrCreateSettings();
+  const current = await getOrCreateSettings(req.companyId);
   const allowed = [
     "companyName", "legalName", "gstNumber", "pan", "email", "phone",
     "address", "city", "state", "pincode", "website", "logoUrl",
@@ -32,7 +31,7 @@ router.patch("/v1/settings/company", requireAdmin, async (req, res): Promise<voi
   const [updated] = await db
     .update(companySettingsTable)
     .set(updates)
-    .where(eq(companySettingsTable.id, current.id))
+    .where(and(eq(companySettingsTable.id, current.id), eq(companySettingsTable.companyId, req.companyId)))
     .returning();
   res.json(updated);
 });

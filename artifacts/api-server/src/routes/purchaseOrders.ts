@@ -43,7 +43,7 @@ async function getPODetail(id: number) {
 
 router.get("/v1/purchase-orders", async (req, res): Promise<void> => {
   const { status, vendorId } = req.query as { status?: string; vendorId?: string };
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(purchaseOrdersTable.companyId, req.companyId)];
   if (status) conditions.push(eq(purchaseOrdersTable.status, status));
   if (vendorId) conditions.push(eq(purchaseOrdersTable.vendorId, parseInt(vendorId, 10)));
 
@@ -52,7 +52,7 @@ router.get("/v1/purchase-orders", async (req, res): Promise<void> => {
     .from(purchaseOrdersTable)
     .leftJoin(vendorsTable, eq(purchaseOrdersTable.vendorId, vendorsTable.id))
     .leftJoin(salesOrdersTable, eq(purchaseOrdersTable.salesOrderId, salesOrdersTable.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(purchaseOrdersTable.createdAt);
 
   res.json(rows.map((r) => ({
@@ -78,6 +78,7 @@ router.post("/v1/purchase-orders", async (req, res): Promise<void> => {
   const totalAmount = items.reduce((s: number, i: { quantity: number; unitPrice: number }) => s + i.quantity * i.unitPrice, 0);
 
   const [po] = await db.insert(purchaseOrdersTable).values({
+    companyId: req.companyId,
     poNumber: "PO-TEMP",
     vendorId,
     salesOrderId: salesOrderId ?? null,
@@ -117,7 +118,7 @@ router.patch("/v1/purchase-orders/:id", async (req, res): Promise<void> => {
   const updates: Record<string, unknown> = {};
   if (req.body.expectedDelivery != null) updates.expectedDelivery = new Date(req.body.expectedDelivery);
 
-  await db.update(purchaseOrdersTable).set(updates).where(eq(purchaseOrdersTable.id, id));
+  await db.update(purchaseOrdersTable).set(updates).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.companyId, req.companyId)));
   const detail = await getPODetail(id);
   if (!detail) {
     res.status(404).json({ error: "Purchase order not found" });
@@ -133,7 +134,7 @@ router.patch("/v1/purchase-orders/:id/status", async (req, res): Promise<void> =
     res.status(400).json({ error: "status is required" });
     return;
   }
-  const [po] = await db.update(purchaseOrdersTable).set({ status }).where(eq(purchaseOrdersTable.id, id)).returning();
+  const [po] = await db.update(purchaseOrdersTable).set({ status }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.companyId, req.companyId))).returning();
   if (!po) {
     res.status(404).json({ error: "Purchase order not found" });
     return;
