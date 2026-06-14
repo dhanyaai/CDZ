@@ -76,11 +76,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const user = getStoredUser();
   const currentCompanyId = getStoredCompanyId();
 
+  const [productionEnabled, setProductionEnabled] = useState(
+    () => getStoredUser()?.productionEnabled ?? false,
+  );
+
+  useEffect(() => {
+    const handler = () => setProductionEnabled(getStoredUser()?.productionEnabled ?? false);
+    window.addEventListener("auth-user-changed", handler);
+    return () => window.removeEventListener("auth-user-changed", handler);
+  }, []);
+
   const initials = user
     ? user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
     : "??";
 
-  const navItems = getNavItems({ production: user?.productionEnabled });
+  const navItems = getNavItems({ production: productionEnabled });
   const flatNavItems = navItems.flatMap((g) => g.items);
 
   const current = flatNavItems.find(

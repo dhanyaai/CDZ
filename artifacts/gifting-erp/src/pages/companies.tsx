@@ -102,9 +102,14 @@ export function Companies() {
   const featureMutation = useMutation({
     mutationFn: ({ id, productionEnabled }: { id: number; productionEnabled: boolean }) =>
       api<Company>(`/v1/companies/${id}/features`, { method: "PATCH", body: JSON.stringify({ productionEnabled }) }),
-    onSuccess: () => {
+    onSuccess: (company) => {
       queryClient.invalidateQueries({ queryKey: ["companies"] });
       toast({ title: "Feature settings saved" });
+      if (company.id === getStoredCompanyId()) {
+        const cur = getStoredUser();
+        if (cur) setStoredUser({ ...cur, productionEnabled: company.productionEnabled });
+        window.dispatchEvent(new Event("auth-user-changed"));
+      }
     },
     onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
