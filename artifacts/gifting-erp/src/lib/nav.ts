@@ -27,6 +27,7 @@ import {
   BookOpen,
   Factory,
   Landmark,
+  BarChart3,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -93,6 +94,7 @@ export function getNavItems(opts: { production?: boolean } = {}): NavGroup[] {
         { label: "Payments", href: "/payments", icon: CreditCard },
         { label: "Credit Notes", href: "/credit-notes", icon: Receipt },
         { label: "Fixed Assets", href: "/fixed-assets", icon: Landmark },
+        { label: "Reports", href: "/reports", icon: BarChart3 },
       ],
     },
     {

@@ -43,6 +43,7 @@ import { SampleOrders } from "@/pages/sample-orders";
 import { ItemLedger } from "@/pages/item-ledger";
 import { FixedAssets } from "@/pages/fixed-assets";
 import { ProductionOrders } from "@/pages/production-orders";
+import { Reports } from "@/pages/reports";
 
 initAuth();
 initTheme();
@@ -107,6 +108,7 @@ function Router() {
         <Route path="/credit-notes" component={CreditNotes} />
         <Route path="/fixed-assets" component={FixedAssets} />
         <Route path="/production" component={ProductionOrders} />
+        <Route path="/reports" component={Reports} />
         <Route path="/users" component={Users} />
         <Route path="/follow-ups" component={FollowUps} />
         <Route path="/companies" component={Companies} />
