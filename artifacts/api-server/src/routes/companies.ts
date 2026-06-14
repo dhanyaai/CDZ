@@ -22,22 +22,13 @@ function serializeCompany(c: typeof companiesTable.$inferSelect, isCurrent: bool
 }
 
 router.get("/v1/companies", async (req, res): Promise<void> => {
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId));
-
-  let companies: (typeof companiesTable.$inferSelect)[];
-  if (user?.role === "Admin") {
-    companies = await db.select().from(companiesTable).orderBy(companiesTable.name);
-  } else {
-    const rows = await db
-      .select({ company: companiesTable })
-      .from(userCompaniesTable)
-      .innerJoin(companiesTable, eq(userCompaniesTable.companyId, companiesTable.id))
-      .where(eq(userCompaniesTable.userId, req.userId))
-      .orderBy(companiesTable.name);
-    companies = rows.map((r) => r.company);
-  }
-
-  res.json(companies.map((c) => serializeCompany(c, c.id === req.companyId)));
+  const rows = await db
+    .select({ company: companiesTable })
+    .from(userCompaniesTable)
+    .innerJoin(companiesTable, eq(userCompaniesTable.companyId, companiesTable.id))
+    .where(eq(userCompaniesTable.userId, req.userId))
+    .orderBy(companiesTable.name);
+  res.json(rows.map((r) => serializeCompany(r.company, r.company.id === req.companyId)));
 });
 
 router.post("/v1/companies", requireAdmin, async (req, res): Promise<void> => {
@@ -85,16 +76,11 @@ router.post("/v1/companies/:id/switch", async (req, res): Promise<void> => {
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, id));
   if (!company) { res.status(404).json({ error: "Company not found" }); return; }
 
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId));
-  if (!user) { res.status(404).json({ error: "User not found" }); return; }
-
-  if (user.role !== "Admin") {
-    const [membership] = await db.select().from(userCompaniesTable)
-      .where(and(eq(userCompaniesTable.userId, req.userId), eq(userCompaniesTable.companyId, id)));
-    if (!membership) {
-      res.status(403).json({ error: "You do not have access to this company" });
-      return;
-    }
+  const [membership] = await db.select().from(userCompaniesTable)
+    .where(and(eq(userCompaniesTable.userId, req.userId), eq(userCompaniesTable.companyId, id)));
+  if (!membership) {
+    res.status(403).json({ error: "You do not have access to this company" });
+    return;
   }
 
   const auth = req.headers.authorization;

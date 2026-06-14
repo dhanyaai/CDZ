@@ -10,6 +10,7 @@ tags:
   - name: health
   - name: auth
   - name: users
+  - name: companies
   - name: clients
   - name: products
   - name: bundles
@@ -682,6 +683,44 @@ paths:
                 items:
                   $ref: "#/components/schemas/InventoryItem"
 
+  /v1/inventory/by-location:
+    get:
+      operationId: listInventoryByLocation
+      tags: [inventory]
+      summary: Per-location stock totals
+      responses:
+        "200":
+          description: Inventory grouped by location
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryByLocation"
+
+  /v1/inventory/transfer:
+    post:
+      operationId: createInventoryTransfer
+      tags: [inventory]
+      summary: Transfer stock between locations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryTransferInput"
+      responses:
+        "201":
+          description: Transfer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryTransferResult"
+        "400":
+          description: Insufficient stock or invalid input
+        "404":
+          description: Product or location not found
+
   /v1/inventory/movements:
     get:
       operationId: listInventoryMovements
@@ -1111,6 +1150,86 @@ paths:
                 items:
                   $ref: "#/components/schemas/TopClient"
 
+  # ── Companies ─────────────────────────────────────────────────────────────
+  /v1/companies:
+    get:
+      operationId: listCompanies
+      tags: [companies]
+      summary: List companies the current user belongs to
+      responses:
+        "200":
+          description: Company list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Company"
+    post:
+      operationId: createCompany
+      tags: [companies]
+      summary: Create a new company (Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+
+  /v1/companies/{id}:
+    patch:
+      operationId: updateCompany
+      tags: [companies]
+      summary: Update company profile (Admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+    delete:
+      operationId: deleteCompany
+      tags: [companies]
+      summary: Delete a company (Admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+
+  /v1/companies/{id}/switch:
+    post:
+      operationId: switchCompany
+      tags: [companies]
+      summary: Switch active company context for the current session
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Switched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "403":
+          description: Not a member of this company
+
 # ── Schemas ────────────────────────────────────────────────────────────────
 components:
   schemas:
@@ -1120,6 +1239,45 @@ components:
       properties:
         status:
           type: string
+
+    # ── Companies ──
+    Company:
+      type: object
+      required: [id, name, createdAt, isCurrent]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        gstin: { type: ["string", "null"] }
+        gstAddress: { type: ["string", "null"] }
+        city: { type: ["string", "null"] }
+        state: { type: ["string", "null"] }
+        pincode: { type: ["string", "null"] }
+        logoUrl: { type: ["string", "null"] }
+        createdAt: { type: string }
+        isCurrent: { type: boolean }
+
+    CompanyInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        gstin: { type: string }
+        gstAddress: { type: string }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string }
+        logoUrl: { type: string }
+
+    CompanyUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        gstin: { type: string }
+        gstAddress: { type: string }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string }
+        logoUrl: { type: string }
 
     # ── Auth ──
     LoginInput:
@@ -1549,6 +1707,43 @@ components:
         quantity: { type: integer }
         batch: { type: string }
         reference: { type: string }
+
+    InventoryByLocationItem:
+      type: object
+      required: [productId, productName, qty]
+      properties:
+        productId: { type: integer }
+        productName: { type: string }
+        qty: { type: integer }
+
+    InventoryByLocation:
+      type: object
+      required: [locationId, locationName, locationCode, items]
+      properties:
+        locationId: { type: integer }
+        locationName: { type: string }
+        locationCode: { type: string }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryByLocationItem"
+
+    InventoryTransferInput:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId: { type: integer }
+        fromLocationId: { type: integer }
+        toLocationId: { type: integer }
+        quantity: { type: integer }
+        reference: { type: string }
+
+    InventoryTransferResult:
+      type: object
+      required: [outMovementId, inMovementId]
+      properties:
+        outMovementId: { type: ["integer", "null"] }
+        inMovementId: { type: ["integer", "null"] }
 
     # ── Assembly ──
     AssemblyJobItem:

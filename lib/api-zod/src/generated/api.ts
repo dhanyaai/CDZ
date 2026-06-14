@@ -719,6 +719,34 @@ export const ListInventoryResponseItem = zod.object({
 export const ListInventoryResponse = zod.array(ListInventoryResponseItem)
 
 
+/**
+ * @summary Per-location stock totals
+ */
+export const ListInventoryByLocationResponseItem = zod.object({
+  "locationId": zod.number(),
+  "locationName": zod.string(),
+  "locationCode": zod.string(),
+  "items": zod.array(zod.object({
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "qty": zod.number()
+}))
+})
+export const ListInventoryByLocationResponse = zod.array(ListInventoryByLocationResponseItem)
+
+
+/**
+ * @summary Transfer stock between locations
+ */
+export const CreateInventoryTransferBody = zod.object({
+  "productId": zod.number(),
+  "fromLocationId": zod.number().optional(),
+  "toLocationId": zod.number().optional(),
+  "quantity": zod.number(),
+  "reference": zod.string().optional()
+})
+
+
 export const ListInventoryMovementsQueryParams = zod.object({
   "productId": zod.coerce.number().optional(),
   "type": zod.coerce.string().optional()
@@ -1133,5 +1161,97 @@ export const GetTopClientsResponseItem = zod.object({
   "totalRevenue": zod.number()
 })
 export const GetTopClientsResponse = zod.array(GetTopClientsResponseItem)
+
+
+/**
+ * @summary List companies the current user belongs to
+ */
+export const ListCompaniesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "gstin": zod.string().nullish(),
+  "gstAddress": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "pincode": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "isCurrent": zod.boolean()
+})
+export const ListCompaniesResponse = zod.array(ListCompaniesResponseItem)
+
+
+/**
+ * @summary Create a new company (Admin only)
+ */
+export const CreateCompanyBody = zod.object({
+  "name": zod.string(),
+  "gstin": zod.string().optional(),
+  "gstAddress": zod.string().optional(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "pincode": zod.string().optional(),
+  "logoUrl": zod.string().optional()
+})
+
+
+/**
+ * @summary Update company profile (Admin only)
+ */
+export const UpdateCompanyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateCompanyBody = zod.object({
+  "name": zod.string().optional(),
+  "gstin": zod.string().optional(),
+  "gstAddress": zod.string().optional(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "pincode": zod.string().optional(),
+  "logoUrl": zod.string().optional()
+})
+
+export const UpdateCompanyResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "gstin": zod.string().nullish(),
+  "gstAddress": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "pincode": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "isCurrent": zod.boolean()
+})
+
+
+/**
+ * @summary Delete a company (Admin only)
+ */
+export const DeleteCompanyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Switch active company context for the current session
+ */
+export const SwitchCompanyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SwitchCompanyResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "gstin": zod.string().nullish(),
+  "gstAddress": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "state": zod.string().nullish(),
+  "pincode": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "isCurrent": zod.boolean()
+})
 
 

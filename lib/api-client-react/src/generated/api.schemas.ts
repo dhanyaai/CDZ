@@ -9,6 +9,45 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface Company {
+  id: number;
+  name: string;
+  /** @nullable */
+  gstin?: string | null;
+  /** @nullable */
+  gstAddress?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  pincode?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  createdAt: string;
+  isCurrent: boolean;
+}
+
+export interface CompanyInput {
+  name: string;
+  gstin?: string;
+  gstAddress?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  logoUrl?: string;
+}
+
+export interface CompanyUpdate {
+  name?: string;
+  gstin?: string;
+  gstAddress?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  logoUrl?: string;
+}
+
 export interface LoginInput {
   email: string;
   password: string;
@@ -380,6 +419,34 @@ export interface InventoryMovementInput {
   quantity: number;
   batch?: string;
   reference?: string;
+}
+
+export interface InventoryByLocationItem {
+  productId: number;
+  productName: string;
+  qty: number;
+}
+
+export interface InventoryByLocation {
+  locationId: number;
+  locationName: string;
+  locationCode: string;
+  items: InventoryByLocationItem[];
+}
+
+export interface InventoryTransferInput {
+  productId: number;
+  fromLocationId?: number;
+  toLocationId?: number;
+  quantity: number;
+  reference?: string;
+}
+
+export interface InventoryTransferResult {
+  /** @nullable */
+  outMovementId: number | null;
+  /** @nullable */
+  inMovementId: number | null;
 }
 
 export interface AssemblyJobItem {
