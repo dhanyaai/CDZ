@@ -40,6 +40,7 @@ import { Companies } from "@/pages/companies";
 import { FollowUps } from "@/pages/followups";
 import { Transfers } from "@/pages/transfers";
 import { SampleOrders } from "@/pages/sample-orders";
+import { ItemLedger } from "@/pages/item-ledger";
 
 initAuth();
 initTheme();
@@ -92,6 +93,7 @@ function Router() {
         <Route path="/purchase-orders" component={PurchaseOrders} />
         <Route path="/purchase-orders/:id" component={PurchaseOrderDetailWrapper} />
         <Route path="/inventory" component={Inventory} />
+        <Route path="/item-ledger" component={ItemLedger} />
         <Route path="/transfers" component={Transfers} />
         <Route path="/locations" component={Locations} />
         <Route path="/grn" component={Grn} />

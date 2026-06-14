@@ -24,6 +24,7 @@ import {
   Building2,
   CalendarClock,
   FlaskConical,
+  BookOpen,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -72,6 +73,7 @@ export const navItems: NavGroup[] = [
     group: "Operations",
     items: [
       { label: "Inventory", href: "/inventory", icon: Box },
+      { label: "Item Ledger", href: "/item-ledger", icon: BookOpen },
       { label: "Transfers", href: "/transfers", icon: ArrowRightLeft },
       { label: "Locations", href: "/locations", icon: MapPin },
       { label: "Goods Receipts", href: "/grn", icon: Inbox },

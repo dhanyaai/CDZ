@@ -427,6 +427,80 @@ router.get("/v1/inventory/movements", async (req, res): Promise<void> => {
   })));
 });
 
+// GET /v1/inventory/ledger?productId=X  — per-item ledger with running balance
+router.get("/v1/inventory/ledger", async (req, res): Promise<void> => {
+  const { productId, from, to } = req.query as { productId?: string; from?: string; to?: string };
+  if (!productId) { res.status(400).json({ error: "productId is required" }); return; }
+  const pid = parseInt(productId, 10);
+
+  const [product] = await db.select().from(productsTable)
+    .where(and(eq(productsTable.id, pid), eq(productsTable.companyId, req.companyId)));
+  if (!product) { res.status(404).json({ error: "Product not found" }); return; }
+
+  const conditions: SQL[] = [
+    eq(inventoryMovementsTable.companyId, req.companyId),
+    eq(inventoryMovementsTable.productId, pid),
+  ];
+
+  const rows = await db
+    .select({ movement: inventoryMovementsTable, location: warehouseLocationsTable })
+    .from(inventoryMovementsTable)
+    .leftJoin(warehouseLocationsTable, eq(inventoryMovementsTable.locationId, warehouseLocationsTable.id))
+    .where(and(...conditions))
+    .orderBy(inventoryMovementsTable.createdAt, inventoryMovementsTable.id);
+
+  const INWARD_TYPES = ["inward", "transfer_in", "assembly_in", "grn"];
+  let running = 0;
+  let totalIn = 0;
+  let totalOut = 0;
+
+  // Apply date filter after fetch (simpler than SQL TS range filter here)
+  const fromMs = from ? new Date(from).getTime() : null;
+  const toMs   = to   ? new Date(to).getTime()   : null;
+
+  const entries = rows
+    .filter((r) => {
+      const t = r.movement.createdAt.getTime();
+      if (fromMs && t < fromMs) return false;
+      if (toMs   && t > toMs)   return false;
+      return true;
+    })
+    .map((r) => {
+      const isIn = INWARD_TYPES.includes(r.movement.type);
+      const qty = r.movement.quantity;
+      if (isIn) { running += qty; totalIn += qty; }
+      else       { running -= qty; totalOut += qty; }
+
+      let displayRef = r.movement.reference ?? null;
+      if (displayRef) {
+        try {
+          const parsed = JSON.parse(displayRef) as { d?: unknown; r?: string };
+          if (parsed && typeof parsed === "object" && "d" in parsed) displayRef = parsed.r || null;
+        } catch { /* plain text */ }
+      }
+
+      return {
+        id: r.movement.id,
+        createdAt: r.movement.createdAt.toISOString(),
+        type: r.movement.type,
+        qty: isIn ? qty : -qty,
+        qtyIn:  isIn ? qty : 0,
+        qtyOut: isIn ? 0  : qty,
+        balance: running,
+        locationId: r.movement.locationId ?? null,
+        locationName: r.location?.name ?? null,
+        batch: r.movement.batch ?? null,
+        reference: displayRef,
+      };
+    });
+
+  res.json({
+    product: { id: product.id, name: product.name, sku: product.sku ?? null, stockLevel: product.stockLevel },
+    summary: { totalIn, totalOut, closingBalance: running },
+    entries,
+  });
+});
+
 router.post("/v1/inventory/movements", async (req, res): Promise<void> => {
   const { productId, type, quantity, batch, reference, locationId } = req.body ?? {};
   if (!productId || !type || quantity == null) {
