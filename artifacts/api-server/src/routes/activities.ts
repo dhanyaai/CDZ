@@ -34,6 +34,18 @@ router.get("/v1/activities", async (req, res): Promise<void> => {
 router.post("/v1/activities", async (req, res): Promise<void> => {
   const { clientId, type, subject, description, dueDate, ownerId } = req.body ?? {};
   if (!type || !subject) { res.status(400).json({ error: "type and subject required" }); return; }
+
+  if (clientId) {
+    const [cl] = await db.select({ id: clientsTable.id }).from(clientsTable)
+      .where(and(eq(clientsTable.id, clientId), eq(clientsTable.companyId, req.companyId)));
+    if (!cl) { res.status(404).json({ error: "Client not found" }); return; }
+  }
+  if (ownerId) {
+    const [owner] = await db.select({ id: usersTable.id }).from(usersTable)
+      .where(and(eq(usersTable.id, ownerId), eq(usersTable.companyId, req.companyId)));
+    if (!owner) { res.status(404).json({ error: "Owner not found" }); return; }
+  }
+
   const [a] = await db.insert(activitiesTable).values({
     companyId: req.companyId, clientId, type, subject, description,
     dueDate: dueDate ? new Date(dueDate) : null, ownerId,

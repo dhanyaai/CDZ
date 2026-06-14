@@ -1226,7 +1226,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Company"
+                $ref: "#/components/schemas/SwitchCompanyResult"
         "403":
           description: Not a member of this company
 
@@ -1740,10 +1740,20 @@ components:
 
     InventoryTransferResult:
       type: object
-      required: [outMovementId, inMovementId]
+      required: [outMovement, inMovement]
       properties:
-        outMovementId: { type: ["integer", "null"] }
-        inMovementId: { type: ["integer", "null"] }
+        outMovement:
+          $ref: "#/components/schemas/InventoryMovement"
+        inMovement:
+          $ref: "#/components/schemas/InventoryMovement"
+
+    SwitchCompanyResult:
+      type: object
+      required: [success, companyId, companyName]
+      properties:
+        success: { type: boolean }
+        companyId: { type: integer }
+        companyName: { type: string }
 
     # ── Assembly ──
     AssemblyJobItem:

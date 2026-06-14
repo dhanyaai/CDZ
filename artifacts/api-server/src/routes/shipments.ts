@@ -71,6 +71,10 @@ router.post("/v1/shipments", async (req, res): Promise<void> => {
     return;
   }
 
+  const [so] = await db.select({ id: salesOrdersTable.id }).from(salesOrdersTable)
+    .where(and(eq(salesOrdersTable.id, salesOrderId), eq(salesOrdersTable.companyId, req.companyId)));
+  if (!so) { res.status(404).json({ error: "Sales order not found" }); return; }
+
   const [shipment] = await db.insert(shipmentsTable).values({
     companyId: req.companyId,
     shipmentNumber: "SH-TEMP",

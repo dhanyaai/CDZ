@@ -89,6 +89,10 @@ router.post("/v1/sales-orders", async (req, res): Promise<void> => {
     return;
   }
 
+  const [client] = await db.select({ id: clientsTable.id }).from(clientsTable)
+    .where(and(eq(clientsTable.id, clientId), eq(clientsTable.companyId, req.companyId)));
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+
   const totalAmount = items.reduce((s: number, i: { quantity: number; unitPrice: number }) => s + i.quantity * i.unitPrice, 0);
 
   const [order] = await db.insert(salesOrdersTable).values({

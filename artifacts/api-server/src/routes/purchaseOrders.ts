@@ -75,6 +75,16 @@ router.post("/v1/purchase-orders", async (req, res): Promise<void> => {
     return;
   }
 
+  const [vendor] = await db.select({ id: vendorsTable.id }).from(vendorsTable)
+    .where(and(eq(vendorsTable.id, vendorId), eq(vendorsTable.companyId, req.companyId)));
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  if (salesOrderId) {
+    const [so] = await db.select({ id: salesOrdersTable.id }).from(salesOrdersTable)
+      .where(and(eq(salesOrdersTable.id, salesOrderId), eq(salesOrdersTable.companyId, req.companyId)));
+    if (!so) { res.status(404).json({ error: "Sales order not found" }); return; }
+  }
+
   const totalAmount = items.reduce((s: number, i: { quantity: number; unitPrice: number }) => s + i.quantity * i.unitPrice, 0);
 
   const [po] = await db.insert(purchaseOrdersTable).values({

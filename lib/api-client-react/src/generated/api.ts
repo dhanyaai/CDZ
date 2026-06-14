@@ -84,6 +84,7 @@ import type {
   ShipmentInput,
   ShipmentUpdate,
   StatusTransition,
+  SwitchCompanyResult,
   TopClient,
   User,
   UserInput,
@@ -5357,9 +5358,9 @@ export const getSwitchCompanyUrl = (id: number,) => {
 /**
  * @summary Switch active company context for the current session
  */
-export const switchCompany = async (id: number, options?: RequestInit): Promise<Company> => {
+export const switchCompany = async (id: number, options?: RequestInit): Promise<SwitchCompanyResult> => {
 
-  return customFetch<Company>(getSwitchCompanyUrl(id),
+  return customFetch<SwitchCompanyResult>(getSwitchCompanyUrl(id),
   {
     ...options,
     method: 'POST'

@@ -81,6 +81,7 @@ export * from './shipmentInput';
 export * from './shipmentItem';
 export * from './shipmentUpdate';
 export * from './statusTransition';
+export * from './switchCompanyResult';
 export * from './topClient';
 export * from './user';
 export * from './userInput';

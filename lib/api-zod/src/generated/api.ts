@@ -1242,16 +1242,9 @@ export const SwitchCompanyParams = zod.object({
 })
 
 export const SwitchCompanyResponse = zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "gstin": zod.string().nullish(),
-  "gstAddress": zod.string().nullish(),
-  "city": zod.string().nullish(),
-  "state": zod.string().nullish(),
-  "pincode": zod.string().nullish(),
-  "logoUrl": zod.string().nullish(),
-  "createdAt": zod.string(),
-  "isCurrent": zod.boolean()
+  "success": zod.boolean(),
+  "companyId": zod.number(),
+  "companyName": zod.string()
 })
 
 

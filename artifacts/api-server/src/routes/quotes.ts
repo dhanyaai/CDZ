@@ -48,6 +48,10 @@ router.post("/v1/quotes", async (req, res): Promise<void> => {
   if (!clientId || !Array.isArray(items) || items.length === 0) {
     res.status(400).json({ error: "clientId and items[] required" }); return;
   }
+  const [client] = await db.select({ id: clientsTable.id }).from(clientsTable)
+    .where(and(eq(clientsTable.id, clientId), eq(clientsTable.companyId, req.companyId)));
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+
   const subtotal = items.reduce((s: number, i: { quantity: number; unitPrice: number }) => s + i.quantity * i.unitPrice, 0);
   const disc = Number(discountPct ?? 0);
   const afterDisc = subtotal * (1 - disc / 100);

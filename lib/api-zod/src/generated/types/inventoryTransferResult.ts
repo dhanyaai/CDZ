@@ -5,10 +5,9 @@
  * Corporate Gifting ERP API
  * OpenAPI spec version: 0.1.0
  */
+import type { InventoryMovement } from './inventoryMovement';
 
 export interface InventoryTransferResult {
-  /** @nullable */
-  outMovementId: number | null;
-  /** @nullable */
-  inMovementId: number | null;
+  outMovement: InventoryMovement;
+  inMovement: InventoryMovement;
 }

@@ -443,10 +443,14 @@ export interface InventoryTransferInput {
 }
 
 export interface InventoryTransferResult {
-  /** @nullable */
-  outMovementId: number | null;
-  /** @nullable */
-  inMovementId: number | null;
+  outMovement: InventoryMovement;
+  inMovement: InventoryMovement;
+}
+
+export interface SwitchCompanyResult {
+  success: boolean;
+  companyId: number;
+  companyName: string;
 }
 
 export interface AssemblyJobItem {
