@@ -60,7 +60,7 @@ router.post("/v1/products", async (req, res): Promise<void> => {
     .returning();
 
   const vendorName = vendorId
-    ? (await db.select().from(vendorsTable).where(eq(vendorsTable.id, vendorId)))[0]?.name
+    ? (await db.select().from(vendorsTable).where(and(eq(vendorsTable.id, vendorId), eq(vendorsTable.companyId, req.companyId))))[0]?.name
     : null;
 
   res.status(201).json(serializeProduct(product, vendorName));

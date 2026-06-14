@@ -135,7 +135,7 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
     notes,
   }).returning();
 
-  const allPayments = await db.select().from(paymentsTable).where(eq(paymentsTable.invoiceId, invoiceId));
+  const allPayments = await db.select().from(paymentsTable).where(and(eq(paymentsTable.invoiceId, invoiceId), eq(paymentsTable.companyId, req.companyId)));
   const totalPaid = allPayments.reduce((s, p) => s + Number(p.amount), 0);
   if (totalPaid >= Number(invoice.grandTotal)) {
     await db.update(invoicesTable).set({ status: "Paid" }).where(eq(invoicesTable.id, invoiceId));

@@ -1,12 +1,13 @@
 import { Router } from "express";
-import { and, eq, lte, gte, sql, isNull } from "drizzle-orm";
+import { and, eq, lte, isNull, sql } from "drizzle-orm";
 import { db, invoicesTable, productsTable, activitiesTable, quotesTable, grnTable } from "@workspace/db";
 
 const router = Router();
 
-router.get("/v1/notifications", async (_req, res): Promise<void> => {
+router.get("/v1/notifications", async (req, res): Promise<void> => {
   const now = new Date();
   const in3days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+  const cid = req.companyId;
 
   const overdue = await db
     .select({
@@ -16,10 +17,17 @@ router.get("/v1/notifications", async (_req, res): Promise<void> => {
       dueDate: invoicesTable.dueDate,
     })
     .from(invoicesTable)
-    .where(and(sql`${invoicesTable.status} != 'Paid'`, lte(invoicesTable.dueDate, now)))
+    .where(and(
+      eq(invoicesTable.companyId, cid),
+      sql`${invoicesTable.status} != 'Paid'`,
+      lte(invoicesTable.dueDate, now),
+    ))
     .limit(20);
 
-  const products = await db.select().from(productsTable);
+  const products = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.companyId, cid));
   const lowStock = products
     .filter((p) => p.stockLevel <= p.lowStockThreshold)
     .slice(0, 20)
@@ -34,19 +42,23 @@ router.get("/v1/notifications", async (_req, res): Promise<void> => {
       clientId: activitiesTable.clientId,
     })
     .from(activitiesTable)
-    .where(and(isNull(activitiesTable.completedAt), lte(activitiesTable.dueDate, in3days)))
+    .where(and(
+      eq(activitiesTable.companyId, cid),
+      isNull(activitiesTable.completedAt),
+      lte(activitiesTable.dueDate, in3days),
+    ))
     .limit(20);
 
   const draftQuotes = await db
     .select({ id: quotesTable.id, quoteNumber: quotesTable.quoteNumber, totalAmount: quotesTable.totalAmount })
     .from(quotesTable)
-    .where(eq(quotesTable.status, "draft"))
+    .where(and(eq(quotesTable.companyId, cid), eq(quotesTable.status, "draft")))
     .limit(20);
 
   const pendingGrn = await db
     .select({ id: grnTable.id, grnNumber: grnTable.grnNumber })
     .from(grnTable)
-    .where(eq(grnTable.status, "partial"))
+    .where(and(eq(grnTable.companyId, cid), eq(grnTable.status, "partial")))
     .limit(20);
 
   const items = [

@@ -179,6 +179,7 @@ router.get("/v1/analytics/ar-aging", async (req, res): Promise<void> => {
       total: sql<string>`COALESCE(SUM(${paymentsTable.amount}), 0)`,
     })
     .from(paymentsTable)
+    .where(eq(paymentsTable.companyId, req.companyId))
     .groupBy(paymentsTable.invoiceId);
   const paidMap = new Map(paid.map((p) => [p.invoiceId, Number(p.total)]));
 
