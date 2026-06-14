@@ -1,10 +1,16 @@
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import {
-  db, categoriesTable, productVariantsTable, pricingTiersTable, customizationOptionsTable,
+  db, categoriesTable, productVariantsTable, pricingTiersTable, customizationOptionsTable, productsTable,
 } from "@workspace/db";
 
 const router = Router();
+
+async function requireProductOwnership(productId: number, companyId: number): Promise<{ id: number } | null> {
+  const [product] = await db.select({ id: productsTable.id }).from(productsTable)
+    .where(and(eq(productsTable.id, productId), eq(productsTable.companyId, companyId)));
+  return product ?? null;
+}
 
 // Categories
 router.get("/v1/categories", async (req, res): Promise<void> => {
@@ -39,16 +45,21 @@ router.delete("/v1/categories/:id", async (req, res): Promise<void> => {
 // Variants
 router.get("/v1/products/:productId/variants", async (req, res): Promise<void> => {
   const productId = parseInt(req.params.productId as string, 10);
-  const rows = await db.select().from(productVariantsTable).where(eq(productVariantsTable.productId, productId));
+  const product = await requireProductOwnership(productId, req.companyId);
+  if (!product) { res.status(404).json({ error: "Product not found" }); return; }
+  const rows = await db.select().from(productVariantsTable)
+    .where(and(eq(productVariantsTable.productId, productId), eq(productVariantsTable.companyId, req.companyId)));
   res.json(rows.map((r) => ({ ...r, priceAdjustment: Number(r.priceAdjustment), createdAt: r.createdAt.toISOString() })));
 });
 
 router.post("/v1/products/:productId/variants", async (req, res): Promise<void> => {
   const productId = parseInt(req.params.productId as string, 10);
+  const product = await requireProductOwnership(productId, req.companyId);
+  if (!product) { res.status(404).json({ error: "Product not found" }); return; }
   const { sku, variantName, size, color, material, priceAdjustment, stockLevel } = req.body ?? {};
   if (!sku || !variantName) { res.status(400).json({ error: "sku and variantName required" }); return; }
   const [v] = await db.insert(productVariantsTable).values({
-    productId, sku, variantName, size, color, material,
+    productId, companyId: req.companyId, sku, variantName, size, color, material,
     priceAdjustment: (priceAdjustment ?? 0).toString(), stockLevel: stockLevel ?? 0,
   }).returning();
   res.status(201).json(v);
@@ -56,19 +67,23 @@ router.post("/v1/products/:productId/variants", async (req, res): Promise<void> 
 
 router.delete("/v1/variants/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  await db.delete(productVariantsTable).where(eq(productVariantsTable.id, id));
+  await db.delete(productVariantsTable).where(and(eq(productVariantsTable.id, id), eq(productVariantsTable.companyId, req.companyId)));
   res.sendStatus(204);
 });
 
 // Pricing tiers
 router.get("/v1/products/:productId/pricing-tiers", async (req, res): Promise<void> => {
   const productId = parseInt(req.params.productId as string, 10);
+  const product = await requireProductOwnership(productId, req.companyId);
+  if (!product) { res.status(404).json({ error: "Product not found" }); return; }
   const rows = await db.select().from(pricingTiersTable).where(eq(pricingTiersTable.productId, productId)).orderBy(pricingTiersTable.minQuantity);
   res.json(rows.map((r) => ({ ...r, unitPrice: Number(r.unitPrice), createdAt: r.createdAt.toISOString() })));
 });
 
 router.post("/v1/products/:productId/pricing-tiers", async (req, res): Promise<void> => {
   const productId = parseInt(req.params.productId as string, 10);
+  const product = await requireProductOwnership(productId, req.companyId);
+  if (!product) { res.status(404).json({ error: "Product not found" }); return; }
   const { tierName, minQuantity, unitPrice } = req.body ?? {};
   if (!tierName || minQuantity == null || unitPrice == null) {
     res.status(400).json({ error: "tierName, minQuantity, unitPrice required" }); return;
@@ -81,6 +96,11 @@ router.post("/v1/products/:productId/pricing-tiers", async (req, res): Promise<v
 
 router.delete("/v1/pricing-tiers/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
+  const [tier] = await db.select({ productId: pricingTiersTable.productId }).from(pricingTiersTable)
+    .where(eq(pricingTiersTable.id, id));
+  if (!tier) { res.sendStatus(204); return; }
+  const product = await requireProductOwnership(tier.productId, req.companyId);
+  if (!product) { res.status(404).json({ error: "Not found" }); return; }
   await db.delete(pricingTiersTable).where(eq(pricingTiersTable.id, id));
   res.sendStatus(204);
 });
@@ -88,12 +108,16 @@ router.delete("/v1/pricing-tiers/:id", async (req, res): Promise<void> => {
 // Customization options
 router.get("/v1/products/:productId/customizations", async (req, res): Promise<void> => {
   const productId = parseInt(req.params.productId as string, 10);
+  const product = await requireProductOwnership(productId, req.companyId);
+  if (!product) { res.status(404).json({ error: "Product not found" }); return; }
   const rows = await db.select().from(customizationOptionsTable).where(eq(customizationOptionsTable.productId, productId));
   res.json(rows.map((r) => ({ ...r, priceUplift: Number(r.priceUplift), createdAt: r.createdAt.toISOString() })));
 });
 
 router.post("/v1/products/:productId/customizations", async (req, res): Promise<void> => {
   const productId = parseInt(req.params.productId as string, 10);
+  const product = await requireProductOwnership(productId, req.companyId);
+  if (!product) { res.status(404).json({ error: "Product not found" }); return; }
   const { optionType, optionName, description, priceUplift, leadTimeDays } = req.body ?? {};
   if (!optionType || !optionName) { res.status(400).json({ error: "optionType and optionName required" }); return; }
   const [o] = await db.insert(customizationOptionsTable).values({
@@ -105,6 +129,11 @@ router.post("/v1/products/:productId/customizations", async (req, res): Promise<
 
 router.delete("/v1/customizations/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
+  const [option] = await db.select({ productId: customizationOptionsTable.productId }).from(customizationOptionsTable)
+    .where(eq(customizationOptionsTable.id, id));
+  if (!option) { res.sendStatus(204); return; }
+  const product = await requireProductOwnership(option.productId, req.companyId);
+  if (!product) { res.status(404).json({ error: "Not found" }); return; }
   await db.delete(customizationOptionsTable).where(eq(customizationOptionsTable.id, id));
   res.sendStatus(204);
 });

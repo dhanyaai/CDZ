@@ -4,8 +4,8 @@ import { db, bundlesTable, bundleItemsTable, productsTable } from "@workspace/db
 
 const router = Router();
 
-async function getBundleWithItems(id: number) {
-  const [bundle] = await db.select().from(bundlesTable).where(eq(bundlesTable.id, id));
+async function getBundleWithItems(id: number, companyId: number) {
+  const [bundle] = await db.select().from(bundlesTable).where(and(eq(bundlesTable.id, id), eq(bundlesTable.companyId, companyId)));
   if (!bundle) return null;
 
   const items = await db
@@ -37,7 +37,7 @@ async function getBundleWithItems(id: number) {
 
 router.get("/v1/bundles", async (req, res): Promise<void> => {
   const bundles = await db.select().from(bundlesTable).where(eq(bundlesTable.companyId, req.companyId)).orderBy(bundlesTable.name);
-  const results = await Promise.all(bundles.map((b) => getBundleWithItems(b.id)));
+  const results = await Promise.all(bundles.map((b) => getBundleWithItems(b.id, req.companyId)));
   res.json(results.filter(Boolean));
 });
 
@@ -60,13 +60,13 @@ router.post("/v1/bundles", async (req, res): Promise<void> => {
     );
   }
 
-  const result = await getBundleWithItems(bundle.id);
+  const result = await getBundleWithItems(bundle.id, req.companyId);
   res.status(201).json(result);
 });
 
 router.get("/v1/bundles/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const result = await getBundleWithItems(id);
+  const result = await getBundleWithItems(id, req.companyId);
   if (!result) {
     res.status(404).json({ error: "Bundle not found" });
     return;
@@ -77,6 +77,10 @@ router.get("/v1/bundles/:id", async (req, res): Promise<void> => {
 router.patch("/v1/bundles/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const { name, description, occasion, imageUrl, items } = req.body ?? {};
+
+  const [existing] = await db.select({ id: bundlesTable.id }).from(bundlesTable)
+    .where(and(eq(bundlesTable.id, id), eq(bundlesTable.companyId, req.companyId)));
+  if (!existing) { res.status(404).json({ error: "Bundle not found" }); return; }
 
   const updates: Record<string, unknown> = {};
   if (name != null) updates.name = name;
@@ -101,7 +105,7 @@ router.patch("/v1/bundles/:id", async (req, res): Promise<void> => {
     }
   }
 
-  const result = await getBundleWithItems(id);
+  const result = await getBundleWithItems(id, req.companyId);
   if (!result) {
     res.status(404).json({ error: "Bundle not found" });
     return;
