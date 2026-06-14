@@ -24,3 +24,4 @@ export * from "./grn";
 export * from "./creditNotes";
 export * from "./locations";
 export * from "./settings";
+export * from "./sampleOrders";

@@ -23,6 +23,7 @@ import operationsRouter from "./operations";
 import notificationsRouter from "./notifications";
 import settingsRouter from "./settings";
 import companiesRouter from "./companies";
+import sampleOrdersRouter from "./sampleOrders";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(catalogRouter);
 router.use(operationsRouter);
 router.use(notificationsRouter);
 router.use(settingsRouter);
+router.use(sampleOrdersRouter);
 
 export default router;

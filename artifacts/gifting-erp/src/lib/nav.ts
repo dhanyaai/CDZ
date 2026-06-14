@@ -23,6 +23,7 @@ import {
   UserCheck,
   Building2,
   CalendarClock,
+  FlaskConical,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -62,6 +63,7 @@ export const navItems: NavGroup[] = [
     group: "Orders",
     items: [
       { label: "Sales Orders", href: "/sales-orders", icon: ShoppingCart },
+      { label: "Sample Orders", href: "/sample-orders", icon: FlaskConical },
       { label: "Purchase Orders", href: "/purchase-orders", icon: ClipboardList },
       { label: "Vendors", href: "/vendors", icon: Briefcase },
     ],

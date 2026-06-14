@@ -39,6 +39,7 @@ import { Contacts } from "@/pages/contacts";
 import { Companies } from "@/pages/companies";
 import { FollowUps } from "@/pages/followups";
 import { Transfers } from "@/pages/transfers";
+import { SampleOrders } from "@/pages/sample-orders";
 
 initAuth();
 initTheme();
@@ -85,6 +86,7 @@ function Router() {
         <Route path="/bundles" component={Bundles} />
         <Route path="/categories" component={Categories} />
         <Route path="/vendors" component={Vendors} />
+        <Route path="/sample-orders" component={SampleOrders} />
         <Route path="/sales-orders" component={SalesOrders} />
         <Route path="/sales-orders/:id" component={SalesOrderDetailWrapper} />
         <Route path="/purchase-orders" component={PurchaseOrders} />
