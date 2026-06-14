@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, companiesTable, usersTable } from "@workspace/db";
 import { updateSessionCompany } from "../lib/sessions";
+import { requireAdmin } from "../lib/requireAdmin";
 
 const router = Router();
 
@@ -15,36 +16,36 @@ router.get("/v1/companies", async (req, res): Promise<void> => {
   })));
 });
 
-router.post("/v1/companies", async (req, res): Promise<void> => {
+router.post("/v1/companies", requireAdmin, async (req, res): Promise<void> => {
   const { name } = req.body ?? {};
-  if (!name) {
-    res.status(400).json({ error: "name is required" });
-    return;
-  }
+  if (!name) { res.status(400).json({ error: "name is required" }); return; }
   const [company] = await db.insert(companiesTable).values({ name }).returning();
   res.status(201).json({ id: company.id, name: company.name, createdAt: company.createdAt.toISOString() });
 });
 
-router.patch("/v1/companies/:id", async (req, res): Promise<void> => {
+router.patch("/v1/companies/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
+  if (id !== req.companyId) {
+    res.status(403).json({ error: "You can only edit the currently active company" });
+    return;
+  }
   const { name } = req.body ?? {};
-  if (!name) {
-    res.status(400).json({ error: "name is required" });
-    return;
-  }
+  if (!name) { res.status(400).json({ error: "name is required" }); return; }
   const [company] = await db.update(companiesTable).set({ name }).where(eq(companiesTable.id, id)).returning();
-  if (!company) {
-    res.status(404).json({ error: "Company not found" });
-    return;
-  }
+  if (!company) { res.status(404).json({ error: "Company not found" }); return; }
   res.json({ id: company.id, name: company.name, createdAt: company.createdAt.toISOString() });
 });
 
 router.post("/v1/companies/:id/switch", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, id));
-  if (!company) {
-    res.status(404).json({ error: "Company not found" });
+  if (!company) { res.status(404).json({ error: "Company not found" }); return; }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId));
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+  if (user.role !== "Admin" && user.companyId !== id) {
+    res.status(403).json({ error: "You do not have access to this company" });
     return;
   }
 
@@ -56,6 +57,16 @@ router.post("/v1/companies/:id/switch", async (req, res): Promise<void> => {
   await db.update(usersTable).set({ companyId: id }).where(eq(usersTable.id, req.userId));
 
   res.json({ success: true, companyId: id, companyName: company.name });
+});
+
+router.delete("/v1/companies/:id", requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  if (id === req.companyId) {
+    res.status(400).json({ error: "Cannot delete the currently active company" });
+    return;
+  }
+  await db.delete(companiesTable).where(and(eq(companiesTable.id, id)));
+  res.sendStatus(204);
 });
 
 export default router;

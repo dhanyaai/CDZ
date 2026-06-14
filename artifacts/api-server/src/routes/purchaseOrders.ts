@@ -4,13 +4,13 @@ import { db, purchaseOrdersTable, purchaseOrderItemsTable, vendorsTable, product
 
 const router = Router();
 
-async function getPODetail(id: number) {
+async function getPODetail(id: number, companyId: number) {
   const [row] = await db
     .select({ po: purchaseOrdersTable, vendorName: vendorsTable.name, orderNumber: salesOrdersTable.orderNumber })
     .from(purchaseOrdersTable)
     .leftJoin(vendorsTable, eq(purchaseOrdersTable.vendorId, vendorsTable.id))
     .leftJoin(salesOrdersTable, eq(purchaseOrdersTable.salesOrderId, salesOrdersTable.id))
-    .where(eq(purchaseOrdersTable.id, id));
+    .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.companyId, companyId)));
 
   if (!row) return null;
 
@@ -99,17 +99,14 @@ router.post("/v1/purchase-orders", async (req, res): Promise<void> => {
     }))
   );
 
-  const detail = await getPODetail(po.id);
+  const detail = await getPODetail(po.id, req.companyId);
   res.status(201).json(detail);
 });
 
 router.get("/v1/purchase-orders/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const detail = await getPODetail(id);
-  if (!detail) {
-    res.status(404).json({ error: "Purchase order not found" });
-    return;
-  }
+  const detail = await getPODetail(id, req.companyId);
+  if (!detail) { res.status(404).json({ error: "Purchase order not found" }); return; }
   res.json(detail);
 });
 
@@ -119,44 +116,22 @@ router.patch("/v1/purchase-orders/:id", async (req, res): Promise<void> => {
   if (req.body.expectedDelivery != null) updates.expectedDelivery = new Date(req.body.expectedDelivery);
 
   await db.update(purchaseOrdersTable).set(updates).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.companyId, req.companyId)));
-  const detail = await getPODetail(id);
-  if (!detail) {
-    res.status(404).json({ error: "Purchase order not found" });
-    return;
-  }
+  const detail = await getPODetail(id, req.companyId);
+  if (!detail) { res.status(404).json({ error: "Purchase order not found" }); return; }
   res.json(detail);
 });
 
 router.patch("/v1/purchase-orders/:id/status", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const { status } = req.body ?? {};
-  if (!status) {
-    res.status(400).json({ error: "status is required" });
-    return;
-  }
-  const [po] = await db.update(purchaseOrdersTable).set({ status }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.companyId, req.companyId))).returning();
-  if (!po) {
-    res.status(404).json({ error: "Purchase order not found" });
-    return;
-  }
+  if (!status) { res.status(400).json({ error: "status is required" }); return; }
+  const [po] = await db.update(purchaseOrdersTable).set({ status })
+    .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.companyId, req.companyId)))
+    .returning();
+  if (!po) { res.status(404).json({ error: "Purchase order not found" }); return; }
 
-  const [row] = await db
-    .select({ po: purchaseOrdersTable, vendorName: vendorsTable.name })
-    .from(purchaseOrdersTable)
-    .leftJoin(vendorsTable, eq(purchaseOrdersTable.vendorId, vendorsTable.id))
-    .where(eq(purchaseOrdersTable.id, id));
-
-  res.json({
-    id: row.po.id,
-    poNumber: row.po.poNumber,
-    vendorId: row.po.vendorId,
-    vendorName: row.vendorName ?? "Unknown",
-    salesOrderId: row.po.salesOrderId ?? null,
-    status: row.po.status,
-    totalAmount: Number(row.po.totalAmount),
-    expectedDelivery: row.po.expectedDelivery?.toISOString() ?? null,
-    createdAt: row.po.createdAt.toISOString(),
-  });
+  const detail = await getPODetail(id, req.companyId);
+  res.json(detail);
 });
 
 export default router;

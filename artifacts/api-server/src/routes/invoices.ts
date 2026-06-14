@@ -102,8 +102,8 @@ router.get("/v1/invoices/:id", async (req, res): Promise<void> => {
 router.get("/v1/payments", async (req, res): Promise<void> => {
   const { invoiceId } = req.query as { invoiceId?: string };
   const payments = invoiceId
-    ? await db.select().from(paymentsTable).where(eq(paymentsTable.invoiceId, parseInt(invoiceId, 10))).orderBy(paymentsTable.paymentDate)
-    : await db.select().from(paymentsTable).orderBy(paymentsTable.paymentDate);
+    ? await db.select().from(paymentsTable).where(and(eq(paymentsTable.invoiceId, parseInt(invoiceId, 10)), eq(paymentsTable.companyId, req.companyId))).orderBy(paymentsTable.paymentDate)
+    : await db.select().from(paymentsTable).where(eq(paymentsTable.companyId, req.companyId)).orderBy(paymentsTable.paymentDate);
 
   res.json(payments.map((p) => ({
     id: p.id,
@@ -123,7 +123,11 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
     return;
   }
 
+  const [invoice] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.companyId, req.companyId)));
+  if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
+
   const [payment] = await db.insert(paymentsTable).values({
+    companyId: req.companyId,
     invoiceId,
     amount: String(amount),
     type,
@@ -132,14 +136,11 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
   }).returning();
 
   const allPayments = await db.select().from(paymentsTable).where(eq(paymentsTable.invoiceId, invoiceId));
-  const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, invoiceId));
-  if (invoice) {
-    const totalPaid = allPayments.reduce((s, p) => s + Number(p.amount), 0);
-    if (totalPaid >= Number(invoice.grandTotal)) {
-      await db.update(invoicesTable).set({ status: "Paid" }).where(eq(invoicesTable.id, invoiceId));
-    } else if (invoice.status === "Draft") {
-      await db.update(invoicesTable).set({ status: "Sent" }).where(eq(invoicesTable.id, invoiceId));
-    }
+  const totalPaid = allPayments.reduce((s, p) => s + Number(p.amount), 0);
+  if (totalPaid >= Number(invoice.grandTotal)) {
+    await db.update(invoicesTable).set({ status: "Paid" }).where(eq(invoicesTable.id, invoiceId));
+  } else if (invoice.status === "Draft") {
+    await db.update(invoicesTable).set({ status: "Sent" }).where(eq(invoicesTable.id, invoiceId));
   }
 
   res.status(201).json({

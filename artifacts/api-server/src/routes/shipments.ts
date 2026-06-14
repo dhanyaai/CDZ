@@ -4,12 +4,12 @@ import { db, shipmentsTable, shipmentItemsTable, salesOrdersTable, deliveryAddre
 
 const router = Router();
 
-async function getShipmentDetail(id: number) {
+async function getShipmentDetail(id: number, companyId: number) {
   const [row] = await db
     .select({ shipment: shipmentsTable, orderNumber: salesOrdersTable.orderNumber })
     .from(shipmentsTable)
     .leftJoin(salesOrdersTable, eq(shipmentsTable.salesOrderId, salesOrdersTable.id))
-    .where(eq(shipmentsTable.id, id));
+    .where(and(eq(shipmentsTable.id, id), eq(shipmentsTable.companyId, companyId)));
 
   if (!row) return null;
 
@@ -99,17 +99,14 @@ router.post("/v1/shipments", async (req, res): Promise<void> => {
     );
   }
 
-  const detail = await getShipmentDetail(shipment.id);
+  const detail = await getShipmentDetail(shipment.id, req.companyId);
   res.status(201).json(detail);
 });
 
 router.get("/v1/shipments/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const detail = await getShipmentDetail(id);
-  if (!detail) {
-    res.status(404).json({ error: "Shipment not found" });
-    return;
-  }
+  const detail = await getShipmentDetail(id, req.companyId);
+  if (!detail) { res.status(404).json({ error: "Shipment not found" }); return; }
   res.json(detail);
 });
 
@@ -121,44 +118,22 @@ router.patch("/v1/shipments/:id", async (req, res): Promise<void> => {
   if (req.body.dispatchDate != null) updates.dispatchDate = new Date(req.body.dispatchDate);
 
   await db.update(shipmentsTable).set(updates).where(and(eq(shipmentsTable.id, id), eq(shipmentsTable.companyId, req.companyId)));
-  const detail = await getShipmentDetail(id);
-  if (!detail) {
-    res.status(404).json({ error: "Shipment not found" });
-    return;
-  }
+  const detail = await getShipmentDetail(id, req.companyId);
+  if (!detail) { res.status(404).json({ error: "Shipment not found" }); return; }
   res.json(detail);
 });
 
 router.patch("/v1/shipments/:id/status", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const { status } = req.body ?? {};
-  if (!status) {
-    res.status(400).json({ error: "status is required" });
-    return;
-  }
-  const [shipment] = await db.update(shipmentsTable).set({ status }).where(and(eq(shipmentsTable.id, id), eq(shipmentsTable.companyId, req.companyId))).returning();
-  if (!shipment) {
-    res.status(404).json({ error: "Shipment not found" });
-    return;
-  }
+  if (!status) { res.status(400).json({ error: "status is required" }); return; }
+  const [shipment] = await db.update(shipmentsTable).set({ status })
+    .where(and(eq(shipmentsTable.id, id), eq(shipmentsTable.companyId, req.companyId)))
+    .returning();
+  if (!shipment) { res.status(404).json({ error: "Shipment not found" }); return; }
 
-  const [row] = await db
-    .select({ shipment: shipmentsTable, orderNumber: salesOrdersTable.orderNumber })
-    .from(shipmentsTable)
-    .leftJoin(salesOrdersTable, eq(shipmentsTable.salesOrderId, salesOrdersTable.id))
-    .where(eq(shipmentsTable.id, id));
-
-  res.json({
-    id: row.shipment.id,
-    shipmentNumber: row.shipment.shipmentNumber,
-    salesOrderId: row.shipment.salesOrderId,
-    orderNumber: row.orderNumber ?? null,
-    courierPartner: row.shipment.courierPartner,
-    status: row.shipment.status,
-    trackingNumber: row.shipment.trackingNumber ?? null,
-    dispatchDate: row.shipment.dispatchDate?.toISOString() ?? null,
-    createdAt: row.shipment.createdAt.toISOString(),
-  });
+  const detail = await getShipmentDetail(id, req.companyId);
+  res.json(detail);
 });
 
 export default router;

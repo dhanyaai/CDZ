@@ -4,12 +4,12 @@ import { db, assemblyJobsTable, assemblyItemsTable, salesOrdersTable, productsTa
 
 const router = Router();
 
-async function getJobDetail(id: number) {
+async function getJobDetail(id: number, companyId: number) {
   const [row] = await db
     .select({ job: assemblyJobsTable, orderNumber: salesOrdersTable.orderNumber })
     .from(assemblyJobsTable)
     .leftJoin(salesOrdersTable, eq(assemblyJobsTable.salesOrderId, salesOrdersTable.id))
-    .where(eq(assemblyJobsTable.id, id));
+    .where(and(eq(assemblyJobsTable.id, id), eq(assemblyJobsTable.companyId, companyId)));
 
   if (!row) return null;
 
@@ -83,17 +83,14 @@ router.post("/v1/assembly", async (req, res): Promise<void> => {
 
   await db.update(assemblyJobsTable).set({ jobNumber: `AJ-${String(job.id).padStart(5, "0")}` }).where(eq(assemblyJobsTable.id, job.id));
 
-  const detail = await getJobDetail(job.id);
+  const detail = await getJobDetail(job.id, req.companyId);
   res.status(201).json(detail);
 });
 
 router.get("/v1/assembly/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const detail = await getJobDetail(id);
-  if (!detail) {
-    res.status(404).json({ error: "Assembly job not found" });
-    return;
-  }
+  const detail = await getJobDetail(id, req.companyId);
+  if (!detail) { res.status(404).json({ error: "Assembly job not found" }); return; }
   res.json(detail);
 });
 
@@ -104,42 +101,21 @@ router.patch("/v1/assembly/:id", async (req, res): Promise<void> => {
   if (req.body.notes != null) updates.notes = req.body.notes;
 
   await db.update(assemblyJobsTable).set(updates).where(and(eq(assemblyJobsTable.id, id), eq(assemblyJobsTable.companyId, req.companyId)));
-  const detail = await getJobDetail(id);
-  if (!detail) {
-    res.status(404).json({ error: "Assembly job not found" });
-    return;
-  }
+  const detail = await getJobDetail(id, req.companyId);
+  if (!detail) { res.status(404).json({ error: "Assembly job not found" }); return; }
   res.json(detail);
 });
 
 router.patch("/v1/assembly/:id/status", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const { status } = req.body ?? {};
-  if (!status) {
-    res.status(400).json({ error: "status is required" });
-    return;
-  }
-  const [job] = await db.update(assemblyJobsTable).set({ status }).where(and(eq(assemblyJobsTable.id, id), eq(assemblyJobsTable.companyId, req.companyId))).returning();
-  if (!job) {
-    res.status(404).json({ error: "Assembly job not found" });
-    return;
-  }
-  const [row] = await db
-    .select({ job: assemblyJobsTable, orderNumber: salesOrdersTable.orderNumber })
-    .from(assemblyJobsTable)
-    .leftJoin(salesOrdersTable, eq(assemblyJobsTable.salesOrderId, salesOrdersTable.id))
-    .where(eq(assemblyJobsTable.id, id));
-
-  res.json({
-    id: row.job.id,
-    jobNumber: row.job.jobNumber,
-    salesOrderId: row.job.salesOrderId,
-    orderNumber: row.orderNumber ?? null,
-    status: row.job.status,
-    totalKits: row.job.totalKits,
-    completedKits: row.job.completedKits,
-    createdAt: row.job.createdAt.toISOString(),
-  });
+  if (!status) { res.status(400).json({ error: "status is required" }); return; }
+  const [job] = await db.update(assemblyJobsTable).set({ status })
+    .where(and(eq(assemblyJobsTable.id, id), eq(assemblyJobsTable.companyId, req.companyId)))
+    .returning();
+  if (!job) { res.status(404).json({ error: "Assembly job not found" }); return; }
+  const detail = await getJobDetail(id, req.companyId);
+  res.json(detail);
 });
 
 export default router;

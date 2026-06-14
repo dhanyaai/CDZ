@@ -24,6 +24,7 @@ export const invoicesTable = pgTable("invoices", {
 
 export const paymentsTable = pgTable("payments", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().default(1).references(() => companiesTable.id, { onDelete: "cascade" }),
   invoiceId: integer("invoice_id").notNull().references(() => invoicesTable.id, { onDelete: "cascade" }),
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
   type: text("type").notNull(),
@@ -33,7 +34,7 @@ export const paymentsTable = pgTable("payments", {
 });
 
 export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({ id: true, createdAt: true, updatedAt: true, companyId: true });
-export const insertPaymentSchema = createInsertSchema(paymentsTable).omit({ id: true, createdAt: true });
+export const insertPaymentSchema = createInsertSchema(paymentsTable).omit({ id: true, createdAt: true, companyId: true });
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type Invoice = typeof invoicesTable.$inferSelect;
 export type Payment = typeof paymentsTable.$inferSelect;
