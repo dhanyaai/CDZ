@@ -21,6 +21,7 @@ import {
   Receipt,
   UserCheck,
   Building2,
+  CalendarClock,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -45,6 +46,7 @@ export const navItems: NavGroup[] = [
       { label: "Leads", href: "/leads", icon: Target },
       { label: "Opportunities", href: "/opportunities", icon: TrendingUp },
       { label: "Quotes", href: "/quotes", icon: FileSpreadsheet },
+      { label: "Follow-ups", href: "/follow-ups", icon: CalendarClock },
     ],
   },
   {

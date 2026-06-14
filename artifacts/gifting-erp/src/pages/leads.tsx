@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, IndianRupee, TrendingUp, Users, Target, Zap } from "lucide-react";
+import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, IndianRupee, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2 } from "lucide-react";
 
 type Lead = {
   id: number; title: string; clientId: number | null; companyName: string | null;
@@ -67,6 +67,8 @@ export function Leads() {
     source: "", estimatedValue: "", notes: "",
   });
   const [editForm, setEditForm] = useState<Partial<Lead>>({});
+  const [followUpForm, setFollowUpForm] = useState({ subject: "", dueDate: "", description: "" });
+  const [showFollowUpForm, setShowFollowUpForm] = useState(false);
 
   const { data: leads, isLoading } = useQuery({
     queryKey: ["leads"], queryFn: () => api<Lead[]>("/v1/leads"),
@@ -106,6 +108,26 @@ export function Leads() {
   const del = useMutation({
     mutationFn: (id: number) => api(`/v1/leads/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); toast({ title: "Lead deleted" }); setSelected(null); },
+  });
+
+  const scheduleFollowUp = useMutation({
+    mutationFn: (leadId: number) => api("/v1/activities", {
+      method: "POST",
+      body: JSON.stringify({
+        leadId,
+        type: "follow-up",
+        subject: followUpForm.subject,
+        description: followUpForm.description || undefined,
+        dueDate: followUpForm.dueDate || undefined,
+      }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["followups"] });
+      setFollowUpForm({ subject: "", dueDate: "", description: "" });
+      setShowFollowUpForm(false);
+      toast({ title: "Follow-up scheduled" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const filtered = (leads ?? []).filter(l => {
@@ -330,6 +352,47 @@ export function Leads() {
                       {STAGES.map(s => <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Schedule Follow-up */}
+                <div className="space-y-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setShowFollowUpForm(!showFollowUpForm)}
+                  >
+                    <CalendarClock className="w-4 h-4 mr-2" />
+                    {showFollowUpForm ? "Cancel Follow-up" : "Schedule Follow-up"}
+                  </Button>
+                  {showFollowUpForm && (
+                    <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
+                      <Input
+                        placeholder="Subject *"
+                        value={followUpForm.subject}
+                        onChange={(e) => setFollowUpForm({ ...followUpForm, subject: e.target.value })}
+                      />
+                      <Input
+                        type="date"
+                        value={followUpForm.dueDate}
+                        onChange={(e) => setFollowUpForm({ ...followUpForm, dueDate: e.target.value })}
+                      />
+                      <Textarea
+                        placeholder="Notes (optional)"
+                        rows={2}
+                        value={followUpForm.description}
+                        onChange={(e) => setFollowUpForm({ ...followUpForm, description: e.target.value })}
+                      />
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        onClick={() => scheduleFollowUp.mutate(selected.id)}
+                        disabled={!followUpForm.subject.trim() || scheduleFollowUp.isPending}
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-2" />Save Follow-up
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions */}

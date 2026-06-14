@@ -2,6 +2,7 @@ import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
 import { clientsTable } from "./clients";
 import { usersTable } from "./users";
 import { companiesTable } from "./companies";
+import { leadsTable } from "./leads";
 
 export const activitiesTable = pgTable("activities", {
   id: serial("id").primaryKey(),
@@ -10,6 +11,7 @@ export const activitiesTable = pgTable("activities", {
   type: text("type").notNull(),
   subject: text("subject").notNull(),
   description: text("description"),
+  leadId: integer("lead_id").references(() => leadsTable.id, { onDelete: "set null" }),
   dueDate: timestamp("due_date", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   ownerId: integer("owner_id").references(() => usersTable.id, { onDelete: "set null" }),
