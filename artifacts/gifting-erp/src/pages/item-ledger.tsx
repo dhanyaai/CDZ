@@ -136,8 +136,8 @@ export function ItemLedger() {
             <SelectContent>
               <SelectItem value="none" disabled>Select product</SelectItem>
               {products.map((p) => (
-                <SelectItem key={p.id} value={p.id.toString()}>
-                  {p.name}
+                <SelectItem key={p.id} value={p.id.toString()} textValue={p.name}>
+                  <span>{p.name}</span>
                   <span className="text-muted-foreground text-xs ml-2">({p.stockLevel} in stock)</span>
                 </SelectItem>
               ))}
