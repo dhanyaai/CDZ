@@ -5,6 +5,12 @@ import { z } from "zod/v4";
 export const companiesTable = pgTable("companies", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  gstin: text("gstin"),
+  gstAddress: text("gst_address"),
+  city: text("city"),
+  state: text("state"),
+  pincode: text("pincode"),
+  logoUrl: text("logo_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

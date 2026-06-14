@@ -66,6 +66,52 @@ router.post("/v1/inventory/transfer", async (req, res): Promise<void> => {
     return;
   }
 
+  const [product] = await db.select().from(productsTable)
+    .where(and(eq(productsTable.id, productId), eq(productsTable.companyId, req.companyId)));
+  if (!product) {
+    res.status(404).json({ error: "Product not found or does not belong to this company" });
+    return;
+  }
+
+  if (fromLocationId != null) {
+    const [fromLoc] = await db.select().from(warehouseLocationsTable)
+      .where(and(eq(warehouseLocationsTable.id, fromLocationId), eq(warehouseLocationsTable.companyId, req.companyId)));
+    if (!fromLoc) {
+      res.status(404).json({ error: "Source location not found or does not belong to this company" });
+      return;
+    }
+  }
+
+  if (toLocationId != null) {
+    const [toLoc] = await db.select().from(warehouseLocationsTable)
+      .where(and(eq(warehouseLocationsTable.id, toLocationId), eq(warehouseLocationsTable.companyId, req.companyId)));
+    if (!toLoc) {
+      res.status(404).json({ error: "Destination location not found or does not belong to this company" });
+      return;
+    }
+  }
+
+  const sourceMovements = await db.select().from(inventoryMovementsTable)
+    .where(and(
+      eq(inventoryMovementsTable.productId, productId),
+      eq(inventoryMovementsTable.companyId, req.companyId),
+      fromLocationId != null
+        ? eq(inventoryMovementsTable.locationId, fromLocationId)
+        : eq(inventoryMovementsTable.locationId, inventoryMovementsTable.locationId),
+    ));
+
+  const sourceStock = sourceMovements
+    .filter((m) => (m.locationId ?? null) === (fromLocationId ?? null))
+    .reduce((sum, m) => {
+      if (m.type === "inward" || m.type === "transfer_in") return sum + m.quantity;
+      return sum - m.quantity;
+    }, 0);
+
+  if (sourceStock < quantity) {
+    res.status(400).json({ error: `Insufficient stock at source location. Available: ${sourceStock}` });
+    return;
+  }
+
   const [outMovement, inMovement] = await db.transaction(async (tx) => {
     const [out] = await tx.insert(inventoryMovementsTable).values({
       companyId: req.companyId, productId, locationId: fromLocationId ?? null,
@@ -114,18 +160,31 @@ router.post("/v1/inventory/movements", async (req, res): Promise<void> => {
     return;
   }
 
+  const [product] = await db.select().from(productsTable)
+    .where(and(eq(productsTable.id, productId), eq(productsTable.companyId, req.companyId)));
+  if (!product) {
+    res.status(404).json({ error: "Product not found or does not belong to this company" });
+    return;
+  }
+
+  if (locationId != null) {
+    const [loc] = await db.select().from(warehouseLocationsTable)
+      .where(and(eq(warehouseLocationsTable.id, locationId), eq(warehouseLocationsTable.companyId, req.companyId)));
+    if (!loc) {
+      res.status(404).json({ error: "Location not found or does not belong to this company" });
+      return;
+    }
+  }
+
   const [movement] = await db
     .insert(inventoryMovementsTable)
     .values({ companyId: req.companyId, productId, type, quantity, batch, reference, locationId: locationId ?? null })
     .returning();
 
-  const [product] = await db.select().from(productsTable).where(and(eq(productsTable.id, productId), eq(productsTable.companyId, req.companyId)));
-  if (product) {
-    const newStock = type === "inward"
-      ? product.stockLevel + quantity
-      : Math.max(0, product.stockLevel - quantity);
-    await db.update(productsTable).set({ stockLevel: newStock }).where(eq(productsTable.id, productId));
-  }
+  const newStock = type === "inward"
+    ? product.stockLevel + quantity
+    : Math.max(0, product.stockLevel - quantity);
+  await db.update(productsTable).set({ stockLevel: newStock }).where(eq(productsTable.id, productId));
 
   const [row] = await db
     .select({ movement: inventoryMovementsTable, product: productsTable })

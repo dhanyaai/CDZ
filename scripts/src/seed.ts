@@ -1,4 +1,4 @@
-import { db, usersTable, clientsTable, clientInteractionsTable, vendorsTable, productsTable, bundlesTable, bundleItemsTable, salesOrdersTable, salesOrderItemsTable, deliveryAddressesTable, purchaseOrdersTable, purchaseOrderItemsTable, inventoryMovementsTable, assemblyJobsTable, artworkApprovalsTable, shipmentsTable, shipmentItemsTable, invoicesTable, paymentsTable } from "@workspace/db";
+import { db, companiesTable, userCompaniesTable, usersTable, clientsTable, clientInteractionsTable, vendorsTable, productsTable, bundlesTable, bundleItemsTable, salesOrdersTable, salesOrderItemsTable, deliveryAddressesTable, purchaseOrdersTable, purchaseOrderItemsTable, inventoryMovementsTable, assemblyJobsTable, artworkApprovalsTable, shipmentsTable, shipmentItemsTable, invoicesTable, paymentsTable } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { randomBytes, scryptSync } from "node:crypto";
 
@@ -9,23 +9,39 @@ function hashPassword(password: string): string {
 }
 
 async function truncate() {
-  // Truncate in reverse dependency order
-  await db.execute(sql`TRUNCATE TABLE payments, invoices, shipment_items, shipments, artwork_approvals, assembly_items, assembly_jobs, inventory_movements, purchase_order_items, purchase_orders, delivery_addresses, sales_order_items, sales_orders, bundle_items, bundles, products, vendors, client_interactions, clients, users RESTART IDENTITY CASCADE`);
+  // Truncate in reverse dependency order, then root tables
+  await db.execute(sql`TRUNCATE TABLE user_companies, payments, invoices, shipment_items, shipments, artwork_approvals, assembly_items, assembly_jobs, inventory_movements, purchase_order_items, purchase_orders, delivery_addresses, sales_order_items, sales_orders, bundle_items, bundles, products, vendors, client_interactions, clients, contacts, users, companies RESTART IDENTITY CASCADE`);
 }
 
 async function seed() {
   console.log("Truncating existing data...");
   await truncate();
 
+  // Companies (must come before users due to FK)
+  console.log("Seeding companies...");
+  const [mainCompany] = await db.insert(companiesTable).values([
+    { name: "Customize Duniya", gstin: "27AABCU9603R1ZX", gstAddress: "123 Andheri Industrial Estate, Mumbai", city: "Mumbai", state: "Maharashtra", pincode: "400093" },
+  ]).returning();
+
   // Users
   console.log("Seeding users...");
   const [admin, sales1, sales2, warehouse, finance] = await db.insert(usersTable).values([
-    { name: "Rajesh Mehta", email: "admin@gifterp.com", passwordHash: hashPassword("admin123"), role: "Admin" },
-    { name: "Priya Sharma", email: "priya@gifterp.com", passwordHash: hashPassword("sales123"), role: "Sales" },
-    { name: "Arjun Nair", email: "arjun@gifterp.com", passwordHash: hashPassword("sales123"), role: "Sales" },
-    { name: "Vikram Singh", email: "vikram@gifterp.com", passwordHash: hashPassword("wh123"), role: "Warehouse" },
-    { name: "Anita Patel", email: "anita@gifterp.com", passwordHash: hashPassword("fin123"), role: "Finance" },
+    { name: "Rajesh Mehta", email: "admin@gifterp.com", passwordHash: hashPassword("admin123"), role: "Admin", companyId: mainCompany.id },
+    { name: "Priya Sharma", email: "priya@gifterp.com", passwordHash: hashPassword("sales123"), role: "Sales", companyId: mainCompany.id },
+    { name: "Arjun Nair", email: "arjun@gifterp.com", passwordHash: hashPassword("sales123"), role: "Sales", companyId: mainCompany.id },
+    { name: "Vikram Singh", email: "vikram@gifterp.com", passwordHash: hashPassword("wh123"), role: "Warehouse", companyId: mainCompany.id },
+    { name: "Anita Patel", email: "anita@gifterp.com", passwordHash: hashPassword("fin123"), role: "Finance", companyId: mainCompany.id },
   ]).returning();
+
+  // User-company memberships
+  console.log("Seeding user-company memberships...");
+  await db.insert(userCompaniesTable).values([
+    { userId: admin.id, companyId: mainCompany.id },
+    { userId: sales1.id, companyId: mainCompany.id },
+    { userId: sales2.id, companyId: mainCompany.id },
+    { userId: warehouse.id, companyId: mainCompany.id },
+    { userId: finance.id, companyId: mainCompany.id },
+  ]);
 
   // Clients
   console.log("Seeding clients...");

@@ -16,8 +16,27 @@ import { format } from "date-fns";
 interface Company {
   id: number;
   name: string;
+  gstin?: string | null;
+  gstAddress?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  logoUrl?: string | null;
   createdAt: string;
   isCurrent: boolean;
+}
+
+interface CompanyForm {
+  name: string;
+  gstin: string;
+  gstAddress: string;
+  city: string;
+  state: string;
+  pincode: string;
+}
+
+function blankForm(): CompanyForm {
+  return { name: "", gstin: "", gstAddress: "", city: "", state: "", pincode: "" };
 }
 
 function useCompanies() {
@@ -33,27 +52,30 @@ export function Companies() {
   const { data: companies, isLoading } = useCompanies();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editCompany, setEditCompany] = useState<Company | null>(null);
-  const [name, setName] = useState("");
+  const [form, setForm] = useState<CompanyForm>(blankForm());
+
+  const setField = (k: keyof CompanyForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const createMutation = useMutation({
-    mutationFn: (name: string) => api<Company>("/v1/companies", { method: "POST", body: JSON.stringify({ name }) }),
+    mutationFn: (data: CompanyForm) => api<Company>("/v1/companies", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["companies"] });
       setDialogOpen(false);
-      setName("");
+      setForm(blankForm());
       toast({ title: "Company created" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, name }: { id: number; name: string }) =>
-      api<Company>(`/v1/companies/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+    mutationFn: ({ id, data }: { id: number; data: CompanyForm }) =>
+      api<Company>(`/v1/companies/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["companies"] });
       setDialogOpen(false);
       setEditCompany(null);
-      setName("");
+      setForm(blankForm());
       toast({ title: "Company updated" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -73,22 +95,29 @@ export function Companies() {
 
   const openCreate = () => {
     setEditCompany(null);
-    setName("");
+    setForm(blankForm());
     setDialogOpen(true);
   };
 
   const openEdit = (c: Company) => {
     setEditCompany(c);
-    setName(c.name);
+    setForm({
+      name: c.name,
+      gstin: c.gstin ?? "",
+      gstAddress: c.gstAddress ?? "",
+      city: c.city ?? "",
+      state: c.state ?? "",
+      pincode: c.pincode ?? "",
+    });
     setDialogOpen(true);
   };
 
   const handleSubmit = () => {
-    if (!name.trim()) return;
+    if (!form.name.trim()) return;
     if (editCompany) {
-      updateMutation.mutate({ id: editCompany.id, name: name.trim() });
+      updateMutation.mutate({ id: editCompany.id, data: form });
     } else {
-      createMutation.mutate(name.trim());
+      createMutation.mutate(form);
     }
   };
 
@@ -131,6 +160,13 @@ export function Companies() {
                     )}
                   </div>
 
+                  {(c.city || c.state || c.gstin) && (
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                      {(c.city || c.state) && <div>{[c.city, c.state].filter(Boolean).join(", ")}</div>}
+                      {c.gstin && <div>GSTIN: {c.gstin}</div>}
+                    </div>
+                  )}
+
                   <div className="text-xs text-muted-foreground">
                     Created {format(new Date(c.createdAt), "MMM d, yyyy")}
                   </div>
@@ -158,25 +194,41 @@ export function Companies() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editCompany ? "Edit Company" : "New Company"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-2">
+          <div className="space-y-3 pt-2">
             <div className="space-y-1.5">
               <Label>Company Name *</Label>
-              <Input
-                placeholder="e.g. Acme Corp"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                autoFocus
-              />
+              <Input placeholder="e.g. Customize Duniya Pvt Ltd" value={form.name} onChange={setField("name")} autoFocus />
+            </div>
+            <div className="space-y-1.5">
+              <Label>GSTIN</Label>
+              <Input placeholder="e.g. 27AABCU9603R1ZX" value={form.gstin} onChange={setField("gstin")} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>GST / Registered Address</Label>
+              <Input placeholder="Street address for invoices" value={form.gstAddress} onChange={setField("gstAddress")} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>City</Label>
+                <Input placeholder="Mumbai" value={form.city} onChange={setField("city")} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>State</Label>
+                <Input placeholder="Maharashtra" value={form.state} onChange={setField("state")} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Pincode</Label>
+              <Input placeholder="400001" value={form.pincode} onChange={setField("pincode")} />
             </div>
             <Button
               className="w-full"
               onClick={handleSubmit}
-              disabled={!name.trim() || createMutation.isPending || updateMutation.isPending}
+              disabled={!form.name.trim() || createMutation.isPending || updateMutation.isPending}
             >
               {editCompany ? "Save Changes" : "Create Company"}
             </Button>
