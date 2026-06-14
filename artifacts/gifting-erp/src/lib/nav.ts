@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Briefcase,
   Box,
+  ArrowRightLeft,
   Settings,
   Palette,
   Truck,
@@ -69,6 +70,7 @@ export const navItems: NavGroup[] = [
     group: "Operations",
     items: [
       { label: "Inventory", href: "/inventory", icon: Box },
+      { label: "Transfers", href: "/transfers", icon: ArrowRightLeft },
       { label: "Locations", href: "/locations", icon: MapPin },
       { label: "Goods Receipts", href: "/grn", icon: Inbox },
       { label: "Assembly", href: "/assembly", icon: Settings },

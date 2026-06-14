@@ -112,19 +112,63 @@ router.post("/v1/inventory/transfer", async (req, res): Promise<void> => {
     return;
   }
 
+  const transferBatch = `XFER-${Date.now()}`;
   const [outMovement, inMovement] = await db.transaction(async (tx) => {
     const [out] = await tx.insert(inventoryMovementsTable).values({
       companyId: req.companyId, productId, locationId: fromLocationId ?? null,
-      type: "transfer_out", quantity, reference: reference ?? "Transfer",
+      type: "transfer_out", quantity, reference: reference ?? null, batch: transferBatch,
     }).returning();
     const [inn] = await tx.insert(inventoryMovementsTable).values({
       companyId: req.companyId, productId, locationId: toLocationId ?? null,
-      type: "transfer_in", quantity, reference: reference ?? "Transfer",
+      type: "transfer_in", quantity, reference: reference ?? null, batch: transferBatch,
     }).returning();
     return [out, inn];
   });
 
-  res.status(201).json({ outMovement, inMovement });
+  res.status(201).json({ outMovement, inMovement, batch: transferBatch });
+});
+
+router.get("/v1/inventory/transfers", async (req, res): Promise<void> => {
+  const outRows = await db
+    .select({ m: inventoryMovementsTable, product: productsTable, loc: warehouseLocationsTable })
+    .from(inventoryMovementsTable)
+    .leftJoin(productsTable, eq(inventoryMovementsTable.productId, productsTable.id))
+    .leftJoin(warehouseLocationsTable, eq(inventoryMovementsTable.locationId, warehouseLocationsTable.id))
+    .where(and(eq(inventoryMovementsTable.companyId, req.companyId), eq(inventoryMovementsTable.type, "transfer_out")))
+    .orderBy(inventoryMovementsTable.id);
+
+  const inRows = await db
+    .select({ m: inventoryMovementsTable, loc: warehouseLocationsTable })
+    .from(inventoryMovementsTable)
+    .leftJoin(warehouseLocationsTable, eq(inventoryMovementsTable.locationId, warehouseLocationsTable.id))
+    .where(and(eq(inventoryMovementsTable.companyId, req.companyId), eq(inventoryMovementsTable.type, "transfer_in")))
+    .orderBy(inventoryMovementsTable.id);
+
+  const inByBatch = new Map<string, typeof inRows[0]>();
+  const inOrphans: typeof inRows = [];
+  for (const row of inRows) {
+    if (row.m.batch) inByBatch.set(row.m.batch, row);
+    else inOrphans.push(row);
+  }
+
+  const transfers = outRows.map((out) => {
+    const inn = out.m.batch ? inByBatch.get(out.m.batch) : undefined;
+    return {
+      batch: out.m.batch ?? null,
+      productId: out.m.productId,
+      productName: out.product?.name ?? "Unknown",
+      quantity: out.m.quantity,
+      fromLocationId: out.m.locationId ?? null,
+      fromLocationName: out.loc?.name ?? "Unassigned",
+      toLocationId: inn?.m.locationId ?? null,
+      toLocationName: inn?.loc?.name ?? "Unassigned",
+      reference: out.m.reference ?? inn?.m.reference ?? null,
+      createdAt: out.m.createdAt.toISOString(),
+    };
+  });
+
+  transfers.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  res.json(transfers);
 });
 
 router.get("/v1/inventory/movements", async (req, res): Promise<void> => {

@@ -38,6 +38,7 @@ import { Settings } from "@/pages/settings";
 import { Contacts } from "@/pages/contacts";
 import { Companies } from "@/pages/companies";
 import { FollowUps } from "@/pages/followups";
+import { Transfers } from "@/pages/transfers";
 
 initAuth();
 initTheme();
@@ -89,6 +90,7 @@ function Router() {
         <Route path="/purchase-orders" component={PurchaseOrders} />
         <Route path="/purchase-orders/:id" component={PurchaseOrderDetailWrapper} />
         <Route path="/inventory" component={Inventory} />
+        <Route path="/transfers" component={Transfers} />
         <Route path="/locations" component={Locations} />
         <Route path="/grn" component={Grn} />
         <Route path="/assembly" component={Assembly} />
