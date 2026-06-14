@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { getStoredUser } from "@/lib/auth";
+import { getStoredUser, setStoredUser } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
@@ -15,8 +17,36 @@ import {
 import { format } from "date-fns";
 import {
   TrendingUp, DollarSign, ShoppingCart, AlertCircle, Package, Users,
-  Building2, Factory, BarChart3, FileText, Truck, Landmark,
+  Building2, Factory, BarChart3, FileText, Truck, Landmark, CalendarDays,
 } from "lucide-react";
+
+// ─── date presets ─────────────────────────────────────────────────────────────
+type Preset = "month" | "3m" | "6m" | "year" | "all";
+const PRESETS: { id: Preset; label: string }[] = [
+  { id: "month", label: "This Month" },
+  { id: "3m",    label: "Last 3M" },
+  { id: "6m",    label: "Last 6M" },
+  { id: "year",  label: "This Year" },
+  { id: "all",   label: "All Time" },
+];
+
+function getRange(preset: Preset): { from?: string; to?: string } {
+  const now = new Date();
+  const today = now.toISOString().split("T")[0];
+  if (preset === "month") return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0], to: today };
+  if (preset === "3m") { const d = new Date(now); d.setMonth(d.getMonth() - 3); return { from: d.toISOString().split("T")[0], to: today }; }
+  if (preset === "6m") { const d = new Date(now); d.setMonth(d.getMonth() - 6); return { from: d.toISOString().split("T")[0], to: today }; }
+  if (preset === "year") return { from: `${now.getFullYear()}-01-01`, to: today };
+  return {};
+}
+
+function qs(f: { from?: string; to?: string }): string {
+  const p = new URLSearchParams();
+  if (f.from) p.set("from", f.from);
+  if (f.to) p.set("to", f.to);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const INR = (n: number) => `₹${(n ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -25,6 +55,25 @@ const fmtMonth = (m: string) => { try { return format(new Date(m + "-01"), "MMM 
 
 const PALETTE = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#3b82f6", "#8b5cf6", "#14b8a6", "#f97316"];
 
+interface Filters { from?: string; to?: string }
+interface TabProps { filters: Filters; cid: number }
+
+// ─── types ────────────────────────────────────────────────────────────────────
+interface Company { id: number; name: string; isCurrent: boolean }
+interface Dashboard { totalClients: number; activeOrders: number; overdueInvoices: number; revenueThisMonth: number; totalRevenue: number; lowStockItems: number; pendingPOs: number; pendingAssembly: number }
+interface RevenueTrend { month: string; revenue: number; orders: number }
+interface Pipeline { status: string; count: number; value: number }
+interface TopClient { clientId: number; clientName: string; orders: number; revenue: number }
+interface TopProduct { productId: number; productName: string; quantity: number; revenue: number }
+interface ArAging { buckets: { bucket: string; value: number }[]; total: number; detail: { bucket: string; invoiceNumber: string; clientName: string; balance: number; daysOverdue: number }[] }
+interface VendorPerf { vendorId: number; vendorName: string; poCount: number; totalValue: number; onTimeRate: number }
+interface InvStatus { totalProducts: number; lowStockCount: number; outOfStockCount: number; totalValue: number }
+interface Product { id: number; name: string; category: string; stockLevel: number; price: number; costPrice: number; sku: string }
+interface AssetSummary { totalAssets: number; activeAssets: number; totalCost: number; totalBookValue: number; totalDepreciation: number; byCategory: { category: string; count: number; totalCost: number; totalBV: number }[] }
+interface FixedAsset { id: number; assetCode: string; name: string; category: string; purchaseCost: number; currentBookValue: number; totalDepreciation: number; status: string; purchaseDate: string; locationName: string | null }
+interface ProdOrder { id: number; orderNumber: string; productName: string; quantity: number; producedQty: number; status: string; plannedDate: string | null }
+
+// ─── small shared components ──────────────────────────────────────────────────
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
@@ -57,49 +106,30 @@ function KpiCard({ label, value, sub, icon: Icon, color }: { label: string; valu
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-base font-semibold text-foreground">{children}</h2>;
-}
-
 function EmptyRow({ cols, label }: { cols: number; label?: string }) {
   return (
     <TableRow>
-      <TableCell colSpan={cols} className="text-center py-10 text-muted-foreground">
-        {label ?? "No data available"}
-      </TableCell>
+      <TableCell colSpan={cols} className="text-center py-10 text-muted-foreground">{label ?? "No data available"}</TableCell>
     </TableRow>
   );
 }
 
-// ─── types ─────────────────────────────────────────────────────────────────────
-interface Dashboard { totalClients: number; activeOrders: number; overdueInvoices: number; revenueThisMonth: number; totalRevenue: number; lowStockItems: number; pendingPOs: number }
-interface RevenueTrend { month: string; revenue: number; orders: number }
-interface Pipeline { status: string; count: number; value: number }
-interface TopClient { clientId: number; clientName: string; orders: number; revenue: number }
-interface TopProduct { productId: number; productName: string; quantity: number; revenue: number }
-interface ArAging { buckets: { bucket: string; value: number }[]; total: number; detail: { clientName: string; invoiceNumber: string; amount: number; days: number }[] }
-interface VendorPerf { vendorId: number; vendorName: string; poCount: number; totalValue: number; onTimeRate: number }
-interface InvStatus { totalProducts: number; lowStockCount: number; outOfStockCount: number; totalValue: number }
-interface Product { id: number; name: string; category: string; stockLevel: number; price: number; costPrice: number; sku: string }
-interface AssetSummary { totalAssets: number; activeAssets: number; totalCost: number; totalBookValue: number; totalDepreciation: number; byCategory: { category: string; count: number; totalCost: number; totalBV: number }[] }
-interface FixedAsset { id: number; assetCode: string; name: string; category: string; purchaseCost: number; currentBookValue: number; totalDepreciation: number; status: string; purchaseDate: string; locationName: string | null }
-interface ProdOrder { id: number; orderNumber: string; productName: string; quantity: number; producedQty: number; status: string; plannedDate: string | null }
-
 // ─── Overview Tab ──────────────────────────────────────────────────────────────
-function OverviewTab() {
-  const { data: dash, isLoading: dL } = useQuery<Dashboard>({ queryKey: ["r-dashboard"], queryFn: () => api("/v1/analytics/dashboard") });
-  const { data: trend = [], isLoading: tL } = useQuery<RevenueTrend[]>({ queryKey: ["r-trend"], queryFn: () => api("/v1/analytics/revenue-trend") });
-  const { data: pipe = [], isLoading: pL } = useQuery<Pipeline[]>({ queryKey: ["r-pipeline"], queryFn: () => api("/v1/analytics/sales-pipeline") });
+function OverviewTab({ filters, cid }: TabProps) {
+  const q = qs(filters);
+  const { data: dash, isLoading: dL } = useQuery<Dashboard>({ queryKey: ["r-dashboard", cid, filters.from, filters.to], queryFn: () => api(`/v1/analytics/dashboard${q}`) });
+  const { data: trend = [], isLoading: tL } = useQuery<RevenueTrend[]>({ queryKey: ["r-trend", cid, filters.from, filters.to], queryFn: () => api(`/v1/analytics/revenue-trend${q}`) });
+  const { data: pipe = [], isLoading: pL } = useQuery<Pipeline[]>({ queryKey: ["r-pipeline", cid, filters.from, filters.to], queryFn: () => api(`/v1/analytics/sales-pipeline${q}`) });
 
   const kpis = [
-    { label: "Revenue This Month", value: INR(dash?.revenueThisMonth ?? 0), icon: DollarSign, color: "bg-indigo-500/10 text-indigo-500" },
-    { label: "Total Revenue", value: INR(dash?.totalRevenue ?? 0), sub: "all time", icon: TrendingUp, color: "bg-emerald-500/10 text-emerald-600" },
+    { label: filters.from ? "Revenue in Period" : "Revenue This Month", value: INR(dash?.revenueThisMonth ?? 0), icon: DollarSign, color: "bg-indigo-500/10 text-indigo-500" },
+    { label: "Total Revenue (All Time)", value: INR(dash?.totalRevenue ?? 0), icon: TrendingUp, color: "bg-emerald-500/10 text-emerald-600" },
     { label: "Active Orders", value: dash?.activeOrders ?? 0, icon: ShoppingCart, color: "bg-blue-500/10 text-blue-500" },
     { label: "Total Clients", value: dash?.totalClients ?? 0, icon: Users, color: "bg-violet-500/10 text-violet-500" },
     { label: "Overdue Invoices", value: dash?.overdueInvoices ?? 0, icon: AlertCircle, color: "bg-red-500/10 text-red-500" },
     { label: "Low Stock Items", value: dash?.lowStockItems ?? 0, icon: Package, color: "bg-amber-500/10 text-amber-600" },
     { label: "Pending POs", value: dash?.pendingPOs ?? 0, icon: Truck, color: "bg-teal-500/10 text-teal-600" },
-    { label: "Pending Assembly", value: (dash as any)?.pendingAssembly ?? 0, icon: Factory, color: "bg-orange-500/10 text-orange-600" },
+    { label: "Pending Assembly", value: dash?.pendingAssembly ?? 0, icon: Factory, color: "bg-orange-500/10 text-orange-600" },
   ];
 
   return (
@@ -111,7 +141,7 @@ function OverviewTab() {
 
       <div className="grid grid-cols-3 gap-4">
         <Card className="col-span-2 elev-1">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Revenue Trend (last 6 months)</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Revenue Trend</CardTitle></CardHeader>
           <CardContent className="h-56">
             {tL ? <Skeleton className="h-full w-full" /> : (
               <ResponsiveContainer width="100%" height="100%">
@@ -140,8 +170,7 @@ function OverviewTab() {
                       <span className="font-medium">{p.status}</span>
                       <span className="text-muted-foreground">{p.count} · {INR(p.value)}</span>
                     </div>
-                    <Progress value={p.count > 0 ? Math.max(8, (p.count / Math.max(...pipe.map(x => x.count), 1)) * 100) : 0}
-                      className="h-1.5" style={{ "--progress-bg": PALETTE[i] } as React.CSSProperties} />
+                    <Progress value={p.count > 0 ? Math.max(8, (p.count / Math.max(...pipe.map(x => x.count), 1)) * 100) : 0} className="h-1.5" />
                   </div>
                 ))}
               </div>
@@ -154,10 +183,11 @@ function OverviewTab() {
 }
 
 // ─── Sales Tab ─────────────────────────────────────────────────────────────────
-function SalesTab() {
-  const { data: clients = [], isLoading: cL } = useQuery<TopClient[]>({ queryKey: ["r-top-clients"], queryFn: () => api("/v1/analytics/top-clients") });
-  const { data: products = [], isLoading: pL } = useQuery<TopProduct[]>({ queryKey: ["r-top-products"], queryFn: () => api("/v1/analytics/top-products") });
-  const { data: trend = [] } = useQuery<RevenueTrend[]>({ queryKey: ["r-trend"], queryFn: () => api("/v1/analytics/revenue-trend") });
+function SalesTab({ filters, cid }: TabProps) {
+  const q = qs(filters);
+  const { data: clients = [], isLoading: cL } = useQuery<TopClient[]>({ queryKey: ["r-top-clients", cid, filters.from, filters.to], queryFn: () => api(`/v1/analytics/top-clients${q}`) });
+  const { data: products = [], isLoading: pL } = useQuery<TopProduct[]>({ queryKey: ["r-top-products", cid, filters.from, filters.to], queryFn: () => api(`/v1/analytics/top-products${q}`) });
+  const { data: trend = [] } = useQuery<RevenueTrend[]>({ queryKey: ["r-trend", cid, filters.from, filters.to], queryFn: () => api(`/v1/analytics/revenue-trend${q}`) });
 
   const totalClientRev = clients.reduce((a, c) => a + c.revenue, 0);
   const totalProductRev = products.reduce((a, p) => a + p.revenue, 0);
@@ -165,22 +195,17 @@ function SalesTab() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
-        {/* Top Clients */}
         <Card className="elev-1">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold flex items-center gap-1.5"><Users className="w-4 h-4 text-indigo-500" />Top Clients by Revenue</CardTitle></CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead className="w-8">#</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead className="text-right">Orders</TableHead>
-                <TableHead className="text-right">Revenue</TableHead>
-                <TableHead className="text-right">Share</TableHead>
+                <TableHead className="w-8">#</TableHead><TableHead>Client</TableHead><TableHead className="text-right">Orders</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Share</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {cL ? <TableRow><TableCell colSpan={5}><Skeleton className="h-32 w-full" /></TableCell></TableRow>
                   : clients.length === 0 ? <EmptyRow cols={5} />
-                  : clients.slice(0, 10).map((c, i) => (
+                  : clients.map((c, i) => (
                     <TableRow key={c.clientId}>
                       <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
                       <TableCell className="font-medium text-sm">{c.clientName}</TableCell>
@@ -194,22 +219,17 @@ function SalesTab() {
           </CardContent>
         </Card>
 
-        {/* Top Products */}
         <Card className="elev-1">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold flex items-center gap-1.5"><Package className="w-4 h-4 text-emerald-500" />Top Products by Revenue</CardTitle></CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead className="w-8">#</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead className="text-right">Qty Sold</TableHead>
-                <TableHead className="text-right">Revenue</TableHead>
-                <TableHead className="text-right">Share</TableHead>
+                <TableHead className="w-8">#</TableHead><TableHead>Product</TableHead><TableHead className="text-right">Qty Sold</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Share</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {pL ? <TableRow><TableCell colSpan={5}><Skeleton className="h-32 w-full" /></TableCell></TableRow>
                   : products.length === 0 ? <EmptyRow cols={5} />
-                  : products.slice(0, 10).map((p, i) => (
+                  : products.map((p, i) => (
                     <TableRow key={p.productId}>
                       <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
                       <TableCell className="font-medium text-sm">{p.productName}</TableCell>
@@ -224,16 +244,12 @@ function SalesTab() {
         </Card>
       </div>
 
-      {/* Monthly Revenue Table */}
       <Card className="elev-1">
         <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Monthly Revenue Breakdown</CardTitle></CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Month</TableHead>
-              <TableHead className="text-right">Orders</TableHead>
-              <TableHead className="text-right">Revenue</TableHead>
-              <TableHead>Trend</TableHead>
+              <TableHead>Month</TableHead><TableHead className="text-right">Orders</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead>MoM</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {trend.length === 0 ? <EmptyRow cols={4} />
@@ -246,11 +262,9 @@ function SalesTab() {
                       <TableCell className="text-right">{t.orders}</TableCell>
                       <TableCell className="text-right tabular-nums">{INR(t.revenue)}</TableCell>
                       <TableCell>
-                        {delta != null ? (
-                          <span className={`text-xs font-medium ${delta >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                            {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)}%
-                          </span>
-                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                        {delta != null
+                          ? <span className={`text-xs font-medium ${delta >= 0 ? "text-emerald-600" : "text-red-500"}`}>{delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)}%</span>
+                          : <span className="text-xs text-muted-foreground">—</span>}
                       </TableCell>
                     </TableRow>
                   );
@@ -264,19 +278,14 @@ function SalesTab() {
 }
 
 // ─── Finance Tab ────────────────────────────────────────────────────────────────
-function FinanceTab() {
-  const { data: aging, isLoading } = useQuery<ArAging>({ queryKey: ["r-ar-aging"], queryFn: () => api("/v1/analytics/ar-aging") });
+function FinanceTab({ filters, cid }: TabProps) {
+  const { data: aging, isLoading } = useQuery<ArAging>({ queryKey: ["r-ar-aging", cid, filters.from, filters.to], queryFn: () => api(`/v1/analytics/ar-aging${qs(filters)}`) });
 
-  const bucketColors: Record<string, string> = {
-    current: "#22c55e", "1-30": "#6366f1", "31-60": "#f59e0b", "61-90": "#f97316", "90+": "#ef4444",
-  };
-  const bucketLabel: Record<string, string> = {
-    current: "Current", "1-30": "1–30 days", "31-60": "31–60 days", "61-90": "61–90 days", "90+": "90+ days",
-  };
+  const bucketColors: Record<string, string> = { current: "#22c55e", "1-30": "#6366f1", "31-60": "#f59e0b", "61-90": "#f97316", "90+": "#ef4444" };
+  const bucketLabel: Record<string, string> = { current: "Current", "1-30": "1–30 days", "31-60": "31–60 days", "61-90": "61–90 days", "90+": "90+ days" };
 
   return (
     <div className="space-y-6">
-      {/* AR Aging Overview */}
       <div className="grid grid-cols-3 gap-4">
         <Card className="col-span-2 elev-1">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Accounts Receivable Aging</CardTitle></CardHeader>
@@ -289,9 +298,7 @@ function FinanceTab() {
                   <YAxis type="category" dataKey="bucket" tick={{ fontSize: 11 }} width={80} />
                   <Tooltip content={<ChartTooltip />} />
                   <Bar dataKey="value" name="Outstanding" radius={[0, 4, 4, 0]}>
-                    {aging?.buckets.map((b) => (
-                      <Cell key={b.bucket} fill={bucketColors[b.bucket] ?? "#6366f1"} />
-                    ))}
+                    {aging?.buckets.map((b) => <Cell key={b.bucket} fill={bucketColors[b.bucket] ?? "#6366f1"} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -319,35 +326,26 @@ function FinanceTab() {
         </Card>
       </div>
 
-      {/* Overdue Detail */}
       <Card className="elev-1">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-            <AlertCircle className="w-4 h-4 text-red-500" />Overdue Invoice Detail
-          </CardTitle>
-        </CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold flex items-center gap-1.5"><AlertCircle className="w-4 h-4 text-red-500" />Overdue Invoice Detail</CardTitle></CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Invoice #</TableHead>
-              <TableHead>Client</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-right">Days Overdue</TableHead>
-              <TableHead>Risk</TableHead>
+              <TableHead>Invoice #</TableHead><TableHead>Client</TableHead><TableHead className="text-right">Balance</TableHead><TableHead className="text-right">Days Overdue</TableHead><TableHead>Risk</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? <TableRow><TableCell colSpan={5}><Skeleton className="h-24 w-full" /></TableCell></TableRow>
                 : (aging?.detail ?? []).length === 0 ? <EmptyRow cols={5} label="No overdue invoices" />
                 : (aging?.detail ?? []).map((d, i) => {
-                  const risk = d.days > 90 ? { label: "High", cls: "bg-red-500/10 text-red-500 border-red-500/20" }
-                    : d.days > 60 ? { label: "Medium", cls: "bg-amber-500/10 text-amber-600 border-amber-500/20" }
+                  const risk = d.daysOverdue > 90 ? { label: "High", cls: "bg-red-500/10 text-red-500 border-red-500/20" }
+                    : d.daysOverdue > 60 ? { label: "Medium", cls: "bg-amber-500/10 text-amber-600 border-amber-500/20" }
                     : { label: "Low", cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" };
                   return (
                     <TableRow key={i}>
                       <TableCell className="font-mono text-sm">{d.invoiceNumber}</TableCell>
                       <TableCell className="font-medium text-sm">{d.clientName}</TableCell>
-                      <TableCell className="text-right tabular-nums text-sm">{INR(d.amount)}</TableCell>
-                      <TableCell className="text-right text-sm">{d.days} days</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">{INR(d.balance)}</TableCell>
+                      <TableCell className="text-right text-sm">{d.daysOverdue} days</TableCell>
                       <TableCell><Badge variant="outline" className={`text-xs ${risk.cls}`}>{risk.label}</Badge></TableCell>
                     </TableRow>
                   );
@@ -361,10 +359,9 @@ function FinanceTab() {
 }
 
 // ─── Inventory Tab ──────────────────────────────────────────────────────────────
-function InventoryTab() {
-  const { data: status } = useQuery<InvStatus>({ queryKey: ["r-inv-status"], queryFn: () => api("/v1/analytics/inventory-status") });
-  const { data: products = [], isLoading } = useQuery<Product[]>({ queryKey: ["products-list"], queryFn: () => api("/v1/products") });
-
+function InventoryTab({ cid }: TabProps) {
+  const { data: status } = useQuery<InvStatus>({ queryKey: ["r-inv-status", cid], queryFn: () => api("/v1/analytics/inventory-status") });
+  const { data: products = [], isLoading } = useQuery<Product[]>({ queryKey: ["products-list", cid], queryFn: () => api("/v1/products") });
   const maxStock = Math.max(...products.map(p => p.stockLevel), 1);
 
   return (
@@ -383,21 +380,13 @@ function InventoryTab() {
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>SKU</TableHead>
-              <TableHead>Product Name</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead className="text-right">Stock Qty</TableHead>
-              <TableHead>Level</TableHead>
-              <TableHead className="text-right">Unit Price</TableHead>
-              <TableHead className="text-right">Stock Value</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>SKU</TableHead><TableHead>Product</TableHead><TableHead>Category</TableHead><TableHead className="text-right">Stock</TableHead><TableHead>Level</TableHead><TableHead className="text-right">Unit Price</TableHead><TableHead className="text-right">Stock Value</TableHead><TableHead>Status</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-8 w-full" /></TableCell></TableRow>)
                 : products.length === 0 ? <EmptyRow cols={8} />
                 : [...products].sort((a, b) => b.stockLevel - a.stockLevel).map((p) => {
                   const stockVal = p.stockLevel * (p.costPrice ?? p.price ?? 0);
-                  const stockPct = (p.stockLevel / maxStock) * 100;
                   const st = p.stockLevel === 0 ? { label: "Out", cls: "bg-red-500/10 text-red-500 border-red-500/20" }
                     : p.stockLevel < 10 ? { label: "Low", cls: "bg-amber-500/10 text-amber-600 border-amber-500/20" }
                     : { label: "OK", cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" };
@@ -407,7 +396,7 @@ function InventoryTab() {
                       <TableCell className="font-medium text-sm">{p.name}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{p.category || "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{p.stockLevel}</TableCell>
-                      <TableCell className="w-28"><Progress value={stockPct} className="h-1.5" /></TableCell>
+                      <TableCell className="w-28"><Progress value={(p.stockLevel / maxStock) * 100} className="h-1.5" /></TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{INR(p.price ?? 0)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm font-medium">{INR(stockVal)}</TableCell>
                       <TableCell><Badge variant="outline" className={`text-xs ${st.cls}`}>{st.label}</Badge></TableCell>
@@ -423,13 +412,13 @@ function InventoryTab() {
 }
 
 // ─── Purchasing Tab ─────────────────────────────────────────────────────────────
-function PurchasingTab() {
-  const { data: pipe = [] } = useQuery<Pipeline[]>({ queryKey: ["r-pipeline"], queryFn: () => api("/v1/analytics/sales-pipeline") });
-  const { data: vendors = [], isLoading } = useQuery<VendorPerf[]>({ queryKey: ["r-vendor-perf"], queryFn: () => api("/v1/analytics/vendor-performance") });
+function PurchasingTab({ filters, cid }: TabProps) {
+  const q = qs(filters);
+  const { data: pipe = [] } = useQuery<Pipeline[]>({ queryKey: ["r-pipeline", cid, filters.from, filters.to], queryFn: () => api(`/v1/analytics/sales-pipeline${q}`) });
+  const { data: vendors = [], isLoading } = useQuery<VendorPerf[]>({ queryKey: ["r-vendor-perf", cid, filters.from, filters.to], queryFn: () => api(`/v1/analytics/vendor-performance${q}`) });
 
   return (
     <div className="space-y-6">
-      {/* PO Pipeline */}
       <Card className="elev-1">
         <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold flex items-center gap-1.5"><Truck className="w-4 h-4" />Purchase Order Pipeline</CardTitle></CardHeader>
         <CardContent className="h-52">
@@ -447,17 +436,12 @@ function PurchasingTab() {
         </CardContent>
       </Card>
 
-      {/* Vendor Performance */}
       <Card className="elev-1">
         <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold flex items-center gap-1.5"><Building2 className="w-4 h-4" />Vendor Performance</CardTitle></CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Vendor</TableHead>
-              <TableHead className="text-right">POs</TableHead>
-              <TableHead className="text-right">Total Value</TableHead>
-              <TableHead className="text-right">On-Time Rate</TableHead>
-              <TableHead>Rating</TableHead>
+              <TableHead>Vendor</TableHead><TableHead className="text-right">POs</TableHead><TableHead className="text-right">Total Value</TableHead><TableHead className="text-right">On-Time Rate</TableHead><TableHead>Rating</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? <TableRow><TableCell colSpan={5}><Skeleton className="h-24 w-full" /></TableCell></TableRow>
@@ -474,7 +458,7 @@ function PurchasingTab() {
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Progress value={v.onTimeRate} className="h-1.5 w-16" />
-                          <span className="text-sm tabular-nums">{v.onTimeRate.toFixed(0)}%</span>
+                          <span className="text-sm tabular-nums">{v.onTimeRate}%</span>
                         </div>
                       </TableCell>
                       <TableCell><Badge variant="outline" className={`text-xs ${rating.cls}`}>{rating.label}</Badge></TableCell>
@@ -490,12 +474,10 @@ function PurchasingTab() {
 }
 
 // ─── Fixed Assets Tab ───────────────────────────────────────────────────────────
-function AssetsTab() {
-  const { data: summary } = useQuery<AssetSummary>({ queryKey: ["fixed-assets-summary"], queryFn: () => api("/v1/fixed-assets/summary") });
-  const { data: assets = [], isLoading } = useQuery<FixedAsset[]>({ queryKey: ["fixed-assets"], queryFn: () => api("/v1/fixed-assets") });
-
-  const deprPct = summary && summary.totalCost > 0
-    ? Math.min(100, (summary.totalDepreciation / summary.totalCost) * 100) : 0;
+function AssetsTab({ cid }: TabProps) {
+  const { data: summary } = useQuery<AssetSummary>({ queryKey: ["fixed-assets-summary", cid], queryFn: () => api("/v1/fixed-assets/summary") });
+  const { data: assets = [], isLoading } = useQuery<FixedAsset[]>({ queryKey: ["fixed-assets", cid], queryFn: () => api("/v1/fixed-assets") });
+  const deprPct = summary && summary.totalCost > 0 ? Math.min(100, (summary.totalDepreciation / summary.totalCost) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -508,19 +490,13 @@ function AssetsTab() {
         ].map((k) => <KpiCard key={k.label} {...k} />)}
       </div>
 
-      {/* By Category */}
       {(summary?.byCategory ?? []).length > 0 && (
         <Card className="elev-1">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Category Breakdown</CardTitle></CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Assets</TableHead>
-                <TableHead className="text-right">Gross Block</TableHead>
-                <TableHead className="text-right">Net Block</TableHead>
-                <TableHead className="text-right">Depreciated</TableHead>
-                <TableHead>Depr %</TableHead>
+                <TableHead>Category</TableHead><TableHead className="text-right">Assets</TableHead><TableHead className="text-right">Gross Block</TableHead><TableHead className="text-right">Net Block</TableHead><TableHead className="text-right">Depreciated</TableHead><TableHead>Depr %</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {(summary?.byCategory ?? []).map((c) => (
@@ -544,40 +520,30 @@ function AssetsTab() {
         </Card>
       )}
 
-      {/* Asset Register */}
       <Card className="elev-1">
         <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Full Asset Register</CardTitle></CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Code</TableHead>
-              <TableHead>Asset Name</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead>Purchase Date</TableHead>
-              <TableHead className="text-right">Cost</TableHead>
-              <TableHead className="text-right">Book Value</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Code</TableHead><TableHead>Asset Name</TableHead><TableHead>Category</TableHead><TableHead>Location</TableHead><TableHead>Purchase Date</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Book Value</TableHead><TableHead>Status</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? Array(3).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-8 w-full" /></TableCell></TableRow>)
                 : assets.length === 0 ? <EmptyRow cols={8} label="No assets registered yet" />
                 : assets.map((a) => {
-                  const st = a.status === "Active" ? { cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" }
-                    : a.status === "Under Maintenance" ? { cls: "bg-amber-500/10 text-amber-600 border-amber-500/20" }
-                    : { cls: "bg-muted text-muted-foreground" };
+                  const st = a.status === "Active" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                    : a.status === "Under Maintenance" ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                    : "bg-muted text-muted-foreground";
                   return (
                     <TableRow key={a.id}>
                       <TableCell className="font-mono text-xs">{a.assetCode}</TableCell>
                       <TableCell className="font-medium text-sm">{a.name}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.category}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{a.locationName ?? "—"}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {a.purchaseDate ? format(new Date(a.purchaseDate), "d MMM yyyy") : "—"}
-                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{a.purchaseDate ? format(new Date(a.purchaseDate), "d MMM yyyy") : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{INR(a.purchaseCost)}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm font-medium">{INR(a.currentBookValue)}</TableCell>
-                      <TableCell><Badge variant="outline" className={`text-xs ${st.cls}`}>{a.status}</Badge></TableCell>
+                      <TableCell><Badge variant="outline" className={`text-xs ${st}`}>{a.status}</Badge></TableCell>
                     </TableRow>
                   );
                 })}
@@ -590,16 +556,10 @@ function AssetsTab() {
 }
 
 // ─── Production Tab ──────────────────────────────────────────────────────────────
-function ProductionTab() {
-  const { data: orders = [], isLoading } = useQuery<ProdOrder[]>({ queryKey: ["production-orders"], queryFn: () => api("/v1/production-orders") });
-
-  const byStatus = ["Draft", "In Progress", "Completed", "Cancelled"].map((s) => ({
-    status: s, count: orders.filter(o => o.status === s).length,
-  }));
-
-  const completionRate = orders.length > 0
-    ? (orders.filter(o => o.status === "Completed").length / orders.length) * 100 : 0;
-
+function ProductionTab({ cid }: TabProps) {
+  const { data: orders = [], isLoading } = useQuery<ProdOrder[]>({ queryKey: ["production-orders", cid], queryFn: () => api("/v1/production-orders") });
+  const byStatus = ["Draft", "In Progress", "Completed", "Cancelled"].map((s) => ({ status: s, count: orders.filter(o => o.status === s).length }));
+  const completionRate = orders.length > 0 ? (orders.filter(o => o.status === "Completed").length / orders.length) * 100 : 0;
   const totalProduced = orders.filter(o => o.status === "Completed").reduce((a, o) => a + o.producedQty, 0);
 
   return (
@@ -633,12 +593,7 @@ function ProductionTab() {
           <CardContent className="p-0 max-h-64 overflow-y-auto">
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Order #</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Produced</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Planned</TableHead>
+                <TableHead>Order #</TableHead><TableHead>Product</TableHead><TableHead className="text-right">Qty</TableHead><TableHead className="text-right">Produced</TableHead><TableHead>Status</TableHead><TableHead>Planned</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {isLoading ? <TableRow><TableCell colSpan={6}><Skeleton className="h-24 w-full" /></TableCell></TableRow>
@@ -671,7 +626,33 @@ function ProductionTab() {
 // ─── Main Reports Page ──────────────────────────────────────────────────────────
 export function Reports() {
   const user = getStoredUser();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState("overview");
+  const [preset, setPreset] = useState<Preset>("6m");
+  const [selectedCid, setSelectedCid] = useState<number | null>(null);
+
+  const { data: companies = [] } = useQuery<Company[]>({
+    queryKey: ["companies"],
+    queryFn: () => api("/v1/companies"),
+  });
+
+  const currentCompany = companies.find(c => c.isCurrent);
+  const activeCid = selectedCid ?? currentCompany?.id ?? 1;
+  const filters = getRange(preset);
+
+  const switchMutation = useMutation({
+    mutationFn: (id: number) => api(`/v1/companies/${id}/switch`, { method: "POST" }),
+    onSuccess: async (_data, id) => {
+      setSelectedCid(id);
+      const me = await api<{ id: number; name: string; email: string; role: string; companyId: number; productionEnabled?: boolean }>("/v1/auth/me");
+      const stored = getStoredUser();
+      if (stored) {
+        setStoredUser({ ...stored, ...me });
+        window.dispatchEvent(new Event("auth-user-changed"));
+      }
+      queryClient.invalidateQueries();
+    },
+  });
 
   const tabs = [
     { id: "overview", label: "Overview", icon: BarChart3 },
@@ -684,18 +665,68 @@ export function Reports() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Reports</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Business intelligence across all modules</p>
         </div>
         <button
           onClick={() => window.print()}
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md bg-card hover:bg-muted/50 transition-colors"
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md bg-card hover:bg-muted/50 transition-colors shrink-0"
         >
-          <FileText className="w-3.5 h-3.5" />Print / Export
+          <FileText className="w-3.5 h-3.5" />Print
         </button>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Company selector */}
+        {companies.length > 1 && (
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-muted-foreground" />
+            <Select
+              value={String(activeCid)}
+              onValueChange={(v) => {
+                const id = Number(v);
+                if (id !== activeCid) switchMutation.mutate(id);
+              }}
+            >
+              <SelectTrigger className="h-8 w-48 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {companies.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* Date presets */}
+        <div className="flex items-center gap-1.5">
+          <CalendarDays className="w-4 h-4 text-muted-foreground" />
+          {PRESETS.map((p) => (
+            <Button
+              key={p.id}
+              size="sm"
+              variant={preset === p.id ? "default" : "outline"}
+              className="h-8 text-xs px-3"
+              onClick={() => setPreset(p.id)}
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
+
+        {/* Active range label */}
+        {filters.from && (
+          <span className="text-xs text-muted-foreground ml-1">
+            {format(new Date(filters.from), "d MMM yyyy")} – {filters.to ? format(new Date(filters.to), "d MMM yyyy") : "today"}
+          </span>
+        )}
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -707,13 +738,13 @@ export function Reports() {
           ))}
         </TabsList>
 
-        <TabsContent value="overview" className="mt-4"><OverviewTab /></TabsContent>
-        <TabsContent value="sales" className="mt-4"><SalesTab /></TabsContent>
-        <TabsContent value="finance" className="mt-4"><FinanceTab /></TabsContent>
-        <TabsContent value="inventory" className="mt-4"><InventoryTab /></TabsContent>
-        <TabsContent value="purchasing" className="mt-4"><PurchasingTab /></TabsContent>
-        <TabsContent value="assets" className="mt-4"><AssetsTab /></TabsContent>
-        {user?.productionEnabled && <TabsContent value="production" className="mt-4"><ProductionTab /></TabsContent>}
+        <TabsContent value="overview"   className="mt-4"><OverviewTab   filters={filters} cid={activeCid} /></TabsContent>
+        <TabsContent value="sales"      className="mt-4"><SalesTab      filters={filters} cid={activeCid} /></TabsContent>
+        <TabsContent value="finance"    className="mt-4"><FinanceTab    filters={filters} cid={activeCid} /></TabsContent>
+        <TabsContent value="inventory"  className="mt-4"><InventoryTab  filters={filters} cid={activeCid} /></TabsContent>
+        <TabsContent value="purchasing" className="mt-4"><PurchasingTab filters={filters} cid={activeCid} /></TabsContent>
+        <TabsContent value="assets"     className="mt-4"><AssetsTab     filters={filters} cid={activeCid} /></TabsContent>
+        {user?.productionEnabled && <TabsContent value="production" className="mt-4"><ProductionTab filters={filters} cid={activeCid} /></TabsContent>}
       </Tabs>
     </div>
   );
