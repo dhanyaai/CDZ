@@ -449,6 +449,7 @@ export interface InventoryTransferResult {
 
 export interface SwitchCompanyResult {
   success: boolean;
+  token: string;
   companyId: number;
   companyName: string;
 }

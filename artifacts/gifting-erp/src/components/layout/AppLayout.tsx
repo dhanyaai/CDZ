@@ -38,7 +38,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { navItems, flatNavItems } from "@/lib/nav";
 import { useTheme } from "@/lib/theme";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { api, setToken } from "@/lib/api";
 
 interface Company { id: number; name: string; createdAt: string; isCurrent: boolean }
 
@@ -94,8 +94,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const switchMutation = useMutation({
     mutationFn: (id: number) =>
-      api<{ success: boolean; companyId: number; companyName: string }>(`/v1/companies/${id}/switch`, { method: "POST" }),
+      api<{ success: boolean; token: string; companyId: number; companyName: string }>(`/v1/companies/${id}/switch`, { method: "POST" }),
     onSuccess: (data) => {
+      setToken(data.token);
       setStoredCompanyId(data.companyId);
       queryClient.clear();
     },

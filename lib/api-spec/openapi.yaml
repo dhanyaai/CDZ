@@ -1749,9 +1749,10 @@ components:
 
     SwitchCompanyResult:
       type: object
-      required: [success, companyId, companyName]
+      required: [success, token, companyId, companyName]
       properties:
         success: { type: boolean }
+        token: { type: string }
         companyId: { type: integer }
         companyName: { type: string }
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, companiesTable, usersTable, userCompaniesTable } from "@workspace/db";
-import { updateSessionCompany } from "../lib/sessions";
+import { createSession, destroySession } from "../lib/sessions";
 import { requireAdmin } from "../lib/requireAdmin";
 
 const router = Router();
@@ -85,12 +85,13 @@ router.post("/v1/companies/:id/switch", async (req, res): Promise<void> => {
 
   const auth = req.headers.authorization;
   if (auth?.startsWith("Bearer ")) {
-    updateSessionCompany(auth.slice(7), id);
+    destroySession(auth.slice(7));
   }
 
+  const newToken = createSession(req.userId, id);
   await db.update(usersTable).set({ companyId: id }).where(eq(usersTable.id, req.userId));
 
-  res.json({ success: true, companyId: id, companyName: company.name });
+  res.json({ success: true, token: newToken, companyId: id, companyName: company.name });
 });
 
 router.delete("/v1/companies/:id", requireAdmin, async (req, res): Promise<void> => {

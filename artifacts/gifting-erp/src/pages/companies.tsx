@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Building2, CheckCircle2, ArrowRightLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { api } from "@/lib/api";
+import { api, setToken } from "@/lib/api";
 import { getStoredCompanyId, setStoredCompanyId } from "@/lib/auth";
 import { format } from "date-fns";
 
@@ -83,8 +83,9 @@ export function Companies() {
 
   const switchMutation = useMutation({
     mutationFn: (id: number) =>
-      api<{ success: boolean; companyId: number; companyName: string }>(`/v1/companies/${id}/switch`, { method: "POST" }),
+      api<{ success: boolean; token: string; companyId: number; companyName: string }>(`/v1/companies/${id}/switch`, { method: "POST" }),
     onSuccess: (data) => {
+      setToken(data.token);
       setStoredCompanyId(data.companyId);
       queryClient.invalidateQueries({ queryKey: ["companies"] });
       queryClient.clear();

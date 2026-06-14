@@ -1243,6 +1243,7 @@ export const SwitchCompanyParams = zod.object({
 
 export const SwitchCompanyResponse = zod.object({
   "success": zod.boolean(),
+  "token": zod.string(),
   "companyId": zod.number(),
   "companyName": zod.string()
 })
