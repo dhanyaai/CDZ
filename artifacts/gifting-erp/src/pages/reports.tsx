@@ -17,7 +17,7 @@ import {
 import { format } from "date-fns";
 import {
   TrendingUp, DollarSign, ShoppingCart, AlertCircle, Package, Users,
-  Building2, Factory, BarChart3, FileText, Truck, Landmark, CalendarDays,
+  Building2, Factory, BarChart3, FileText, Truck, Landmark, CalendarDays, Archive,
 } from "lucide-react";
 
 // ─── date presets ─────────────────────────────────────────────────────────────
@@ -72,6 +72,9 @@ interface Product { id: number; name: string; category: string; stockLevel: numb
 interface AssetSummary { totalAssets: number; activeAssets: number; totalCost: number; totalBookValue: number; totalDepreciation: number; byCategory: { category: string; count: number; totalCost: number; totalBV: number }[] }
 interface FixedAsset { id: number; assetCode: string; name: string; category: string; purchaseCost: number; currentBookValue: number; totalDepreciation: number; status: string; purchaseDate: string; locationName: string | null }
 interface ProdOrder { id: number; orderNumber: string; productName: string; quantity: number; producedQty: number; status: string; plannedDate: string | null }
+interface StockAgeBuckets { "0-30": number; "31-60": number; "61-90": number; "90+": number }
+interface StockAgeItem { productId: number; productName: string; sku: string; category: string; currentStock: number; costPrice: number; totalValue: number; avgAge: number; oldestAge: number; buckets: StockAgeBuckets }
+interface StockAgeData { summary: Record<string, { qty: number; value: number }>; items: StockAgeItem[] }
 
 // ─── small shared components ──────────────────────────────────────────────────
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) {
@@ -555,6 +558,159 @@ function AssetsTab({ cid }: TabProps) {
   );
 }
 
+// ─── Stock Ageing Tab ────────────────────────────────────────────────────────────
+const BUCKET_META = [
+  { key: "0-30",  label: "Fresh",        sub: "0–30 days",   color: "#22c55e", cardCls: "bg-emerald-500/10 text-emerald-600", badgeCls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+  { key: "31-60", label: "Aging",        sub: "31–60 days",  color: "#6366f1", cardCls: "bg-indigo-500/10 text-indigo-500",   badgeCls: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20" },
+  { key: "61-90", label: "Slow Moving",  sub: "61–90 days",  color: "#f59e0b", cardCls: "bg-amber-500/10 text-amber-600",     badgeCls: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
+  { key: "90+",   label: "Dead Stock",   sub: "90+ days",    color: "#ef4444", cardCls: "bg-red-500/10 text-red-500",         badgeCls: "bg-red-500/10 text-red-500 border-red-500/20" },
+];
+
+function StockAgeingTab({ cid }: TabProps) {
+  const { data, isLoading } = useQuery<StockAgeData>({
+    queryKey: ["r-stock-ageing", cid],
+    queryFn: () => api("/v1/analytics/stock-ageing"),
+  });
+
+  const chartData = BUCKET_META.map((b) => ({
+    label: b.label,
+    qty: data?.summary[b.key]?.qty ?? 0,
+    value: data?.summary[b.key]?.value ?? 0,
+  }));
+
+  const totalValue = Object.values(data?.summary ?? {}).reduce((s, b) => s + b.value, 0);
+  const totalQty   = Object.values(data?.summary ?? {}).reduce((s, b) => s + b.qty,   0);
+
+  return (
+    <div className="space-y-6">
+      {/* KPI banner */}
+      <div className="grid grid-cols-4 gap-3">
+        {BUCKET_META.map((b) => {
+          const s = data?.summary[b.key];
+          return (
+            <Card key={b.key} className="elev-1">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: b.color }} />
+                  <span className="text-xs font-medium text-muted-foreground">{b.label}</span>
+                  <span className="text-xs text-muted-foreground ml-auto">{b.sub}</span>
+                </div>
+                <div className="text-xl font-bold">{isLoading ? "—" : (s?.qty ?? 0)} <span className="text-sm font-normal text-muted-foreground">units</span></div>
+                <div className="text-sm text-muted-foreground tabular-nums">{isLoading ? "—" : INR(s?.value ?? 0)}</div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Chart + totals */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card className="col-span-2 elev-1">
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Stock Value by Age Bucket</CardTitle></CardHeader>
+          <CardContent className="h-52">
+            {isLoading ? <Skeleton className="h-full w-full" /> : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar dataKey="value" name="Value" radius={[4, 4, 0, 0]}>
+                    {BUCKET_META.map((b) => <Cell key={b.key} fill={b.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="elev-1">
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Portfolio Summary</CardTitle></CardHeader>
+          <CardContent className="space-y-4 pt-2">
+            <div>
+              <div className="text-2xl font-bold">{INR(totalValue)}</div>
+              <div className="text-xs text-muted-foreground">Total stock value</div>
+            </div>
+            <div>
+              <div className="text-xl font-bold">{totalQty} <span className="text-sm font-normal text-muted-foreground">units</span></div>
+              <div className="text-xs text-muted-foreground">Total stock quantity</div>
+            </div>
+            <div className="border-t pt-3 space-y-2">
+              {BUCKET_META.map((b) => {
+                const s = data?.summary[b.key];
+                const share = totalValue > 0 ? (((s?.value ?? 0) / totalValue) * 100).toFixed(0) : "0";
+                return (
+                  <div key={b.key} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">{b.label}</span>
+                      <span className="font-medium">{share}%</span>
+                    </div>
+                    <Progress value={Number(share)} className="h-1.5" />
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Product-level detail */}
+      <Card className="elev-1">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+            <Archive className="w-4 h-4" />Stock Ageing Detail (FIFO)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Product</TableHead>
+                <TableHead>SKU</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Total Qty</TableHead>
+                <TableHead className="text-right text-emerald-600">0–30d</TableHead>
+                <TableHead className="text-right text-indigo-500">31–60d</TableHead>
+                <TableHead className="text-right text-amber-600">61–90d</TableHead>
+                <TableHead className="text-right text-red-500">90+d</TableHead>
+                <TableHead className="text-right">Avg Age</TableHead>
+                <TableHead className="text-right">Stock Value</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading
+                ? Array(3).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={11}><Skeleton className="h-8 w-full" /></TableCell></TableRow>)
+                : (data?.items ?? []).length === 0
+                ? <EmptyRow cols={11} label="No stock on hand" />
+                : (data?.items ?? []).map((item) => {
+                    const meta = item.avgAge <= 30 ? BUCKET_META[0] : item.avgAge <= 60 ? BUCKET_META[1] : item.avgAge <= 90 ? BUCKET_META[2] : BUCKET_META[3];
+                    return (
+                      <TableRow key={item.productId}>
+                        <TableCell className="font-medium text-sm">{item.productName}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{item.sku || "—"}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{item.category || "—"}</TableCell>
+                        <TableCell className="text-right tabular-nums">{item.currentStock}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm text-emerald-600 font-medium">{item.buckets["0-30"] || "—"}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm text-indigo-500 font-medium">{item.buckets["31-60"] || "—"}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm text-amber-600 font-medium">{item.buckets["61-90"] || "—"}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm text-red-500 font-medium">{item.buckets["90+"] || "—"}</TableCell>
+                        <TableCell className="text-right text-sm">{item.avgAge}d</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm font-medium">{INR(item.totalValue)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-xs ${meta.badgeCls}`}>{meta.label}</Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Production Tab ──────────────────────────────────────────────────────────────
 function ProductionTab({ cid }: TabProps) {
   const { data: orders = [], isLoading } = useQuery<ProdOrder[]>({ queryKey: ["production-orders", cid], queryFn: () => api("/v1/production-orders") });
@@ -658,8 +814,9 @@ export function Reports() {
     { id: "overview", label: "Overview", icon: BarChart3 },
     { id: "sales", label: "Sales", icon: TrendingUp },
     { id: "finance", label: "Finance", icon: FileText },
-    { id: "inventory", label: "Inventory", icon: Package },
-    { id: "purchasing", label: "Purchasing", icon: Truck },
+    { id: "inventory",    label: "Inventory",     icon: Package },
+    { id: "stock-ageing", label: "Stock Ageing",  icon: Archive },
+    { id: "purchasing",   label: "Purchasing",    icon: Truck },
     { id: "assets", label: "Fixed Assets", icon: Landmark },
     ...(user?.productionEnabled ? [{ id: "production", label: "Production", icon: Factory }] : []),
   ];
@@ -741,8 +898,9 @@ export function Reports() {
         <TabsContent value="overview"   className="mt-4"><OverviewTab   filters={filters} cid={activeCid} /></TabsContent>
         <TabsContent value="sales"      className="mt-4"><SalesTab      filters={filters} cid={activeCid} /></TabsContent>
         <TabsContent value="finance"    className="mt-4"><FinanceTab    filters={filters} cid={activeCid} /></TabsContent>
-        <TabsContent value="inventory"  className="mt-4"><InventoryTab  filters={filters} cid={activeCid} /></TabsContent>
-        <TabsContent value="purchasing" className="mt-4"><PurchasingTab filters={filters} cid={activeCid} /></TabsContent>
+        <TabsContent value="inventory"    className="mt-4"><InventoryTab  filters={filters} cid={activeCid} /></TabsContent>
+        <TabsContent value="stock-ageing" className="mt-4"><StockAgeingTab filters={filters} cid={activeCid} /></TabsContent>
+        <TabsContent value="purchasing"   className="mt-4"><PurchasingTab filters={filters} cid={activeCid} /></TabsContent>
         <TabsContent value="assets"     className="mt-4"><AssetsTab     filters={filters} cid={activeCid} /></TabsContent>
         {user?.productionEnabled && <TabsContent value="production" className="mt-4"><ProductionTab filters={filters} cid={activeCid} /></TabsContent>}
       </Tabs>

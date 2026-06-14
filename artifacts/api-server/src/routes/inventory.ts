@@ -495,7 +495,7 @@ router.get("/v1/inventory/ledger", async (req, res): Promise<void> => {
     });
 
   res.json({
-    product: { id: product.id, name: product.name, sku: product.sku ?? null, stockLevel: product.stockLevel },
+    product: { id: product.id, name: product.name, sku: null as null, stockLevel: product.stockLevel },
     summary: { totalIn, totalOut, closingBalance: running },
     entries,
   });

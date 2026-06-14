@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, count, sum, and, gte, lte, sql, desc } from "drizzle-orm";
 import type { Request } from "express";
-import { db, clientsTable, salesOrdersTable, salesOrderItemsTable, assemblyJobsTable, invoicesTable, productsTable, purchaseOrdersTable, vendorsTable, opportunitiesTable, usersTable, paymentsTable } from "@workspace/db";
+import { db, clientsTable, salesOrdersTable, salesOrderItemsTable, assemblyJobsTable, invoicesTable, productsTable, purchaseOrdersTable, vendorsTable, opportunitiesTable, usersTable, paymentsTable, inventoryMovementsTable } from "@workspace/db";
 
 const router = Router();
 
@@ -313,6 +313,99 @@ router.get("/v1/analytics/sales-leaderboard", async (req, res): Promise<void> =>
   }
   const out = Array.from(byUser.values()).filter((u) => u.pipeline > 0 || u.won > 0).sort((a, b) => b.won + b.pipeline - (a.won + a.pipeline));
   res.json(out);
+});
+
+// ─── stock-ageing ─────────────────────────────────────────────────────────────
+router.get("/v1/analytics/stock-ageing", async (req, res): Promise<void> => {
+  const cid = req.companyId;
+  const now = new Date();
+
+  const products = await db
+    .select()
+    .from(productsTable)
+    .where(and(eq(productsTable.companyId, cid), sql`${productsTable.stockLevel} > 0`));
+
+  type BucketKey = "0-30" | "31-60" | "61-90" | "90+";
+  const getBucket = (days: number): BucketKey =>
+    days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
+
+  const summaryTotals: Record<BucketKey, { qty: number; value: number }> = {
+    "0-30": { qty: 0, value: 0 },
+    "31-60": { qty: 0, value: 0 },
+    "61-90": { qty: 0, value: 0 },
+    "90+": { qty: 0, value: 0 },
+  };
+
+  const items = await Promise.all(
+    products.map(async (product) => {
+      // Fetch inward movements newest-first for FIFO ageing
+      const movements = await db
+        .select()
+        .from(inventoryMovementsTable)
+        .where(
+          and(
+            eq(inventoryMovementsTable.companyId, cid),
+            eq(inventoryMovementsTable.productId, product.id),
+            sql`${inventoryMovementsTable.type} = ANY(ARRAY['inward','transfer_in','opening']::text[])`
+          )
+        )
+        .orderBy(desc(inventoryMovementsTable.createdAt));
+
+      let remaining = product.stockLevel;
+      const buckets: Record<BucketKey, number> = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
+      let oldestAge = 0;
+      let totalAgeDays = 0;
+      let totalQtyAccounted = 0;
+
+      for (const mov of movements) {
+        if (remaining <= 0) break;
+        const qty = Math.min(mov.quantity, remaining);
+        const days = Math.max(0, Math.floor((now.getTime() - mov.createdAt.getTime()) / 86400000));
+        const bucket = getBucket(days);
+        buckets[bucket] += qty;
+        totalAgeDays += days * qty;
+        totalQtyAccounted += qty;
+        if (days > oldestAge) oldestAge = days;
+        remaining -= qty;
+      }
+
+      // Fallback for stock with no recorded inward movements
+      if (remaining > 0) {
+        const refDate = product.createdAt ?? now;
+        const days = Math.max(0, Math.floor((now.getTime() - refDate.getTime()) / 86400000));
+        const bucket = getBucket(days);
+        buckets[bucket] += remaining;
+        totalAgeDays += days * remaining;
+        totalQtyAccounted += remaining;
+        if (days > oldestAge) oldestAge = days;
+      }
+
+      const costPrice = Number(product.costPrice ?? 0);
+      const totalValue = product.stockLevel * costPrice;
+      const avgAge = totalQtyAccounted > 0 ? Math.round(totalAgeDays / totalQtyAccounted) : 0;
+
+      for (const [b, qty] of Object.entries(buckets) as [BucketKey, number][]) {
+        summaryTotals[b].qty += qty;
+        summaryTotals[b].value += qty * costPrice;
+      }
+
+      return {
+        productId: product.id,
+        productName: product.name,
+        sku: "",
+        category: product.category ?? "",
+        currentStock: product.stockLevel,
+        costPrice,
+        totalValue,
+        avgAge,
+        oldestAge,
+        buckets,
+      };
+    })
+  );
+
+  items.sort((a, b) => b.oldestAge - a.oldestAge);
+  res.json({ summary: summaryTotals, items });
 });
 
 export default router;
