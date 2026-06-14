@@ -47,3 +47,9 @@ id = "ONEjcBowZC__-dd8vUZIm"
 uri = "file://artifacts/gifting-erp-promo/public/audio/bg_music.mp3"
 type = "audio"
 title = "background music"
+
+[[outputs]]
+id = "8YjNX3fKH_-eYYI1KBupU"
+uri = "file://.local/outputs/Gift-Suite.pdf"
+type = "pdf"
+title = "Gift Suite.pdf"
