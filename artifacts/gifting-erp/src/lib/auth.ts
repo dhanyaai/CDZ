@@ -5,7 +5,7 @@ export function initAuth(): void {
   setAuthTokenGetter(() => getToken());
 }
 
-export type AuthUser = { id: number; name: string; email: string; role: string; companyId?: number };
+export type AuthUser = { id: number; name: string; email: string; role: string; companyId?: number; productionEnabled?: boolean };
 
 export function getStoredUser(): AuthUser | null {
   const raw = localStorage.getItem("auth_user");

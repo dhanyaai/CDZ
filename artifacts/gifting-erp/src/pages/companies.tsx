@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Building2, CheckCircle2, ArrowRightLeft } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Building2, CheckCircle2, ArrowRightLeft, Factory } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { api, setToken } from "@/lib/api";
-import { getStoredCompanyId, setStoredCompanyId } from "@/lib/auth";
+import { getStoredCompanyId, setStoredCompanyId, getStoredUser, setStoredUser } from "@/lib/auth";
 import { format } from "date-fns";
 
 interface Company {
@@ -22,6 +23,7 @@ interface Company {
   state?: string | null;
   pincode?: string | null;
   logoUrl?: string | null;
+  productionEnabled: boolean;
   createdAt: string;
   isCurrent: boolean;
 }
@@ -84,15 +86,27 @@ export function Companies() {
 
   const switchMutation = useMutation({
     mutationFn: (id: number) =>
-      api<{ success: boolean; token: string; companyId: number; companyName: string }>(`/v1/companies/${id}/switch`, { method: "POST" }),
+      api<{ success: boolean; token: string; companyId: number; companyName: string; productionEnabled: boolean }>(`/v1/companies/${id}/switch`, { method: "POST" }),
     onSuccess: (data) => {
       setToken(data.token);
       setStoredCompanyId(data.companyId);
+      const cur = getStoredUser();
+      if (cur) setStoredUser({ ...cur, companyId: data.companyId, productionEnabled: data.productionEnabled });
       queryClient.invalidateQueries({ queryKey: ["companies"] });
       queryClient.clear();
       toast({ title: `Switched to ${data.companyName}`, description: "All data will now reflect the selected company." });
     },
     onError: (e: Error) => toast({ title: "Switch failed", description: e.message, variant: "destructive" }),
+  });
+
+  const featureMutation = useMutation({
+    mutationFn: ({ id, productionEnabled }: { id: number; productionEnabled: boolean }) =>
+      api<Company>(`/v1/companies/${id}/features`, { method: "PATCH", body: JSON.stringify({ productionEnabled }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["companies"] });
+      toast({ title: "Feature settings saved" });
+    },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
 
   const openCreate = () => {
@@ -172,6 +186,16 @@ export function Companies() {
 
                   <div className="text-xs text-muted-foreground">
                     Created {format(new Date(c.createdAt), "MMM d, yyyy")}
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-lg bg-muted/40 border px-3 py-2">
+                    <Factory className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-xs flex-1">Production module</span>
+                    <Switch
+                      checked={c.productionEnabled}
+                      onCheckedChange={(v) => featureMutation.mutate({ id: c.id, productionEnabled: v })}
+                      disabled={featureMutation.isPending}
+                    />
                   </div>
 
                   <div className="flex gap-2">

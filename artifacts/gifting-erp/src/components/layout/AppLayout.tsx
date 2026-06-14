@@ -32,10 +32,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getStoredUser, logout, getStoredCompanyId, setStoredCompanyId } from "@/lib/auth";
+import { getStoredUser, setStoredUser, logout, getStoredCompanyId, setStoredCompanyId } from "@/lib/auth";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { CommandPalette } from "@/components/command-palette";
-import { navItems, flatNavItems } from "@/lib/nav";
+import { getNavItems } from "@/lib/nav";
 import { useTheme } from "@/lib/theme";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, setToken } from "@/lib/api";
@@ -80,6 +80,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     ? user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
     : "??";
 
+  const navItems = getNavItems({ production: user?.productionEnabled });
+  const flatNavItems = navItems.flatMap((g) => g.items);
+
   const current = flatNavItems.find(
     (i) => location === i.href || location.startsWith(`${i.href}/`),
   );
@@ -94,10 +97,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const switchMutation = useMutation({
     mutationFn: (id: number) =>
-      api<{ success: boolean; token: string; companyId: number; companyName: string }>(`/v1/companies/${id}/switch`, { method: "POST" }),
+      api<{ success: boolean; token: string; companyId: number; companyName: string; productionEnabled: boolean }>(`/v1/companies/${id}/switch`, { method: "POST" }),
     onSuccess: (data) => {
       setToken(data.token);
       setStoredCompanyId(data.companyId);
+      const current = getStoredUser();
+      if (current) setStoredUser({ ...current, companyId: data.companyId, productionEnabled: data.productionEnabled });
       queryClient.clear();
     },
   });

@@ -16,6 +16,7 @@ function serializeCompany(c: typeof companiesTable.$inferSelect, isCurrent: bool
     state: c.state ?? null,
     pincode: c.pincode ?? null,
     logoUrl: c.logoUrl ?? null,
+    productionEnabled: c.productionEnabled,
     createdAt: c.createdAt.toISOString(),
     isCurrent,
   };
@@ -91,7 +92,25 @@ router.post("/v1/companies/:id/switch", async (req, res): Promise<void> => {
   const newToken = createSession(req.userId, id);
   await db.update(usersTable).set({ companyId: id }).where(eq(usersTable.id, req.userId));
 
-  res.json({ success: true, token: newToken, companyId: id, companyName: company.name });
+  res.json({ success: true, token: newToken, companyId: id, companyName: company.name, productionEnabled: company.productionEnabled });
+});
+
+// PATCH /v1/companies/:id/features — toggle per-company feature flags (admin only)
+router.patch("/v1/companies/:id/features", requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const [membership] = await db.select().from(userCompaniesTable)
+    .where(and(eq(userCompaniesTable.userId, req.userId), eq(userCompaniesTable.companyId, id)));
+  if (!membership) { res.status(403).json({ error: "Not a member of this company" }); return; }
+
+  const { productionEnabled } = req.body ?? {};
+  if (productionEnabled === undefined) { res.status(400).json({ error: "productionEnabled is required" }); return; }
+
+  const [company] = await db.update(companiesTable)
+    .set({ productionEnabled: Boolean(productionEnabled) })
+    .where(eq(companiesTable.id, id))
+    .returning();
+  if (!company) { res.status(404).json({ error: "Company not found" }); return; }
+  res.json(serializeCompany(company, id === req.companyId));
 });
 
 router.delete("/v1/companies/:id", requireAdmin, async (req, res): Promise<void> => {

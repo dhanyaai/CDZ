@@ -10,9 +10,9 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { navItems } from "@/lib/nav";
+import { getNavItems } from "@/lib/nav";
 import { useTheme } from "@/lib/theme";
-import { logout } from "@/lib/auth";
+import { logout, getStoredUser } from "@/lib/auth";
 
 export function CommandPalette({
   open,
@@ -23,6 +23,8 @@ export function CommandPalette({
 }) {
   const [, navigate] = useLocation();
   const { theme, toggle } = useTheme();
+  const user = getStoredUser();
+  const navItems = getNavItems({ production: user?.productionEnabled });
 
   const go = (href: string) => {
     onOpenChange(false);

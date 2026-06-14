@@ -41,6 +41,8 @@ import { FollowUps } from "@/pages/followups";
 import { Transfers } from "@/pages/transfers";
 import { SampleOrders } from "@/pages/sample-orders";
 import { ItemLedger } from "@/pages/item-ledger";
+import { FixedAssets } from "@/pages/fixed-assets";
+import { ProductionOrders } from "@/pages/production-orders";
 
 initAuth();
 initTheme();
@@ -103,6 +105,8 @@ function Router() {
         <Route path="/invoices" component={Invoices} />
         <Route path="/payments" component={Payments} />
         <Route path="/credit-notes" component={CreditNotes} />
+        <Route path="/fixed-assets" component={FixedAssets} />
+        <Route path="/production" component={ProductionOrders} />
         <Route path="/users" component={Users} />
         <Route path="/follow-ups" component={FollowUps} />
         <Route path="/companies" component={Companies} />

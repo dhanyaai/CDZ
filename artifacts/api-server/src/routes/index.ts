@@ -24,6 +24,8 @@ import notificationsRouter from "./notifications";
 import settingsRouter from "./settings";
 import companiesRouter from "./companies";
 import sampleOrdersRouter from "./sampleOrders";
+import fixedAssetsRouter from "./fixedAssets";
+import productionOrdersRouter from "./productionOrders";
 
 const router: IRouter = Router();
 
@@ -52,5 +54,7 @@ router.use(operationsRouter);
 router.use(notificationsRouter);
 router.use(settingsRouter);
 router.use(sampleOrdersRouter);
+router.use(fixedAssetsRouter);
+router.use(productionOrdersRouter);
 
 export default router;

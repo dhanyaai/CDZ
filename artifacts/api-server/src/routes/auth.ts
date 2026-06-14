@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, companiesTable } from "@workspace/db";
 import { createSession, destroySession, getSession } from "../lib/sessions";
 import { verifyPassword } from "../lib/password";
 
@@ -21,6 +21,8 @@ router.post("/v1/auth/login", async (req, res): Promise<void> => {
 
   const token = createSession(user.id, user.companyId);
 
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, user.companyId));
+
   res.json({
     token,
     companyId: user.companyId,
@@ -32,6 +34,7 @@ router.post("/v1/auth/login", async (req, res): Promise<void> => {
       companyId: user.companyId,
       isActive: user.isActive,
       createdAt: user.createdAt.toISOString(),
+      productionEnabled: company?.productionEnabled ?? false,
     },
   });
 });
@@ -51,6 +54,8 @@ router.get("/v1/auth/me", async (req, res): Promise<void> => {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, session.userId));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, session.companyId));
+
   res.json({
     id: user.id,
     name: user.name,
@@ -59,6 +64,7 @@ router.get("/v1/auth/me", async (req, res): Promise<void> => {
     companyId: session.companyId,
     isActive: user.isActive,
     createdAt: user.createdAt.toISOString(),
+    productionEnabled: company?.productionEnabled ?? false,
   });
 });
 

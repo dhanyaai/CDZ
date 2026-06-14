@@ -25,3 +25,5 @@ export * from "./creditNotes";
 export * from "./locations";
 export * from "./settings";
 export * from "./sampleOrders";
+export * from "./fixedAssets";
+export * from "./productionOrders";
