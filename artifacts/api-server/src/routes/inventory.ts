@@ -229,40 +229,66 @@ async function validateTransferItems(
   return errors;
 }
 
+// Encode/decode destination locationId + user reference into the reference field
+// Format: JSON { d: toLocationId | null, r: userRef | "" }
+function encodeRef(toLocationId: number | null | undefined, userRef: string | null | undefined): string {
+  return JSON.stringify({ d: toLocationId ?? null, r: userRef ?? "" });
+}
+function decodeRef(raw: string | null | undefined): { toLocationId: number | null; userRef: string | null } {
+  if (!raw) return { toLocationId: null, userRef: null };
+  try {
+    const parsed = JSON.parse(raw) as { d?: number | null; r?: string };
+    if (typeof parsed === "object" && parsed !== null && "d" in parsed) {
+      return { toLocationId: parsed.d ?? null, userRef: parsed.r || null };
+    }
+  } catch { /* not encoded — treat as plain text reference */ }
+  return { toLocationId: null, userRef: raw };
+}
+
 // POST /v1/inventory/send-transfer  (dispatches stock, leaves it in-transit)
 router.post("/v1/inventory/send-transfer", async (req, res): Promise<void> => {
-  const { fromLocationId, items, reference } = req.body ?? {};
+  const { fromLocationId, toLocationId, items, reference } = req.body ?? {};
   if (!Array.isArray(items) || items.length === 0) {
     res.status(400).json({ error: "items array is required" }); return;
   }
-  if (fromLocationId != null) {
-    const [loc] = await db.select().from(warehouseLocationsTable)
-      .where(and(eq(warehouseLocationsTable.id, fromLocationId), eq(warehouseLocationsTable.companyId, req.companyId)));
-    if (!loc) { res.status(404).json({ error: "Source location not found" }); return; }
+  if (fromLocationId == null || toLocationId == null) {
+    res.status(400).json({ error: "fromLocationId and toLocationId are required" }); return;
   }
+  if (fromLocationId === toLocationId) {
+    res.status(400).json({ error: "Source and destination locations must be different" }); return;
+  }
+
+  const [fromLoc] = await db.select().from(warehouseLocationsTable)
+    .where(and(eq(warehouseLocationsTable.id, fromLocationId), eq(warehouseLocationsTable.companyId, req.companyId)));
+  if (!fromLoc) { res.status(404).json({ error: "Source location not found" }); return; }
+
+  const [toLoc] = await db.select().from(warehouseLocationsTable)
+    .where(and(eq(warehouseLocationsTable.id, toLocationId), eq(warehouseLocationsTable.companyId, req.companyId)));
+  if (!toLoc) { res.status(404).json({ error: "Destination location not found" }); return; }
+
   const errors = await validateTransferItems(items, fromLocationId, req.companyId);
   if (errors.length > 0) { res.status(400).json({ error: errors.join("; ") }); return; }
 
   const transferBatch = `XFER-${Date.now()}`;
+  const encodedRef = encodeRef(toLocationId, reference);
   await db.transaction(async (tx) => {
     for (const item of items) {
       await tx.insert(inventoryMovementsTable).values({
         companyId: req.companyId, productId: item.productId,
-        locationId: fromLocationId ?? null,
+        locationId: fromLocationId,
         type: "transfer_out", quantity: item.quantity,
-        reference: reference ?? null, batch: transferBatch,
+        reference: encodedRef, batch: transferBatch,
       });
     }
   });
   res.status(201).json({ batch: transferBatch, itemCount: items.length, status: "in_transit" });
 });
 
-// POST /v1/inventory/receive-transfer  (confirms receipt for an in-transit batch)
+// POST /v1/inventory/receive-transfer  (confirms receipt — destination was set at send time)
 router.post("/v1/inventory/receive-transfer", async (req, res): Promise<void> => {
-  const { batch, toLocationId } = req.body ?? {};
+  const { batch } = req.body ?? {};
   if (!batch) { res.status(400).json({ error: "batch is required" }); return; }
 
-  // Make sure batch exists with transfer_out movements
   const outMovements = await db.select().from(inventoryMovementsTable)
     .where(and(
       eq(inventoryMovementsTable.companyId, req.companyId),
@@ -273,7 +299,6 @@ router.post("/v1/inventory/receive-transfer", async (req, res): Promise<void> =>
     res.status(404).json({ error: "Transfer batch not found" }); return;
   }
 
-  // Make sure it hasn't already been received
   const existing = await db.select().from(inventoryMovementsTable)
     .where(and(
       eq(inventoryMovementsTable.companyId, req.companyId),
@@ -284,11 +309,8 @@ router.post("/v1/inventory/receive-transfer", async (req, res): Promise<void> =>
     res.status(409).json({ error: "This transfer has already been received" }); return;
   }
 
-  if (toLocationId != null) {
-    const [loc] = await db.select().from(warehouseLocationsTable)
-      .where(and(eq(warehouseLocationsTable.id, toLocationId), eq(warehouseLocationsTable.companyId, req.companyId)));
-    if (!loc) { res.status(404).json({ error: "Destination location not found" }); return; }
-  }
+  // Decode the destination from the encoded reference stored at send time
+  const { toLocationId } = decodeRef(outMovements[0].reference);
 
   await db.transaction(async (tx) => {
     for (const out of outMovements) {
@@ -304,20 +326,22 @@ router.post("/v1/inventory/receive-transfer", async (req, res): Promise<void> =>
 });
 
 router.get("/v1/inventory/transfers", async (req, res): Promise<void> => {
-  const outRows = await db
-    .select({ m: inventoryMovementsTable, product: productsTable, loc: warehouseLocationsTable })
-    .from(inventoryMovementsTable)
-    .leftJoin(productsTable, eq(inventoryMovementsTable.productId, productsTable.id))
-    .leftJoin(warehouseLocationsTable, eq(inventoryMovementsTable.locationId, warehouseLocationsTable.id))
-    .where(and(eq(inventoryMovementsTable.companyId, req.companyId), eq(inventoryMovementsTable.type, "transfer_out")))
-    .orderBy(inventoryMovementsTable.id);
+  const [outRows, inRows, allLocs] = await Promise.all([
+    db.select({ m: inventoryMovementsTable, product: productsTable, loc: warehouseLocationsTable })
+      .from(inventoryMovementsTable)
+      .leftJoin(productsTable, eq(inventoryMovementsTable.productId, productsTable.id))
+      .leftJoin(warehouseLocationsTable, eq(inventoryMovementsTable.locationId, warehouseLocationsTable.id))
+      .where(and(eq(inventoryMovementsTable.companyId, req.companyId), eq(inventoryMovementsTable.type, "transfer_out")))
+      .orderBy(inventoryMovementsTable.id),
+    db.select({ m: inventoryMovementsTable, loc: warehouseLocationsTable })
+      .from(inventoryMovementsTable)
+      .leftJoin(warehouseLocationsTable, eq(inventoryMovementsTable.locationId, warehouseLocationsTable.id))
+      .where(and(eq(inventoryMovementsTable.companyId, req.companyId), eq(inventoryMovementsTable.type, "transfer_in")))
+      .orderBy(inventoryMovementsTable.id),
+    db.select().from(warehouseLocationsTable).where(eq(warehouseLocationsTable.companyId, req.companyId)),
+  ]);
 
-  const inRows = await db
-    .select({ m: inventoryMovementsTable, loc: warehouseLocationsTable })
-    .from(inventoryMovementsTable)
-    .leftJoin(warehouseLocationsTable, eq(inventoryMovementsTable.locationId, warehouseLocationsTable.id))
-    .where(and(eq(inventoryMovementsTable.companyId, req.companyId), eq(inventoryMovementsTable.type, "transfer_in")))
-    .orderBy(inventoryMovementsTable.id);
+  const locById = new Map(allLocs.map((l) => [l.id, l.name]));
 
   const inByBatch = new Map<string, typeof inRows[0]>();
   for (const row of inRows) {
@@ -346,14 +370,24 @@ router.get("/v1/inventory/transfers", async (req, res): Promise<void> => {
     if (out.m.batch && groups.has(out.m.batch)) {
       groups.get(out.m.batch)!.items.push(item);
     } else {
+      // For in-transit batches the destination was stored in the encoded reference
+      const decoded = inn ? null : decodeRef(out.m.reference);
+      const toLocId = inn ? (inn.m.locationId ?? null) : (decoded?.toLocationId ?? null);
+      const toLocName = inn
+        ? (inn.loc?.name ?? "Unassigned")
+        : (toLocId != null ? (locById.get(toLocId) ?? "Unknown") : "Unassigned");
+      const userRef = inn
+        ? (out.m.reference ?? inn.m.reference ?? null)
+        : (decoded?.userRef ?? null);
+
       const entry: TransferGroup = {
         batch: out.m.batch ?? null,
         status: inn ? "completed" : "in_transit",
         fromLocationId: out.m.locationId ?? null,
         fromLocationName: out.loc?.name ?? "Unassigned",
-        toLocationId: inn?.m.locationId ?? null,
-        toLocationName: inn?.loc?.name ?? "—",
-        reference: out.m.reference ?? inn?.m.reference ?? null,
+        toLocationId: toLocId,
+        toLocationName: toLocName,
+        reference: userRef,
         createdAt: out.m.createdAt.toISOString(),
         items: [item],
       };

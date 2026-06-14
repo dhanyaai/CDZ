@@ -43,14 +43,14 @@ export function Transfers() {
 
   // Send dialog state
   const [sendOpen, setSendOpen] = useState(false);
-  const [sendFrom, setSendFrom] = useState("0");
+  const [sendFrom, setSendFrom] = useState("none");
+  const [sendTo, setSendTo] = useState("none");
   const [sendRef, setSendRef] = useState("");
   const [sendLines, setSendLines] = useState<LineItem[]>([{ productId: "", quantity: "1" }]);
 
   // Receive dialog state
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [receivingTransfer, setReceivingTransfer] = useState<TransferGroup | null>(null);
-  const [receiveTo, setReceiveTo] = useState("0");
 
   const { data: transfers, isLoading } = useQuery<TransferGroup[]>({
     queryKey: ["transfers"],
@@ -67,22 +67,37 @@ export function Transfers() {
     queryFn: () => api<Location[]>("/v1/locations"),
   });
 
-  const locationOptions = [{ id: 0, name: "Unassigned" }, ...(locations ?? [])];
+  const locationOptions = locations ?? [];
+
+  // Stock available at the selected from-location
+  const stockAtFrom = (productId: string) => {
+    const item = inventory?.find((p) => p.productId.toString() === productId);
+    return item?.stockLevel ?? 0;
+  };
 
   // ── Send helpers ─────────────────────────────────────────────────────────────
-  const resetSend = () => { setSendFrom("0"); setSendRef(""); setSendLines([{ productId: "", quantity: "1" }]); };
+  const resetSend = () => {
+    setSendFrom("none"); setSendTo("none"); setSendRef("");
+    setSendLines([{ productId: "", quantity: "1" }]);
+  };
   const addSendLine = () => setSendLines((l) => [...l, { productId: "", quantity: "1" }]);
   const removeSendLine = (i: number) => setSendLines((l) => l.filter((_, idx) => idx !== i));
   const updateSendLine = (i: number, field: keyof LineItem, value: string) =>
     setSendLines((l) => l.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
 
-  const canSend = sendLines.length > 0 && sendLines.every((l) => l.productId && Number(l.quantity) > 0);
+  const canSend =
+    sendFrom !== "none" &&
+    sendTo !== "none" &&
+    sendFrom !== sendTo &&
+    sendLines.length > 0 &&
+    sendLines.every((l) => l.productId && Number(l.quantity) > 0);
 
   const sendMutation = useMutation({
     mutationFn: () => api("/v1/inventory/send-transfer", {
       method: "POST",
       body: JSON.stringify({
-        fromLocationId: sendFrom === "0" ? undefined : Number(sendFrom),
+        fromLocationId: Number(sendFrom),
+        toLocationId: Number(sendTo),
         items: sendLines.map((l) => ({ productId: Number(l.productId), quantity: Number(l.quantity) })),
         reference: sendRef || undefined,
       }),
@@ -99,15 +114,12 @@ export function Transfers() {
   });
 
   // ── Receive helpers ───────────────────────────────────────────────────────────
-  const openReceive = (t: TransferGroup) => { setReceivingTransfer(t); setReceiveTo("0"); setReceiveOpen(true); };
+  const openReceive = (t: TransferGroup) => { setReceivingTransfer(t); setReceiveOpen(true); };
 
   const receiveMutation = useMutation({
     mutationFn: () => api("/v1/inventory/receive-transfer", {
       method: "POST",
-      body: JSON.stringify({
-        batch: receivingTransfer?.batch,
-        toLocationId: receiveTo === "0" ? undefined : Number(receiveTo),
-      }),
+      body: JSON.stringify({ batch: receivingTransfer?.batch }),
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transfers"] });
@@ -115,7 +127,7 @@ export function Transfers() {
       qc.invalidateQueries({ queryKey: ["inventory", "by-location"] });
       setReceiveOpen(false); setReceivingTransfer(null);
       setTab("completed");
-      toast({ title: "Transfer received", description: "Stock has been added to the destination location." });
+      toast({ title: "Transfer received", description: "Stock added to destination location." });
     },
     onError: (e: Error) => toast({ title: "Receive failed", description: e.message, variant: "destructive" }),
   });
@@ -146,8 +158,21 @@ export function Transfers() {
   };
 
   const displayList = (tab === "in_transit" ? inTransit : completed).filter(filterFn);
-
   const totalUnits = all.reduce((s, t) => s + (t.items ?? []).reduce((is, i) => is + i.quantity, 0), 0);
+
+  // ── Location badge helper ──────────────────────────────────────────────────────
+  const LocBadge = ({ name, color }: { name: string; color: "red" | "emerald" | "amber" }) => {
+    const cls = {
+      red: "bg-red-500/5 border-red-500/20 text-red-500",
+      emerald: "bg-emerald-500/5 border-emerald-500/20 text-emerald-500",
+      amber: "bg-amber-500/5 border-amber-500/20 text-amber-600",
+    }[color];
+    return (
+      <Badge variant="outline" className={`text-xs shrink-0 ${cls}`}>
+        <Warehouse className="w-3 h-3 mr-1" />{name}
+      </Badge>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -155,13 +180,11 @@ export function Transfers() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Stock Transfers</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Send stock in transit and confirm receipt at destination</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Move stock between locations — dispatch and confirm receipt</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => { resetSend(); setSendOpen(true); }}>
-            <SendHorizonal className="w-4 h-4 mr-2" />Send Stock
-          </Button>
-        </div>
+        <Button onClick={() => { resetSend(); setSendOpen(true); }}>
+          <SendHorizonal className="w-4 h-4 mr-2" />New Transfer
+        </Button>
       </div>
 
       {/* Stats */}
@@ -195,7 +218,7 @@ export function Transfers() {
             </div>
             <div>
               <div className="text-2xl font-bold">{totalUnits.toLocaleString("en-IN")}</div>
-              <div className="text-xs text-muted-foreground">Units Moved</div>
+              <div className="text-xs text-muted-foreground">Total Units Moved</div>
             </div>
           </CardContent>
         </Card>
@@ -219,27 +242,33 @@ export function Transfers() {
           </TabsList>
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search by product, location, reference…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder="Search location, product, reference…" value={search}
+              onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
         </div>
 
         {/* ── In Transit tab ── */}
         <TabsContent value="in_transit" className="mt-4">
           {isLoading ? (
-            <div className="space-y-3">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}</div>
+            <div className="space-y-3">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-lg" />)}</div>
           ) : displayList.length === 0 ? (
             <div className="text-center py-16 border rounded-lg bg-card">
               <SendHorizonal className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
               <p className="font-medium text-muted-foreground">No transfers in transit</p>
-              <p className="text-sm text-muted-foreground mt-1">Click "Send Stock" to dispatch stock to another location</p>
+              <p className="text-sm text-muted-foreground mt-1">Click "New Transfer" to move stock between locations</p>
+              <Button className="mt-4" size="sm" onClick={() => { resetSend(); setSendOpen(true); }}>
+                <SendHorizonal className="w-4 h-4 mr-2" />New Transfer
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
               {displayList.map((t) => {
                 const items = t.items ?? [];
                 const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+                const key = t.batch ?? t.createdAt;
+                const expanded = expandedBatches.has(key);
                 return (
-                  <Card key={t.batch} className="elev-1 border-amber-500/20">
+                  <Card key={key} className="elev-1 border-amber-500/20">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-2 flex-1 min-w-0">
@@ -247,33 +276,30 @@ export function Transfers() {
                             <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-600 border-amber-500/20">
                               <Clock className="w-3 h-3 mr-1" />In Transit
                             </Badge>
-                            <span className="text-xs text-muted-foreground">{format(new Date(t.createdAt), "MMM d, yyyy · HH:mm")}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date(t.createdAt), "MMM d, yyyy · HH:mm")}
+                            </span>
                             {t.reference && <span className="text-xs text-muted-foreground">· {t.reference}</span>}
                           </div>
-                          <div className="flex items-center gap-2 text-sm">
-                            <Badge variant="outline" className="bg-red-500/5 border-red-500/20 text-red-500 shrink-0">
-                              <Warehouse className="w-3 h-3 mr-1" />{t.fromLocationName}
-                            </Badge>
+                          <div className="flex items-center gap-2 text-sm flex-wrap">
+                            <LocBadge name={t.fromLocationName} color="red" />
                             <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            <Badge variant="outline" className="bg-muted border-muted text-muted-foreground shrink-0">
-                              <Warehouse className="w-3 h-3 mr-1" />Awaiting destination
-                            </Badge>
+                            <LocBadge name={t.toLocationName} color="emerald" />
                           </div>
                           <div className="text-sm text-muted-foreground">
                             {items.length === 1
                               ? <><span className="font-medium text-foreground">{items[0].productName}</span> · {totalQty} units</>
-                              : <><span className="font-medium text-foreground">{items.length} products</span> · {totalQty} total units</>}
+                              : <><span className="font-medium text-foreground">{items.length} products</span> · {totalQty} total units</>
+                            }
                           </div>
                           {items.length > 1 && (
-                            <button
-                              onClick={() => toggleExpand(t.batch)}
-                              className="text-xs text-primary flex items-center gap-1 hover:underline"
-                            >
-                              {expandedBatches.has(t.batch ?? "") ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                              {expandedBatches.has(t.batch ?? "") ? "Hide items" : "Show all items"}
+                            <button onClick={() => toggleExpand(t.batch)}
+                              className="text-xs text-primary flex items-center gap-1 hover:underline">
+                              {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              {expanded ? "Hide items" : "Show all items"}
                             </button>
                           )}
-                          {expandedBatches.has(t.batch ?? "") && (
+                          {expanded && (
                             <div className="ml-2 space-y-0.5 border-l-2 border-muted pl-3">
                               {items.map((item, ii) => (
                                 <div key={ii} className="text-sm flex justify-between">
@@ -284,7 +310,7 @@ export function Transfers() {
                             </div>
                           )}
                         </div>
-                        <Button size="sm" onClick={() => openReceive(t)} className="shrink-0">
+                        <Button size="sm" onClick={() => openReceive(t)} className="shrink-0 bg-emerald-600 hover:bg-emerald-700">
                           <PackageCheck className="w-4 h-4 mr-1.5" />Receive
                         </Button>
                       </div>
@@ -340,13 +366,9 @@ export function Transfers() {
                           </TableCell>
                           <TableCell className="align-top pt-3">
                             <div className="flex items-center gap-2 text-sm flex-wrap">
-                              <Badge variant="outline" className="text-xs bg-red-500/5 border-red-500/20 text-red-500 shrink-0">
-                                <Warehouse className="w-3 h-3 mr-1" />{t.fromLocationName}
-                              </Badge>
+                              <LocBadge name={t.fromLocationName} color="red" />
                               <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              <Badge variant="outline" className="text-xs bg-emerald-500/5 border-emerald-500/20 text-emerald-500 shrink-0">
-                                <Warehouse className="w-3 h-3 mr-1" />{t.toLocationName}
-                              </Badge>
+                              <LocBadge name={t.toLocationName} color="emerald" />
                             </div>
                           </TableCell>
                           <TableCell className="align-top pt-3">
@@ -357,7 +379,9 @@ export function Transfers() {
                           <TableCell className="text-right font-bold tabular-nums align-top pt-3">{totalQty}</TableCell>
                           <TableCell className="text-muted-foreground text-sm align-top pt-3">{t.reference ?? "—"}</TableCell>
                           <TableCell className="align-top pt-2">
-                            {items.length > 1 && (expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />)}
+                            {items.length > 1 && (expanded
+                              ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                              : <ChevronDown className="w-4 h-4 text-muted-foreground" />)}
                           </TableCell>
                         </TableRow>
                         {expanded && items.map((item, ii) => (
@@ -380,27 +404,57 @@ export function Transfers() {
         </TabsContent>
       </Tabs>
 
-      {/* ── Send Dialog ── */}
+      {/* ── Send / New Transfer Dialog ── */}
       <Dialog open={sendOpen} onOpenChange={(o) => { setSendOpen(o); if (!o) resetSend(); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><SendHorizonal className="w-4 h-4" />Send Stock</DialogTitle>
-            <p className="text-sm text-muted-foreground">Dispatch stock from a location. The receiver will confirm where it arrives.</p>
+            <DialogTitle className="flex items-center gap-2">
+              <SendHorizonal className="w-4 h-4" />New Stock Transfer
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Move stock from one location to another. Stock is deducted immediately; confirm receipt at destination.
+            </p>
           </DialogHeader>
           <div className="space-y-4 pt-1">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">From Location (Dispatch Source)</label>
-              <Select value={sendFrom} onValueChange={setSendFrom}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {locationOptions.map((l) => <SelectItem key={l.id} value={l.id.toString()}>{l.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            {/* From / To locations */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">From Location *</label>
+                <Select value={sendFrom} onValueChange={setSendFrom}>
+                  <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" disabled>Select location</SelectItem>
+                    {locationOptions.map((l) => (
+                      <SelectItem key={l.id} value={l.id.toString()} disabled={l.id.toString() === sendTo}>
+                        {l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">To Location *</label>
+                <Select value={sendTo} onValueChange={setSendTo}>
+                  <SelectTrigger><SelectValue placeholder="Select destination" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" disabled>Select location</SelectItem>
+                    {locationOptions.map((l) => (
+                      <SelectItem key={l.id} value={l.id.toString()} disabled={l.id.toString() === sendFrom}>
+                        {l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            {sendFrom !== "none" && sendTo !== "none" && sendFrom === sendTo && (
+              <p className="text-xs text-destructive">Source and destination must be different.</p>
+            )}
 
+            {/* Line items */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Products to Send *</label>
+                <label className="text-sm font-medium">Products to Transfer *</label>
                 <Button type="button" size="sm" variant="outline" onClick={addSendLine} className="h-7 text-xs px-2">
                   <Plus className="w-3 h-3 mr-1" />Add Row
                 </Button>
@@ -410,21 +464,31 @@ export function Transfers() {
                   <span>Product</span><span className="text-center">Qty</span><span />
                 </div>
                 {sendLines.map((line, i) => {
-                  const sel = inventory?.find((p) => p.productId.toString() === line.productId);
+                  const avail = stockAtFrom(line.productId);
                   return (
                     <div key={i} className="grid grid-cols-[1fr_90px_28px] gap-2 items-center px-3 py-2">
-                      <Select value={line.productId} onValueChange={(v) => updateSendLine(i, "productId", v)}>
+                      <Select value={line.productId || "none"} onValueChange={(v) => updateSendLine(i, "productId", v === "none" ? "" : v)}>
                         <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select product" /></SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="none" disabled>Select product</SelectItem>
                           {(inventory ?? []).map((p) => (
                             <SelectItem key={p.productId} value={p.productId.toString()}>
-                              {p.productName} <span className="text-muted-foreground text-xs ml-1">({p.stockLevel})</span>
+                              {p.productName}
+                              <span className="text-muted-foreground text-xs ml-1">({p.stockLevel} in stock)</span>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <Input type="number" min="1" max={sel?.stockLevel} value={line.quantity}
-                        onChange={(e) => updateSendLine(i, "quantity", e.target.value)} className="h-8 text-sm text-center" />
+                      <div className="relative">
+                        <Input type="number" min="1" max={avail || undefined} value={line.quantity}
+                          onChange={(e) => updateSendLine(i, "quantity", e.target.value)}
+                          className="h-8 text-sm text-center" />
+                        {line.productId && Number(line.quantity) > avail && (
+                          <div className="absolute -bottom-4 left-0 text-[10px] text-destructive whitespace-nowrap">
+                            Max {avail}
+                          </div>
+                        )}
+                      </div>
                       <Button type="button" size="icon" variant="ghost"
                         className="h-7 w-7 text-muted-foreground hover:text-red-500"
                         onClick={() => removeSendLine(i)} disabled={sendLines.length === 1}>
@@ -434,49 +498,51 @@ export function Transfers() {
                   );
                 })}
               </div>
-              <p className="text-xs text-muted-foreground">Stock available shown in brackets next to each product.</p>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Reference / Notes</label>
-              <Input placeholder="e.g. Branch transfer, dispatch note #42" value={sendRef} onChange={(e) => setSendRef(e.target.value)} />
+              <Input placeholder="e.g. Monthly restock, event requirement…"
+                value={sendRef} onChange={(e) => setSendRef(e.target.value)} />
             </div>
 
-            <Button className="w-full" onClick={() => sendMutation.mutate()} disabled={!canSend || sendMutation.isPending}>
+            <Button className="w-full" onClick={() => sendMutation.mutate()}
+              disabled={!canSend || sendMutation.isPending}>
               <SendHorizonal className="w-4 h-4 mr-2" />
-              Dispatch {sendLines.filter((l) => l.productId).length} Product{sendLines.filter((l) => l.productId).length !== 1 ? "s" : ""}
+              Dispatch Transfer
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* ── Receive Dialog ── */}
+      {/* ── Receive / Confirm Dialog ── */}
       <Dialog open={receiveOpen} onOpenChange={(o) => { setReceiveOpen(o); if (!o) setReceivingTransfer(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><PackageCheck className="w-4 h-4" />Confirm Receipt</DialogTitle>
-            <p className="text-sm text-muted-foreground">Select where the incoming stock will be stored.</p>
+            <DialogTitle className="flex items-center gap-2">
+              <PackageCheck className="w-4 h-4" />Confirm Receipt
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Confirm that the stock below has arrived at its destination.
+            </p>
           </DialogHeader>
           {receivingTransfer && (
             <div className="space-y-4 pt-1">
-              {/* Summary */}
-              <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+                {/* Route */}
                 <div className="flex items-center gap-2 text-sm">
-                  <Badge variant="outline" className="bg-red-500/5 border-red-500/20 text-red-500 shrink-0">
-                    <Warehouse className="w-3 h-3 mr-1" />{receivingTransfer.fromLocationName}
-                  </Badge>
+                  <LocBadge name={receivingTransfer.fromLocationName} color="red" />
                   <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  <Badge variant="outline" className="bg-emerald-500/5 border-emerald-500/20 text-emerald-500 shrink-0">
-                    <Warehouse className="w-3 h-3 mr-1" />Destination (select below)
-                  </Badge>
+                  <LocBadge name={receivingTransfer.toLocationName} color="emerald" />
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Dispatched {format(new Date(receivingTransfer.createdAt), "MMM d, yyyy · HH:mm")}
                   {receivingTransfer.reference && ` · ${receivingTransfer.reference}`}
                 </div>
+                {/* Items */}
                 <div className="divide-y border rounded-md bg-background">
                   {(receivingTransfer.items ?? []).map((item, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-1.5 text-sm">
+                    <div key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                       <span className="text-muted-foreground">{item.productName}</span>
                       <span className="font-semibold tabular-nums">{item.quantity} units</span>
                     </div>
@@ -484,20 +550,19 @@ export function Transfers() {
                 </div>
               </div>
 
-              {/* Destination */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Receive Into Location *</label>
-                <Select value={receiveTo} onValueChange={setReceiveTo}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {locationOptions.map((l) => <SelectItem key={l.id} value={l.id.toString()}>{l.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Confirming will add the stock above to <strong>{receivingTransfer.toLocationName}</strong>.
+              </p>
 
-              <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => receiveMutation.mutate()} disabled={receiveMutation.isPending}>
-                <PackageCheck className="w-4 h-4 mr-2" />Confirm Receipt
-              </Button>
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1" onClick={() => setReceiveOpen(false)}>
+                  Cancel
+                </Button>
+                <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                  onClick={() => receiveMutation.mutate()} disabled={receiveMutation.isPending}>
+                  <PackageCheck className="w-4 h-4 mr-2" />Confirm Receipt
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
