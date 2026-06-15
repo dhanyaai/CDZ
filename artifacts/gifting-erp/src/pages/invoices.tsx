@@ -16,7 +16,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, FileText, CheckCircle2, Clock, AlertTriangle, IndianRupee, TrendingDown, SendHorizontal } from "lucide-react";
+import { Plus, FileText, CheckCircle2, Clock, AlertTriangle, IndianRupee, TrendingDown, SendHorizontal, Printer } from "lucide-react";
+import { printInvoice } from "@/lib/print-utils";
 import { useToast } from "@/hooks/use-toast";
 import { format, isPast } from "date-fns";
 
@@ -177,6 +178,10 @@ export function Invoices() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="Print invoice"
+                          onClick={() => printInvoice({ invoiceNumber: invoice.invoiceNumber, clientName: invoice.clientName, orderNumber: invoice.orderNumber, subtotal: subtotalAmt, gstAmount: Number(invoice.gstAmount ?? 0), totalAmount: Number(invoice.totalAmount ?? 0), status: invoice.status, dueDate: invoice.dueDate })}>
+                          <Printer className="w-3.5 h-3.5" />
+                        </Button>
                         {invoice.status === "Draft" && (
                           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => markSent.mutate(invoice.id)}>
                             <SendHorizontal className="w-3 h-3 mr-1" />Send

@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Printer } from "lucide-react";
+import { printCreditNote } from "@/lib/print-utils";
 
 type CN = {
   id: number; creditNoteNumber: string; clientId: number; clientName: string | null;
@@ -52,7 +53,7 @@ export function CreditNotes() {
         <Table>
           <TableHeader><TableRow>
             <TableHead>CN #</TableHead><TableHead>Client</TableHead><TableHead>Against Invoice</TableHead>
-            <TableHead className="text-right">Amount</TableHead><TableHead>Reason</TableHead><TableHead></TableHead>
+            <TableHead className="text-right">Amount</TableHead><TableHead>Reason</TableHead><TableHead className="w-20"></TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {data?.map((cn) => (
@@ -62,7 +63,14 @@ export function CreditNotes() {
                 <TableCell>{cn.invoiceNumber ?? "—"}</TableCell>
                 <TableCell className="text-right font-semibold text-red-600">−₹{cn.amount.toLocaleString()}</TableCell>
                 <TableCell className="text-muted-foreground text-sm">{cn.reason}</TableCell>
-                <TableCell><Button size="icon" variant="ghost" onClick={() => del.mutate(cn.id)}><Trash2 className="w-4 h-4" /></Button></TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="ghost" title="Print credit note" onClick={() => printCreditNote({ creditNoteNumber: cn.creditNoteNumber, clientName: cn.clientName, invoiceNumber: cn.invoiceNumber, amount: Number(cn.amount), reason: cn.reason, status: cn.status, issuedDate: cn.issuedDate })}>
+                      <Printer className="w-4 h-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => del.mutate(cn.id)}><Trash2 className="w-4 h-4" /></Button>
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
             {!data?.length && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No credit notes yet</TableCell></TableRow>}

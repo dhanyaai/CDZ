@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Printer } from "lucide-react";
+import { printGrn } from "@/lib/print-utils";
 
 type Grn = {
   id: number; grnNumber: string; purchaseOrderId: number;
@@ -58,7 +59,7 @@ export function Grn() {
         <Table>
           <TableHeader><TableRow>
             <TableHead>GRN #</TableHead><TableHead>PO</TableHead>
-            <TableHead>Received</TableHead><TableHead>Status</TableHead><TableHead>Notes</TableHead>
+            <TableHead>Received</TableHead><TableHead>Status</TableHead><TableHead>Notes</TableHead><TableHead className="w-14"></TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {data?.map((g) => (
@@ -68,6 +69,11 @@ export function Grn() {
                 <TableCell>{new Date(g.receivedDate).toLocaleDateString()}</TableCell>
                 <TableCell><Badge>{g.status}</Badge></TableCell>
                 <TableCell className="text-muted-foreground text-sm">{g.notes ?? "—"}</TableCell>
+                <TableCell>
+                  <Button size="icon" variant="ghost" title="Print GRN" onClick={() => printGrn({ grnNumber: g.grnNumber, purchaseOrderId: g.purchaseOrderId, receivedDate: g.receivedDate, status: g.status, notes: g.notes })}>
+                    <Printer className="w-4 h-4" />
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {!data?.length && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No receipts yet</TableCell></TableRow>}

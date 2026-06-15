@@ -6,9 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, MapPin, Calendar, FileText } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, FileText, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { printSalesOrder } from "@/lib/print-utils";
 
 export function SalesOrderDetail({ id }: { id: number }) {
   const { data: order, isLoading } = useGetSalesOrder(id, { query: { enabled: !!id, queryKey: getGetSalesOrderQueryKey(id) } });
@@ -66,22 +67,27 @@ export function SalesOrderDetail({ id }: { id: number }) {
           </p>
         </div>
         
-        <div className="flex items-center gap-4 bg-card p-4 rounded-lg border">
-          <div className="text-sm font-medium">Update Status:</div>
-          <Select 
-            value={order.status} 
-            onValueChange={(v) => updateStatus.mutate({ id, data: { status: v as any } })}
-            disabled={updateStatus.isPending}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {allStatuses.map(s => (
-                <SelectItem key={s} value={s}>{s}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => printSalesOrder(order as any)}>
+            <Printer className="w-4 h-4 mr-2" />Print
+          </Button>
+          <div className="flex items-center gap-3 bg-card p-3 rounded-lg border">
+            <div className="text-sm font-medium">Update Status:</div>
+            <Select 
+              value={order.status} 
+              onValueChange={(v) => updateStatus.mutate({ id, data: { status: v as any } })}
+              disabled={updateStatus.isPending}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {allStatuses.map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 

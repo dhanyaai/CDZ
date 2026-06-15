@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, ArrowRight, FileSpreadsheet, IndianRupee, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Trash2, ArrowRight, FileSpreadsheet, IndianRupee, Clock, CheckCircle2, XCircle, Printer } from "lucide-react";
+import { printQuote } from "@/lib/print-utils";
 import { format } from "date-fns";
 
 type Quote = {
@@ -277,6 +278,9 @@ export function Quotes() {
                       <ArrowRight className="w-4 h-4 mr-2" />Convert to Sales Order
                     </Button>
                   )}
+                  <Button variant="outline" className="w-full" onClick={() => printQuote(selected)}>
+                    <Printer className="w-4 h-4 mr-2" />Print Quote
+                  </Button>
                   <Button variant="destructive" className="w-full" onClick={() => del.mutate(selected.id)} disabled={del.isPending}>
                     <Trash2 className="w-4 h-4 mr-2" />Delete Quote
                   </Button>
