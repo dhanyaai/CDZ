@@ -2,6 +2,7 @@ import { pgTable, serial, text, timestamp, integer, numeric, uniqueIndex } from 
 import { clientsTable } from "./clients";
 import { opportunitiesTable } from "./leads";
 import { companiesTable } from "./companies";
+import { productsTable } from "./products";
 
 export const quotesTable = pgTable("quotes", {
   id: serial("id").primaryKey(),
@@ -25,10 +26,12 @@ export const quotesTable = pgTable("quotes", {
 export const quoteItemsTable = pgTable("quote_items", {
   id: serial("id").primaryKey(),
   quoteId: integer("quote_id").notNull().references(() => quotesTable.id, { onDelete: "cascade" }),
+  productId: integer("product_id").references(() => productsTable.id, { onDelete: "set null" }),
   description: text("description").notNull(),
   quantity: integer("quantity").notNull(),
   unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull(),
   lineTotal: numeric("line_total", { precision: 12, scale: 2 }).notNull(),
+  imageUrl: text("image_url"),
 });
 
 export type Quote = typeof quotesTable.$inferSelect;

@@ -39,7 +39,13 @@ router.get("/v1/quotes/:id", async (req, res): Promise<void> => {
     gstAmount: Number(quote.gstAmount), totalAmount: Number(quote.totalAmount),
     validUntil: quote.validUntil?.toISOString() ?? null,
     createdAt: quote.createdAt.toISOString(),
-    items: items.map((i) => ({ ...i, unitPrice: Number(i.unitPrice), lineTotal: Number(i.lineTotal) })),
+    items: items.map((i) => ({
+      ...i,
+      unitPrice: Number(i.unitPrice),
+      lineTotal: Number(i.lineTotal),
+      imageUrl: i.imageUrl ?? null,
+      productId: i.productId ?? null,
+    })),
   });
 });
 
@@ -65,10 +71,17 @@ router.post("/v1/quotes", async (req, res): Promise<void> => {
       subtotal: subtotal.toFixed(2), discountPct: disc.toFixed(2),
       gstAmount: gst.toFixed(2), totalAmount: total.toFixed(2), notes,
     }).returning();
-    await tx.insert(quoteItemsTable).values(items.map((i: { description: string; quantity: number; unitPrice: number }) => ({
-      quoteId: q.id, description: i.description, quantity: i.quantity,
-      unitPrice: i.unitPrice.toString(), lineTotal: (i.quantity * i.unitPrice).toString(),
-    })));
+    await tx.insert(quoteItemsTable).values(
+      items.map((i: { description: string; quantity: number; unitPrice: number; productId?: number; imageUrl?: string }) => ({
+        quoteId: q.id,
+        productId: i.productId ?? null,
+        description: i.description,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice.toString(),
+        lineTotal: (i.quantity * i.unitPrice).toString(),
+        imageUrl: i.imageUrl ?? null,
+      }))
+    );
     return q;
   });
   res.status(201).json({ ...quote, id: quote.id });

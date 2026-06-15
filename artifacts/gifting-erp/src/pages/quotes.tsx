@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, ArrowRight, FileSpreadsheet, IndianRupee, Clock, CheckCircle2, XCircle, Printer } from "lucide-react";
+import { Plus, Trash2, ArrowRight, FileSpreadsheet, IndianRupee, Clock, CheckCircle2, XCircle, Printer, Package } from "lucide-react";
 import { printQuote } from "@/lib/print-utils";
 import { format } from "date-fns";
 
@@ -23,14 +23,31 @@ type Quote = {
   gstAmount: number; totalAmount: number; createdAt: string; notes?: string | null;
 };
 
-type LineItem = { description: string; quantity: number; unitPrice: number };
+type QuoteItem = {
+  id: number; description: string; quantity: number; unitPrice: number;
+  lineTotal: number; imageUrl?: string | null; productId?: number | null;
+};
+
+type QuoteDetail = Quote & { items: QuoteItem[] };
+
+type Product = {
+  id: number; name: string; sellingPrice: string | number; imageUrl?: string | null; category?: string;
+};
+
+type LineItem = {
+  productId?: number;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  imageUrl?: string | null;
+};
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  draft: { label: "Draft", color: "bg-slate-500/10 text-slate-400 border-slate-500/20", icon: FileSpreadsheet },
-  sent: { label: "Sent", color: "bg-blue-500/10 text-blue-400 border-blue-500/20", icon: Clock },
+  draft:    { label: "Draft",    color: "bg-slate-500/10 text-slate-400 border-slate-500/20",   icon: FileSpreadsheet },
+  sent:     { label: "Sent",     color: "bg-blue-500/10 text-blue-400 border-blue-500/20",       icon: Clock },
   accepted: { label: "Accepted", color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", icon: CheckCircle2 },
-  rejected: { label: "Rejected", color: "bg-red-500/10 text-red-400 border-red-500/20", icon: XCircle },
-  expired: { label: "Expired", color: "bg-orange-500/10 text-orange-400 border-orange-500/20", icon: XCircle },
+  rejected: { label: "Rejected", color: "bg-red-500/10 text-red-400 border-red-500/20",         icon: XCircle },
+  expired:  { label: "Expired",  color: "bg-orange-500/10 text-orange-400 border-orange-500/20", icon: XCircle },
 };
 
 export function Quotes() {
@@ -47,11 +64,24 @@ export function Quotes() {
 
   const { data: quotes, isLoading } = useQuery({ queryKey: ["quotes"], queryFn: () => api<Quote[]>("/v1/quotes") });
   const { data: clients } = useListClients();
+  const { data: products } = useQuery<Product[]>({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products") });
+
+  const { data: quoteDetail } = useQuery<QuoteDetail>({
+    queryKey: ["quote-detail", selected?.id],
+    queryFn: () => api<QuoteDetail>(`/v1/quotes/${selected!.id}`),
+    enabled: !!selected,
+  });
 
   const create = useMutation({
     mutationFn: () => api("/v1/quotes", { method: "POST", body: JSON.stringify({
       clientId: Number(clientId), discountPct: Number(discountPct), validUntil: validUntil || null, notes: notes || null,
-      items: items.filter(i => i.description),
+      items: items.filter(i => i.description).map(i => ({
+        productId: i.productId,
+        description: i.description,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        imageUrl: i.imageUrl,
+      })),
     })}),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["quotes"] }); setDialog(false);
@@ -90,6 +120,18 @@ export function Quotes() {
   const acceptedValue = (quotes ?? []).filter(q => q.status === "accepted").reduce((s, q) => s + Number(q.totalAmount ?? 0), 0);
   const pendingCount = (quotes ?? []).filter(q => ["draft","sent"].includes(q.status)).length;
   const conversionRate = (quotes ?? []).length ? Math.round(((quotes ?? []).filter(q => q.status === "accepted").length / (quotes ?? []).length) * 100) : 0;
+
+  function pickProduct(lineIdx: number, productId: string) {
+    const prod = (products ?? []).find(p => String(p.id) === productId);
+    if (!prod) return;
+    setItems(prev => prev.map((it, i) => i === lineIdx ? {
+      ...it,
+      productId: prod.id,
+      description: prod.name,
+      unitPrice: Number(prod.sellingPrice),
+      imageUrl: prod.imageUrl ?? null,
+    } : it));
+  }
 
   if (isLoading) return <Skeleton className="h-96 w-full" />;
 
@@ -182,7 +224,7 @@ export function Quotes() {
         </Table>
       </div>
 
-      {/* New quote dialog */}
+      {/* ── New Quote Dialog ── */}
       <Dialog open={dialog} onOpenChange={setDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Quote</DialogTitle></DialogHeader>
@@ -195,25 +237,89 @@ export function Quotes() {
               <Input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} placeholder="Valid until" />
               <Input type="number" placeholder="Discount %" min="0" max="100" value={discountPct} onChange={e => setDiscountPct(e.target.value)} />
             </div>
+
+            {/* Line items with product picker */}
             <div className="space-y-2">
               <div className="text-sm font-medium">Line Items</div>
               {items.map((item, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <Input className="col-span-6" placeholder="Description" value={item.description}
-                    onChange={e => { const n = [...items]; n[i].description = e.target.value; setItems(n); }} />
-                  <Input className="col-span-2" type="number" placeholder="Qty" value={item.quantity}
-                    onChange={e => { const n = [...items]; n[i].quantity = Number(e.target.value); setItems(n); }} />
-                  <Input className="col-span-3" type="number" placeholder="Unit price ₹" value={item.unitPrice}
-                    onChange={e => { const n = [...items]; n[i].unitPrice = Number(e.target.value); setItems(n); }} />
-                  <Button className="col-span-1" size="icon" variant="ghost" onClick={() => setItems(items.filter((_, x) => x !== i))}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                <div key={i} className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    {/* Product image thumbnail */}
+                    <div className="shrink-0 w-10 h-10 rounded-md overflow-hidden border bg-muted flex items-center justify-center">
+                      {item.imageUrl
+                        ? <img src={item.imageUrl} alt={item.description} className="w-full h-full object-cover" />
+                        : <Package className="w-4 h-4 text-muted-foreground" />
+                      }
+                    </div>
+                    {/* Product select */}
+                    <Select
+                      value={item.productId ? String(item.productId) : "__custom__"}
+                      onValueChange={v => {
+                        if (v === "__custom__") {
+                          setItems(prev => prev.map((it, idx) => idx === i ? { ...it, productId: undefined, imageUrl: null } : it));
+                        } else {
+                          pickProduct(i, v);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="flex-1 text-sm">
+                        <SelectValue placeholder="Select product…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__custom__">— Custom description —</SelectItem>
+                        {(products ?? []).map(p => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            <div className="flex items-center gap-2">
+                              {p.imageUrl
+                                ? <img src={p.imageUrl} alt={p.name} className="w-5 h-5 rounded object-cover shrink-0" />
+                                : <Package className="w-4 h-4 text-muted-foreground shrink-0" />
+                              }
+                              <span>{p.name}</span>
+                              <span className="text-muted-foreground ml-auto">₹{Number(p.sellingPrice).toLocaleString("en-IN")}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button size="icon" variant="ghost" className="shrink-0" onClick={() => setItems(items.filter((_, x) => x !== i))}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {/* Description / qty / price row */}
+                  <div className="grid grid-cols-12 gap-2">
+                    <Input
+                      className="col-span-6 text-sm"
+                      placeholder="Description"
+                      value={item.description}
+                      onChange={e => { const n = [...items]; n[i].description = e.target.value; setItems(n); }}
+                    />
+                    <Input
+                      className="col-span-2 text-sm"
+                      type="number" placeholder="Qty" min="1"
+                      value={item.quantity}
+                      onChange={e => { const n = [...items]; n[i].quantity = Number(e.target.value); setItems(n); }}
+                    />
+                    <Input
+                      className="col-span-4 text-sm"
+                      type="number" placeholder="Unit price ₹"
+                      value={item.unitPrice}
+                      onChange={e => { const n = [...items]; n[i].unitPrice = Number(e.target.value); setItems(n); }}
+                    />
+                  </div>
+                  {item.quantity > 0 && item.unitPrice > 0 && (
+                    <div className="text-xs text-right text-muted-foreground">
+                      Line total: ₹{(item.quantity * item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </div>
+                  )}
                 </div>
               ))}
               <Button variant="outline" size="sm" onClick={() => setItems([...items, { description: "", quantity: 1, unitPrice: 0 }])}>
                 <Plus className="w-3 h-3 mr-1" />Add line
               </Button>
             </div>
+
+            <Input placeholder="Notes (optional)" value={notes} onChange={e => setNotes(e.target.value)} />
+
             <div className="bg-muted/40 rounded-lg p-4 space-y-1.5 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>₹{subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
               {Number(discountPct) > 0 && <div className="flex justify-between text-amber-600"><span>Discount ({discountPct}%)</span><span>−₹{(subtotal - afterDisc).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>}
@@ -225,12 +331,13 @@ export function Quotes() {
         </DialogContent>
       </Dialog>
 
-      {/* Quote detail drawer */}
+      {/* ── Quote Detail Drawer ── */}
       <Sheet open={!!selected} onOpenChange={o => !o && setSelected(null)}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           {selected && (() => {
             const cfg = STATUS_CONFIG[selected.status] ?? STATUS_CONFIG.draft;
             const subtotalAmt = Number(selected.totalAmount ?? 0) - Number(selected.gstAmount ?? 0);
+            const detailItems = quoteDetail?.items ?? [];
             return (
               <>
                 <SheetHeader className="mb-6">
@@ -244,6 +351,7 @@ export function Quotes() {
                   </div>
                 </SheetHeader>
                 <div className="space-y-5">
+                  {/* Total summary */}
                   <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
                     <div className="text-xs text-muted-foreground mb-0.5">Quote Total</div>
                     <div className="text-3xl font-bold text-primary">₹{Number(selected.totalAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
@@ -253,12 +361,42 @@ export function Quotes() {
                       {selected.discountPct > 0 && <div className="flex justify-between text-amber-500"><span>Discount</span><span>{selected.discountPct}%</span></div>}
                     </div>
                   </div>
+
+                  {/* Line items with images */}
+                  {detailItems.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-muted-foreground uppercase tracking-wide text-xs">Items</div>
+                      <div className="space-y-2">
+                        {detailItems.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-3 rounded-lg border bg-muted/20 p-2.5">
+                            <div className="shrink-0 w-12 h-12 rounded-md overflow-hidden border bg-muted flex items-center justify-center">
+                              {item.imageUrl
+                                ? <img src={item.imageUrl} alt={item.description} className="w-full h-full object-cover" />
+                                : <Package className="w-5 h-5 text-muted-foreground" />
+                              }
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium truncate">{item.description}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {item.quantity} × ₹{item.unitPrice.toLocaleString("en-IN", { minimumFractionDigits: 0 })}
+                              </div>
+                            </div>
+                            <div className="text-sm font-bold shrink-0">
+                              ₹{item.lineTotal.toLocaleString("en-IN", { minimumFractionDigits: 0 })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {selected.validUntil && (
                     <div className="flex items-center gap-2 text-sm">
                       <Clock className="w-4 h-4 text-muted-foreground" />
                       <span>Valid until <strong>{format(new Date(selected.validUntil), "MMM d, yyyy")}</strong></span>
                     </div>
                   )}
+
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Status</label>
                     <Select value={selected.status} onValueChange={v => {
@@ -273,14 +411,26 @@ export function Quotes() {
                       </SelectContent>
                     </Select>
                   </div>
+
                   {selected.status === "accepted" && (
                     <Button className="w-full" onClick={() => convertToOrder.mutate(selected.id)} disabled={convertToOrder.isPending}>
                       <ArrowRight className="w-4 h-4 mr-2" />Convert to Sales Order
                     </Button>
                   )}
-                  <Button variant="outline" className="w-full" onClick={() => printQuote(selected)}>
+
+                  <Button variant="outline" className="w-full" onClick={() => printQuote({
+                    ...selected,
+                    items: detailItems.map(it => ({
+                      description: it.description,
+                      quantity: it.quantity,
+                      unitPrice: it.unitPrice,
+                      lineTotal: it.lineTotal,
+                      imageUrl: it.imageUrl,
+                    })),
+                  })}>
                     <Printer className="w-4 h-4 mr-2" />Print Quote
                   </Button>
+
                   <Button variant="destructive" className="w-full" onClick={() => del.mutate(selected.id)} disabled={del.isPending}>
                     <Trash2 className="w-4 h-4 mr-2" />Delete Quote
                   </Button>

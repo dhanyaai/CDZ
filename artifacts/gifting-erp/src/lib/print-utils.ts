@@ -244,8 +244,38 @@ export function printQuote(q: {
   validUntil?: string | null;
   notes?: string | null;
   status: string;
+  items?: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number; imageUrl?: string | null }>;
 }) {
   const subtotalAmt = q.subtotal ?? (Number(q.totalAmount) - Number(q.gstAmount));
+  const items = q.items ?? [];
+  const itemsHtml = items.length > 0 ? `
+    <div class="section-title" style="margin-top:4px;">Quoted Items</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:52px;"></th>
+          <th>Product / Description</th>
+          <th class="text-right" style="width:60px;">Qty</th>
+          <th class="text-right" style="width:110px;">Unit Price</th>
+          <th class="text-right" style="width:120px;">Line Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map(item => `<tr>
+          <td style="padding:8px 12px;">
+            ${item.imageUrl
+              ? `<img src="${item.imageUrl}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;border:1px solid #e5e7eb;display:block;" />`
+              : `<div style="width:40px;height:40px;border-radius:6px;background:#ede9fe;display:flex;align-items:center;justify-content:center;font-size:18px;">🎁</div>`
+            }
+          </td>
+          <td class="font-bold">${item.description}</td>
+          <td class="text-right">${item.quantity}</td>
+          <td class="text-right">₹${Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+          <td class="text-right font-bold">₹${Number(item.lineTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+  ` : "";
   const html = `
     <div class="doc-header">
       <div><div class="brand">Customize Duniya</div><div class="brand-sub">Quotation</div></div>
@@ -269,6 +299,7 @@ export function printQuote(q: {
       </div>
     </div>
     ${q.notes ? `<div class="note-box"><strong>Notes</strong>${q.notes}</div>` : ""}
+    ${itemsHtml}
     <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
       <div class="totals-box">
         <div class="total-row sub"><span>Subtotal</span><span>₹${subtotalAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
