@@ -16,9 +16,9 @@ import {
 } from "recharts";
 type ArAgingBucket = { bucket: string; value: number };
 type ArAgingRaw = { buckets: ArAgingBucket[]; total: number; detail: unknown[] };
-type Leaderboard = { userId: number; userName: string; totalRevenue: number; orderCount: number };
-type TopProduct = { productId: number; productName: string; totalQty: number; totalRevenue: number };
-type VendorPerf = { vendorId: number; vendorName: string; totalOrders: number; totalAmount: number; fulfilmentRate: number };
+type Leaderboard = { ownerId: number; name: string; role: string; pipeline: number; won: number; openCount: number; wonCount: number };
+type TopProduct = { productId: number; productName: string; quantity: number; revenue: number };
+type VendorPerf = { vendorId: number; vendorName: string; poCount: number; totalValue: number; onTimeRate: number };
 type InventoryStatusRaw = { totalProducts: number; lowStockCount: number; outOfStockCount: number; totalValue: number };
 type InventoryStatusItem = { status: string; count: number };
 
@@ -244,15 +244,15 @@ export function Dashboard() {
             ) : (
               <div className="space-y-3">
                 {leaderboard.map((rep, i) => (
-                  <div key={rep.userId} className="flex items-center gap-3">
+                  <div key={rep.ownerId} className="flex items-center gap-3">
                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                       i === 0 ? "bg-amber-500/20 text-amber-500" : i === 1 ? "bg-slate-500/20 text-slate-400" : i === 2 ? "bg-orange-500/20 text-orange-500" : "bg-muted text-muted-foreground"
                     }`}>{i + 1}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{rep.userName}</div>
-                      <div className="text-xs text-muted-foreground">{rep.orderCount} orders</div>
+                      <div className="font-medium text-sm truncate">{rep.name}</div>
+                      <div className="text-xs text-muted-foreground">{rep.wonCount} won · {rep.openCount} open</div>
                     </div>
-                    <div className="font-semibold text-sm">₹{rep.totalRevenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
+                    <div className="font-semibold text-sm">₹{Number(rep.pipeline).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
                   </div>
                 ))}
               </div>
@@ -281,9 +281,9 @@ export function Dashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{p.productName}</div>
-                      <div className="text-xs text-muted-foreground">{p.totalQty} units sold</div>
+                      <div className="text-xs text-muted-foreground">{p.quantity} units sold</div>
                     </div>
-                    <div className="font-semibold text-sm">₹{p.totalRevenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
+                    <div className="font-semibold text-sm">₹{Number(p.revenue).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
                   </div>
                 ))}
               </div>
@@ -309,15 +309,15 @@ export function Dashboard() {
                   <div key={v.vendorId} className="space-y-1">
                     <div className="flex justify-between text-sm">
                       <span className="font-medium truncate flex-1 mr-2">{v.vendorName}</span>
-                      <Badge variant="outline" className={`text-[10px] px-1.5 ${v.fulfilmentRate >= 90 ? "border-emerald-500/40 text-emerald-500" : v.fulfilmentRate >= 70 ? "border-amber-500/40 text-amber-500" : "border-red-500/40 text-red-500"}`}>
-                        {v.fulfilmentRate}%
+                      <Badge variant="outline" className={`text-[10px] px-1.5 ${v.onTimeRate >= 90 ? "border-emerald-500/40 text-emerald-500" : v.onTimeRate >= 70 ? "border-amber-500/40 text-amber-500" : "border-red-500/40 text-red-500"}`}>
+                        {v.onTimeRate}%
                       </Badge>
                     </div>
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                       <div className="h-full rounded-full transition-all"
-                        style={{ width: `${v.fulfilmentRate}%`, backgroundColor: v.fulfilmentRate >= 90 ? "#10b981" : v.fulfilmentRate >= 70 ? "#f59e0b" : "#ef4444" }} />
+                        style={{ width: `${v.onTimeRate}%`, backgroundColor: v.onTimeRate >= 90 ? "#10b981" : v.onTimeRate >= 70 ? "#f59e0b" : "#ef4444" }} />
                     </div>
-                    <div className="text-xs text-muted-foreground">{v.totalOrders} orders · ₹{v.totalAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
+                    <div className="text-xs text-muted-foreground">{v.poCount} POs · ₹{Number(v.totalValue).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
                   </div>
                 ))}
               </div>
@@ -338,8 +338,10 @@ export function Dashboard() {
           <CardContent>
             <div className="space-y-3">
               {topClients?.map((client, i) => {
-                const maxRev = topClients[0]?.totalRevenue ?? 1;
-                const pct = Math.round((client.totalRevenue / maxRev) * 100);
+                const maxRev = Number((topClients[0] as any)?.revenue ?? (topClients[0] as any)?.totalRevenue ?? 1);
+                const rev = Number((client as any).revenue ?? (client as any).totalRevenue ?? 0);
+                const orders = (client as any).orders ?? (client as any).totalOrders ?? 0;
+                const pct = Math.round((rev / maxRev) * 100);
                 return (
                   <div key={client.clientId} className="space-y-1">
                     <div className="flex justify-between text-sm">
@@ -348,8 +350,8 @@ export function Dashboard() {
                         <span className="font-medium">{client.clientName}</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs text-muted-foreground">{client.totalOrders} orders</span>
-                        <span className="font-semibold">₹{client.totalRevenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                        <span className="text-xs text-muted-foreground">{orders} orders</span>
+                        <span className="font-semibold">₹{rev.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
                       </div>
                     </div>
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
