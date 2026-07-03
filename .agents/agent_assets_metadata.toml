@@ -53,3 +53,9 @@ id = "8YjNX3fKH_-eYYI1KBupU"
 uri = "file://.local/outputs/Gift-Suite.pdf"
 type = "pdf"
 title = "Gift Suite.pdf"
+
+[[outputs]]
+id = "ColwKcqTx0yatUK2Mg_p1"
+uri = "file://attached_assets/gifting_erp_status_report.pdf"
+type = "pdf"
+title = "Corporate Gifting ERP — Status Report"
