@@ -59,3 +59,9 @@ id = "ColwKcqTx0yatUK2Mg_p1"
 uri = "file://attached_assets/gifting_erp_status_report.pdf"
 type = "pdf"
 title = "Corporate Gifting ERP — Status Report (with table of contents)"
+
+[[outputs]]
+id = "9_0VZPHC3J-KN-OKAKInO"
+uri = "file://attached_assets/gifting_erp_status_report_v2.pdf"
+type = "pdf"
+title = "Corporate Gifting ERP — Status Report (7 pages, with table of contents)"
