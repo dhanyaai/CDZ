@@ -49,6 +49,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(true);
+
+  useEffect(() => {
+    if (alertOpen) return;
+    const t = setTimeout(() => setAlertOpen(true), 8000);
+    return () => clearTimeout(t);
+  }, [alertOpen]);
+
   const [collapsed, setCollapsed] = useState<boolean>(
     () => typeof localStorage !== "undefined" && localStorage.getItem(COLLAPSE_KEY) === "1",
   );
