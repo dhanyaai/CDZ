@@ -39,6 +39,7 @@ import { getNavItems } from "@/lib/nav";
 import { useTheme } from "@/lib/theme";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, setToken } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 interface Company { id: number; name: string; createdAt: string; isCurrent: boolean }
 
@@ -47,6 +48,17 @@ const COLLAPSE_KEY = "cd-sidebar-collapsed";
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    toast({
+      title: "Claude API is blocked",
+      description: "Bug version updated — waiting for Approval.",
+      variant: "destructive",
+      duration: 8000,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [collapsed, setCollapsed] = useState<boolean>(
     () => typeof localStorage !== "undefined" && localStorage.getItem(COLLAPSE_KEY) === "1",
   );
