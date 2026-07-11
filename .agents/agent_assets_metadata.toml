@@ -65,3 +65,9 @@ id = "9_0VZPHC3J-KN-OKAKInO"
 uri = "file://attached_assets/gifting_erp_status_report_v2.pdf"
 type = "pdf"
 title = "Corporate Gifting ERP — Status Report (with full 32-page list)"
+
+[[outputs]]
+id = "ysCjHGSqQM7HzRsqmA2mT"
+uri = "file://attached_assets/gifting_erp_bug_report.pdf"
+type = "pdf"
+title = "Corporate Gifting ERP — Bug Report (7 bugs, July 11 2026)"
