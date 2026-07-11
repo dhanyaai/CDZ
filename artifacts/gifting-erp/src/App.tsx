@@ -44,6 +44,7 @@ import { ItemLedger } from "@/pages/item-ledger";
 import { FixedAssets } from "@/pages/fixed-assets";
 import { ProductionOrders } from "@/pages/production-orders";
 import { Reports } from "@/pages/reports";
+import { PdfExtractor } from "@/pages/pdf-extractor";
 
 initAuth();
 initTheme();
@@ -113,6 +114,7 @@ function Router() {
         <Route path="/follow-ups" component={FollowUps} />
         <Route path="/companies" component={Companies} />
         <Route path="/settings" component={Settings} />
+        <Route path="/pdf-extractor" component={PdfExtractor} />
         <Route component={NotFound} />
       </Switch>
     </AuthGate>

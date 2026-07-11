@@ -28,6 +28,7 @@ import {
   Factory,
   Landmark,
   BarChart3,
+  FileImage,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -103,6 +104,12 @@ export function getNavItems(opts: { production?: boolean } = {}): NavGroup[] {
         { label: "Users", href: "/users", icon: Users },
         { label: "Companies", href: "/companies", icon: Building2 },
         { label: "Settings", href: "/settings", icon: Settings },
+      ],
+    },
+    {
+      group: "Tools",
+      items: [
+        { label: "PDF Image Extractor", href: "/pdf-extractor", icon: FileImage },
       ],
     },
   ];
