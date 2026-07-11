@@ -39,7 +39,7 @@ import { getNavItems } from "@/lib/nav";
 import { useTheme } from "@/lib/theme";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, setToken } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
+import { AlertTriangle } from "lucide-react";
 
 interface Company { id: number; name: string; createdAt: string; isCurrent: boolean }
 
@@ -48,17 +48,7 @@ const COLLAPSE_KEY = "cd-sidebar-collapsed";
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    toast({
-      title: "Claude API is blocked",
-      description: "Bug version updated — waiting for Approval.",
-      variant: "destructive",
-      duration: 8000,
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [alertOpen, setAlertOpen] = useState(true);
   const [collapsed, setCollapsed] = useState<boolean>(
     () => typeof localStorage !== "undefined" && localStorage.getItem(COLLAPSE_KEY) === "1",
   );
@@ -133,6 +123,37 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <TooltipProvider delayDuration={0}>
       <div className="flex h-screen bg-background overflow-hidden">
         <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
+
+        {/* Centered alert popup */}
+        {alertOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+              {/* Red header bar */}
+              <div className="bg-red-600 px-6 py-4 flex items-center gap-3">
+                <AlertTriangle className="text-white shrink-0" size={22} />
+                <span className="text-white font-bold text-base tracking-wide">System Notice</span>
+              </div>
+              {/* Body */}
+              <div className="px-6 py-6">
+                <p className="text-gray-900 dark:text-gray-100 font-semibold text-lg leading-snug mb-1">
+                  Claude API is blocked
+                </p>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                  Bug version updated — waiting for Approval.
+                </p>
+              </div>
+              {/* Footer */}
+              <div className="px-6 pb-5 flex justify-end">
+                <button
+                  onClick={() => setAlertOpen(false)}
+                  className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Mobile sidebar overlay */}
         {sidebarOpen && (
