@@ -8,6 +8,8 @@ function serializeProduct(p: typeof productsTable.$inferSelect, vendorName?: str
   return {
     id: p.id,
     name: p.name,
+    brand: p.brand ?? null,
+    productType: p.productType ?? null,
     category: p.category,
     costPrice: Number(p.costPrice),
     sellingPrice: Number(p.sellingPrice),
@@ -38,7 +40,7 @@ router.get("/v1/products", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/products", async (req, res): Promise<void> => {
-  const { name, category, costPrice, sellingPrice, stockLevel, lowStockThreshold, vendorId, imageUrl } = req.body ?? {};
+  const { name, category, costPrice, sellingPrice, stockLevel, lowStockThreshold, vendorId, imageUrl, brand, productType } = req.body ?? {};
   if (!name || !category || costPrice == null || sellingPrice == null) {
     res.status(400).json({ error: "name, category, costPrice, and sellingPrice are required" });
     return;
@@ -49,6 +51,8 @@ router.post("/v1/products", async (req, res): Promise<void> => {
     .values({
       companyId: req.companyId,
       name,
+      brand: brand ?? null,
+      productType: productType ?? null,
       category,
       costPrice: String(costPrice),
       sellingPrice: String(sellingPrice),
@@ -85,6 +89,8 @@ router.patch("/v1/products/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const updates: Record<string, unknown> = {};
   if (req.body.name != null) updates.name = req.body.name;
+  if (req.body.brand != null) updates.brand = req.body.brand;
+  if (req.body.productType != null) updates.productType = req.body.productType;
   if (req.body.category != null) updates.category = req.body.category;
   if (req.body.costPrice != null) updates.costPrice = String(req.body.costPrice);
   if (req.body.sellingPrice != null) updates.sellingPrice = String(req.body.sellingPrice);

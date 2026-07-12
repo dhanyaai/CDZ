@@ -8,6 +8,8 @@ export const productsTable = pgTable("products", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().default(1).references(() => companiesTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  brand: text("brand"),
+  productType: text("product_type"),
   category: text("category").notNull(),
   costPrice: numeric("cost_price", { precision: 12, scale: 2 }).notNull(),
   sellingPrice: numeric("selling_price", { precision: 12, scale: 2 }).notNull(),

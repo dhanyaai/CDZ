@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useListProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useListVendors, getListProductsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -15,12 +15,22 @@ import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search, Plus, Edit, Trash2, Settings2, Package, AlertTriangle, IndianRupee, TrendingUp } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Settings2, Package, AlertTriangle, IndianRupee, TrendingUp, Upload, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ProductManager } from "@/components/product-manager";
 
+const PRODUCT_TYPES = [
+  { value: "raw_material", label: "Raw Material" },
+  { value: "finished_good", label: "Finished Good" },
+  { value: "semi_finished", label: "Semi-Finished" },
+  { value: "packaging", label: "Packaging" },
+  { value: "other", label: "Other" },
+];
+
 const formSchema = z.object({
   name: z.string().min(1),
+  brand: z.string().optional(),
+  productType: z.string().optional(),
   category: z.string().min(1),
   costPrice: z.coerce.number().min(0),
   sellingPrice: z.coerce.number().min(0),
@@ -32,6 +42,16 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+const EMPTY_FORM: FormValues = {
+  name: "", brand: "", productType: "", category: "",
+  costPrice: 0, sellingPrice: 0, stockLevel: 0, lowStockThreshold: 10,
+  vendorId: null, imageUrl: "",
+};
+
+function productTypeLabel(val: string | null | undefined) {
+  return PRODUCT_TYPES.find(t => t.value === val)?.label ?? val ?? "—";
+}
+
 export function Products() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string | undefined>();
@@ -39,6 +59,8 @@ export function Products() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [managerProductId, setManagerProductId] = useState<number | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: products, isLoading } = useListProducts({
     search: search || undefined,
@@ -81,28 +103,60 @@ export function Products() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: "", category: "", costPrice: 0, sellingPrice: 0, stockLevel: 0, lowStockThreshold: 10, vendorId: null, imageUrl: "" },
+    defaultValues: EMPTY_FORM,
   });
 
   const openNew = () => {
     setEditingId(null);
-    form.reset({ name: "", category: "", costPrice: 0, sellingPrice: 0, stockLevel: 0, lowStockThreshold: 10, vendorId: null, imageUrl: "" });
+    form.reset(EMPTY_FORM);
+    setImagePreview("");
     setDialogOpen(true);
   };
 
   const openEdit = (product: any) => {
     setEditingId(product.id);
     form.reset({
-      name: product.name, category: product.category,
-      costPrice: product.costPrice, sellingPrice: product.sellingPrice,
-      stockLevel: product.stockLevel, lowStockThreshold: product.lowStockThreshold ?? 10,
-      vendorId: product.vendorId, imageUrl: product.imageUrl || "",
+      name: product.name,
+      brand: product.brand || "",
+      productType: product.productType || "",
+      category: product.category,
+      costPrice: product.costPrice,
+      sellingPrice: product.sellingPrice,
+      stockLevel: product.stockLevel,
+      lowStockThreshold: product.lowStockThreshold ?? 10,
+      vendorId: product.vendorId,
+      imageUrl: product.imageUrl || "",
     });
+    setImagePreview(product.imageUrl || "");
     setDialogOpen(true);
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      form.setValue("imageUrl", dataUrl);
+      setImagePreview(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const clearImage = () => {
+    form.setValue("imageUrl", "");
+    setImagePreview("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const onSubmit = (data: FormValues) => {
-    const submitData = { ...data, vendorId: data.vendorId || undefined };
+    const submitData = {
+      ...data,
+      brand: data.brand || undefined,
+      productType: data.productType || undefined,
+      vendorId: data.vendorId || undefined,
+      imageUrl: data.imageUrl || undefined,
+    };
     if (editingId) updateProduct.mutate({ id: editingId, data: submitData });
     else createProduct.mutate({ data: submitData });
   };
@@ -179,6 +233,8 @@ export function Products() {
           <TableHeader>
             <TableRow>
               <TableHead>Product</TableHead>
+              <TableHead>Brand</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Category</TableHead>
               <TableHead className="text-right">Cost</TableHead>
               <TableHead className="text-right">Price</TableHead>
@@ -191,11 +247,11 @@ export function Products() {
           <TableBody>
             {isLoading ? (
               Array(4).fill(0).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={10}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
               ))
             ) : products?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12">
+                <TableCell colSpan={10} className="text-center py-12">
                   <Package className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
                   <p className="text-muted-foreground">No products found</p>
                   <Button variant="outline" size="sm" className="mt-3" onClick={openNew}>
@@ -215,7 +271,7 @@ export function Products() {
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
                         {product.imageUrl ? (
-                          <img src={product.imageUrl} alt={product.name} className="w-9 h-9 rounded-lg object-cover border border-border" />
+                          <img src={product.imageUrl} alt={product.name} className="w-9 h-9 rounded-lg object-cover border border-border shrink-0" />
                         ) : (
                           <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
                             <Package className="w-4 h-4 text-muted-foreground" />
@@ -224,8 +280,14 @@ export function Products() {
                         <span>{product.name}</span>
                       </div>
                     </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{(product as any).brand || "—"}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs">{product.category}</Badge>
+                      {(product as any).productType ? (
+                        <Badge variant="outline" className="text-xs">{productTypeLabel((product as any).productType)}</Badge>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="text-xs">{product.category}</Badge>
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">₹{cost.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</TableCell>
                     <TableCell className="text-right font-medium">₹{sell.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</TableCell>
@@ -262,15 +324,77 @@ export function Products() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit Product" : "New Product"}</DialogTitle>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+
+              {/* Image upload */}
+              <div className="space-y-2">
+                <Label>Product Image</Label>
+                <div className="flex items-center gap-3">
+                  {imagePreview ? (
+                    <div className="relative w-20 h-20 shrink-0">
+                      <img src={imagePreview} alt="Preview" className="w-20 h-20 rounded-lg object-cover border border-border" />
+                      <button
+                        type="button"
+                        onClick={clearImage}
+                        className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center hover:opacity-80"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-20 h-20 rounded-lg bg-muted border-2 border-dashed border-border flex items-center justify-center shrink-0">
+                      <Package className="w-7 h-7 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {imagePreview ? "Change Image" : "Upload Image"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-1.5">JPG, PNG, WebP — any size</p>
+                  </div>
+                </div>
+              </div>
+
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem><FormLabel>Name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="brand" render={({ field }) => (
+                  <FormItem><FormLabel>Brand</FormLabel><FormControl><Input placeholder="e.g. Nike, Fastrack" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="productType" render={({ field }) => (
+                  <FormItem><FormLabel>Product Type</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "__none__"}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">— None —</SelectItem>
+                        {PRODUCT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  <FormMessage /></FormItem>
+                )} />
+              </div>
+
               <FormField control={form.control} name="category" render={({ field }) => (
                 <FormItem><FormLabel>Category *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
@@ -281,6 +405,7 @@ export function Products() {
                   </Select>
                 <FormMessage /></FormItem>
               )} />
+
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="costPrice" render={({ field }) => (
                   <FormItem><FormLabel>Cost Price ₹</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
@@ -289,6 +414,7 @@ export function Products() {
                   <FormItem><FormLabel>Selling Price ₹</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="stockLevel" render={({ field }) => (
                   <FormItem><FormLabel>Stock Level</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
@@ -297,6 +423,7 @@ export function Products() {
                   <FormItem><FormLabel>Low Stock Alert At</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
+
               <FormField control={form.control} name="vendorId" render={({ field }) => (
                 <FormItem><FormLabel>Vendor</FormLabel>
                   <Select onValueChange={v => field.onChange(v === "none" ? null : Number(v))} value={field.value?.toString() || "none"}>
@@ -308,9 +435,7 @@ export function Products() {
                   </Select>
                 <FormMessage /></FormItem>
               )} />
-              <FormField control={form.control} name="imageUrl" render={({ field }) => (
-                <FormItem><FormLabel>Image URL</FormLabel><FormControl><Input placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
+
               <Button type="submit" className="w-full" disabled={createProduct.isPending || updateProduct.isPending}>Save Product</Button>
             </form>
           </Form>
