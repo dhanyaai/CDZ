@@ -1,1 +1,4 @@
 - [video-js scaffold typecheck](video-js-scaffold.md) — `pnpm typecheck` fails on scaffold files (animations.ts/hooks.ts/main.tsx); verify videos with validate-recording.sh + Vite logs, not tsc.
+- [Contacts API shape](contacts-api.md) — DB uses firstName/lastName/designation/department/notes; flat /v1/contacts GET+POST were added (previously only nested routes existed)
+- [Vendor DB fields](vendor-fields.md) — 7 fields added (gstNumber, address, city, state, pincode, paymentTerms, bankAccount); API client types lag until codegen, cast as `any` in UI
+- [DB lib rebuild rule](db-lib-rebuild.md) — after any schema change run `pnpm run typecheck:libs` before API server typecheck or stale declarations cause false errors
