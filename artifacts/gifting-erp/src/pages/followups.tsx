@@ -215,20 +215,20 @@ export function FollowUps() {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Client</label>
-                <Select value={form.clientId} onValueChange={v => setForm({ ...form, clientId: v })}>
+                <Select value={form.clientId || "__none__"} onValueChange={v => setForm({ ...form, clientId: v === "__none__" ? "" : v })}>
                   <SelectTrigger><SelectValue placeholder="Link client…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">— None —</SelectItem>
+                    <SelectItem value="__none__">— None —</SelectItem>
                     {clients?.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.companyName}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Lead</label>
-                <Select value={form.leadId} onValueChange={v => setForm({ ...form, leadId: v })}>
+                <Select value={form.leadId || "__none__"} onValueChange={v => setForm({ ...form, leadId: v === "__none__" ? "" : v })}>
                   <SelectTrigger><SelectValue placeholder="Link lead…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">— None —</SelectItem>
+                    <SelectItem value="__none__">— None —</SelectItem>
                     {leads?.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -237,10 +237,10 @@ export function FollowUps() {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Assigned To</label>
-                <Select value={form.ownerId} onValueChange={v => setForm({ ...form, ownerId: v })}>
+                <Select value={form.ownerId || "__none__"} onValueChange={v => setForm({ ...form, ownerId: v === "__none__" ? "" : v })}>
                   <SelectTrigger><SelectValue placeholder="Assign to…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">— Unassigned —</SelectItem>
+                    <SelectItem value="__none__">— Unassigned —</SelectItem>
                     {users?.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                   </SelectContent>
                 </Select>

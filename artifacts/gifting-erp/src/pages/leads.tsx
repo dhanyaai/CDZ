@@ -217,10 +217,10 @@ export function Leads() {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Link to Existing Client</label>
-                <Select value={form.clientId} onValueChange={v => setForm({ ...form, clientId: v, companyName: clients?.find(c => String(c.id) === v)?.companyName ?? form.companyName })}>
+                <Select value={form.clientId || "__none__"} onValueChange={v => setForm({ ...form, clientId: v === "__none__" ? "" : v, companyName: v !== "__none__" ? (clients?.find(c => String(c.id) === v)?.companyName ?? form.companyName) : form.companyName })}>
                   <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">— None / New prospect —</SelectItem>
+                    <SelectItem value="__none__">— None / New prospect —</SelectItem>
                     {clients?.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.companyName}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -237,10 +237,10 @@ export function Leads() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Assigned To</label>
-                <Select value={form.ownerId} onValueChange={v => setForm({ ...form, ownerId: v })}>
+                <Select value={form.ownerId || "__none__"} onValueChange={v => setForm({ ...form, ownerId: v === "__none__" ? "" : v })}>
                   <SelectTrigger><SelectValue placeholder="Select salesperson…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">— Unassigned —</SelectItem>
+                    <SelectItem value="__none__">— Unassigned —</SelectItem>
                     {users?.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.name} ({u.role})</SelectItem>)}
                   </SelectContent>
                 </Select>
