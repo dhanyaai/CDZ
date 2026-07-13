@@ -352,6 +352,11 @@ export function FixedAssets() {
                 <Textarea placeholder="Optional description" value={form.description}
                   onChange={setF("description")} rows={2} />
               </div>
+              <div className="col-span-2 space-y-1.5">
+                <label className="text-sm font-medium">Notes</label>
+                <Textarea placeholder="Internal notes, warranty info, vendor details…" value={form.notes}
+                  onChange={setF("notes")} rows={2} />
+              </div>
             </div>
             <Button className="w-full" onClick={() => createMutation.mutate()}
               disabled={!canCreate || createMutation.isPending}>

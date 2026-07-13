@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useListPurchaseOrders, useCreatePurchaseOrder, useListVendors, useListProducts, getListPurchaseOrdersQueryKey } from "@workspace/api-client-react";
+import { useListPurchaseOrders, useCreatePurchaseOrder, useListVendors, useListProducts, useListSalesOrders, getListPurchaseOrdersQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -49,6 +49,7 @@ export function PurchaseOrders() {
   const { data: allOrders } = useListPurchaseOrders();
   const { data: vendors } = useListVendors();
   const { data: products } = useListProducts();
+  const { data: salesOrders } = useListSalesOrders();
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -197,6 +198,20 @@ export function PurchaseOrders() {
                 )} />
                 <FormField control={form.control} name="expectedDelivery" render={({ field }) => (
                   <FormItem><FormLabel>Expected Delivery</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="salesOrderId" render={({ field }) => (
+                  <FormItem className="col-span-2"><FormLabel>Linked Sales Order (optional)</FormLabel>
+                    <Select
+                      onValueChange={v => field.onChange(v === "__none__" ? null : Number(v))}
+                      value={field.value ? field.value.toString() : "__none__"}
+                    >
+                      <FormControl><SelectTrigger><SelectValue placeholder="Link to sales order…" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">— None —</SelectItem>
+                        {salesOrders?.map(so => <SelectItem key={so.id} value={so.id.toString()}>{so.orderNumber} · {so.clientName}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  <FormMessage /></FormItem>
                 )} />
               </div>
 
