@@ -8,6 +8,7 @@ export const categoriesTable = pgTable("categories", {
   slug: text("slug").notNull(),
   parentId: integer("parent_id").references((): AnyPgColumn => categoriesTable.id, { onDelete: "set null" }),
   description: text("description"),
+  hsnCode: text("hsn_code"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("categories_company_slug_idx").on(t.companyId, t.slug),

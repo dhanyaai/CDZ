@@ -27,6 +27,9 @@ async function getShipmentDetail(id: number, companyId: number) {
     status: row.shipment.status,
     trackingNumber: row.shipment.trackingNumber ?? null,
     dispatchDate: row.shipment.dispatchDate?.toISOString() ?? null,
+    estimatedDelivery: row.shipment.estimatedDelivery?.toISOString() ?? null,
+    numberOfBoxes: row.shipment.numberOfBoxes ?? null,
+    totalWeight: row.shipment.totalWeight != null ? Number(row.shipment.totalWeight) : null,
     items: items.map((r) => ({
       id: r.item.id,
       deliveryName: r.item.deliveryName,
@@ -65,7 +68,7 @@ router.get("/v1/shipments", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/shipments", async (req, res): Promise<void> => {
-  const { salesOrderId, courierPartner, trackingNumber } = req.body ?? {};
+  const { salesOrderId, courierPartner, trackingNumber, estimatedDelivery, numberOfBoxes, totalWeight } = req.body ?? {};
   if (!salesOrderId || !courierPartner) {
     res.status(400).json({ error: "salesOrderId and courierPartner are required" });
     return;
@@ -81,6 +84,9 @@ router.post("/v1/shipments", async (req, res): Promise<void> => {
     salesOrderId,
     courierPartner,
     trackingNumber,
+    estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : undefined,
+    numberOfBoxes: numberOfBoxes ?? undefined,
+    totalWeight: totalWeight != null ? String(totalWeight) : undefined,
     status: "Preparing",
   }).returning();
 
@@ -120,6 +126,9 @@ router.patch("/v1/shipments/:id", async (req, res): Promise<void> => {
   if (req.body.courierPartner != null) updates.courierPartner = req.body.courierPartner;
   if (req.body.trackingNumber != null) updates.trackingNumber = req.body.trackingNumber;
   if (req.body.dispatchDate != null) updates.dispatchDate = new Date(req.body.dispatchDate);
+  if (req.body.estimatedDelivery != null) updates.estimatedDelivery = new Date(req.body.estimatedDelivery);
+  if (req.body.numberOfBoxes != null) updates.numberOfBoxes = req.body.numberOfBoxes;
+  if (req.body.totalWeight != null) updates.totalWeight = String(req.body.totalWeight);
 
   await db.update(shipmentsTable).set(updates).where(and(eq(shipmentsTable.id, id), eq(shipmentsTable.companyId, req.companyId)));
   const detail = await getShipmentDetail(id, req.companyId);

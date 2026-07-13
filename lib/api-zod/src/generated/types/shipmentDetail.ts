@@ -19,6 +19,12 @@ export interface ShipmentDetail {
   trackingNumber?: string | null;
   /** @nullable */
   dispatchDate?: string | null;
+  /** @nullable */
+  estimatedDelivery?: string | null;
+  /** @nullable */
+  numberOfBoxes?: number | null;
+  /** @nullable */
+  totalWeight?: number | null;
   items: ShipmentItem[];
   createdAt: string;
 }

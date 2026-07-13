@@ -11,6 +11,10 @@ export interface Payment {
   invoiceId: number;
   amount: number;
   type: string;
+  /** @nullable */
+  paymentMode?: string | null;
+  /** @nullable */
+  referenceNo?: string | null;
   paymentDate: string;
   /** @nullable */
   notes?: string | null;

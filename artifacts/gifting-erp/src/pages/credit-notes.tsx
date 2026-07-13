@@ -53,7 +53,7 @@ export function CreditNotes() {
         <Table>
           <TableHeader><TableRow>
             <TableHead>CN #</TableHead><TableHead>Client</TableHead><TableHead>Against Invoice</TableHead>
-            <TableHead className="text-right">Amount</TableHead><TableHead>Reason</TableHead><TableHead className="w-20"></TableHead>
+            <TableHead className="text-right">Amount</TableHead><TableHead>Reason</TableHead><TableHead>Status</TableHead><TableHead className="w-20"></TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {data?.map((cn) => (
@@ -63,6 +63,9 @@ export function CreditNotes() {
                 <TableCell>{cn.invoiceNumber ?? "—"}</TableCell>
                 <TableCell className="text-right font-semibold text-red-600">−₹{cn.amount.toLocaleString()}</TableCell>
                 <TableCell className="text-muted-foreground text-sm">{cn.reason}</TableCell>
+                <TableCell>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cn.status === "Issued" ? "bg-blue-100 text-blue-800" : cn.status === "Applied" ? "bg-green-100 text-green-800" : cn.status === "Void" ? "bg-red-100 text-red-800" : "bg-muted text-muted-foreground"}`}>{cn.status}</span>
+                </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
                     <Button size="icon" variant="ghost" title="Print credit note" onClick={() => printCreditNote({ creditNoteNumber: cn.creditNoteNumber, clientName: cn.clientName, invoiceNumber: cn.invoiceNumber, amount: Number(cn.amount), reason: cn.reason, status: cn.status, issuedDate: cn.issuedDate })}>
@@ -90,7 +93,17 @@ export function CreditNotes() {
               <SelectContent>{invoices?.map((i) => <SelectItem key={i.id} value={String(i.id)}>{i.invoiceNumber}</SelectItem>)}</SelectContent>
             </Select>
             <Input placeholder="Amount *" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-            <Input placeholder="Reason *" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+            <Select value={form.reason} onValueChange={(v) => setForm({ ...form, reason: v })}>
+              <SelectTrigger><SelectValue placeholder="Reason *" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Product Return">Product Return</SelectItem>
+                <SelectItem value="Price Dispute">Price Dispute</SelectItem>
+                <SelectItem value="Defective / Damaged">Defective / Damaged</SelectItem>
+                <SelectItem value="Short Supply">Short Supply</SelectItem>
+                <SelectItem value="Wrong Product">Wrong Product</SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
+              </SelectContent>
+            </Select>
             <Button onClick={() => create.mutate()} disabled={!form.clientId || !form.amount || !form.reason || create.isPending} className="w-full">Issue</Button>
           </div>
         </DialogContent>

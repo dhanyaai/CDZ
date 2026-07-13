@@ -10,4 +10,7 @@ export interface ShipmentInput {
   salesOrderId: number;
   courierPartner: string;
   trackingNumber?: string;
+  estimatedDelivery?: string;
+  numberOfBoxes?: number;
+  totalWeight?: number;
 }

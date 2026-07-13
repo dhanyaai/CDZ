@@ -10,6 +10,8 @@ export interface PaymentInput {
   invoiceId: number;
   amount: number;
   type: string;
+  paymentMode?: string;
+  referenceNo?: string;
   paymentDate: string;
   notes?: string;
 }

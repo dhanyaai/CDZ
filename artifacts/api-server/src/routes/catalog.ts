@@ -19,16 +19,16 @@ router.get("/v1/categories", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/categories", async (req, res): Promise<void> => {
-  const { name, slug, parentId, description } = req.body ?? {};
+  const { name, slug, parentId, description, hsnCode } = req.body ?? {};
   if (!name || !slug) { res.status(400).json({ error: "name and slug required" }); return; }
-  const [c] = await db.insert(categoriesTable).values({ companyId: req.companyId, name, slug, parentId, description }).returning();
+  const [c] = await db.insert(categoriesTable).values({ companyId: req.companyId, name, slug, parentId, description, hsnCode: hsnCode ?? null }).returning();
   res.status(201).json(c);
 });
 
 router.patch("/v1/categories/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const updates: Record<string, unknown> = {};
-  for (const f of ["name", "slug", "parentId", "description"] as const) {
+  for (const f of ["name", "slug", "parentId", "description", "hsnCode"] as const) {
     if (req.body[f] !== undefined) updates[f] = req.body[f];
   }
   const [c] = await db.update(categoriesTable).set(updates).where(and(eq(categoriesTable.id, id), eq(categoriesTable.companyId, req.companyId))).returning();

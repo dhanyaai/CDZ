@@ -10,4 +10,7 @@ export interface ShipmentUpdate {
   courierPartner?: string;
   trackingNumber?: string;
   dispatchDate?: string;
+  estimatedDelivery?: string;
+  numberOfBoxes?: number;
+  totalWeight?: number;
 }

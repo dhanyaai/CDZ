@@ -155,13 +155,14 @@ router.get("/v1/payments", async (req, res): Promise<void> => {
 
   res.json(payments.map((p) => ({
     id: p.id, invoiceId: p.invoiceId, amount: Number(p.amount),
-    type: p.type, paymentDate: p.paymentDate.toISOString(),
+    type: p.type, paymentMode: p.paymentMode ?? null, referenceNo: p.referenceNo ?? null,
+    paymentDate: p.paymentDate.toISOString(),
     notes: p.notes ?? null, createdAt: p.createdAt.toISOString(),
   })));
 });
 
 router.post("/v1/payments", async (req, res): Promise<void> => {
-  const { invoiceId, amount, type, paymentDate, notes } = req.body ?? {};
+  const { invoiceId, amount, type, paymentMode, referenceNo, paymentDate, notes } = req.body ?? {};
   if (!invoiceId || amount == null || !type || !paymentDate) {
     res.status(400).json({ error: "invoiceId, amount, type, and paymentDate are required" }); return;
   }
@@ -172,7 +173,8 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
 
   const [payment] = await db.insert(paymentsTable).values({
     companyId: req.companyId, invoiceId, amount: String(amount),
-    type, paymentDate: new Date(paymentDate), notes,
+    type, paymentMode: paymentMode ?? null, referenceNo: referenceNo ?? null,
+    paymentDate: new Date(paymentDate), notes,
   }).returning();
 
   const allPayments = await db.select().from(paymentsTable)
@@ -186,7 +188,8 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
 
   res.status(201).json({
     id: payment.id, invoiceId: payment.invoiceId, amount: Number(payment.amount),
-    type: payment.type, paymentDate: payment.paymentDate.toISOString(),
+    type: payment.type, paymentMode: payment.paymentMode ?? null, referenceNo: payment.referenceNo ?? null,
+    paymentDate: payment.paymentDate.toISOString(),
     notes: payment.notes ?? null, createdAt: payment.createdAt.toISOString(),
   });
 });

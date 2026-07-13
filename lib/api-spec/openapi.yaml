@@ -1898,6 +1898,9 @@ components:
         status: { type: string }
         trackingNumber: { type: ["string", "null"] }
         dispatchDate: { type: ["string", "null"] }
+        estimatedDelivery: { type: ["string", "null"] }
+        numberOfBoxes: { type: ["integer", "null"] }
+        totalWeight: { type: ["number", "null"] }
         items: { type: array, items: { $ref: "#/components/schemas/ShipmentItem" } }
         createdAt: { type: string }
 
@@ -1908,6 +1911,9 @@ components:
         salesOrderId: { type: integer }
         courierPartner: { type: string }
         trackingNumber: { type: string }
+        estimatedDelivery: { type: string }
+        numberOfBoxes: { type: integer }
+        totalWeight: { type: number }
 
     ShipmentUpdate:
       type: object
@@ -1915,6 +1921,9 @@ components:
         courierPartner: { type: string }
         trackingNumber: { type: string }
         dispatchDate: { type: string }
+        estimatedDelivery: { type: string }
+        numberOfBoxes: { type: integer }
+        totalWeight: { type: number }
 
     # ── Invoices ──
     Invoice:
@@ -1951,6 +1960,8 @@ components:
         invoiceId: { type: integer }
         amount: { type: number }
         type: { type: string }
+        paymentMode: { type: ["string", "null"] }
+        referenceNo: { type: ["string", "null"] }
         paymentDate: { type: string }
         notes: { type: ["string", "null"] }
         createdAt: { type: string }
@@ -1962,6 +1973,8 @@ components:
         invoiceId: { type: integer }
         amount: { type: number }
         type: { type: string }
+        paymentMode: { type: string }
+        referenceNo: { type: string }
         paymentDate: { type: string }
         notes: { type: string }
 

@@ -30,6 +30,8 @@ export const paymentsTable = pgTable("payments", {
   invoiceId: integer("invoice_id").notNull().references(() => invoicesTable.id, { onDelete: "cascade" }),
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
   type: text("type").notNull(),
+  paymentMode: text("payment_mode"),
+  referenceNo: text("reference_no"),
   paymentDate: timestamp("payment_date", { withTimezone: true }).notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

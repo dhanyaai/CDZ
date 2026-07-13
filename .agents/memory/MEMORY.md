@@ -1,2 +1,3 @@
 - [Radix SelectItem empty value](radix-select-empty.md) — value="" crashes Radix UI Select; use "__none__" sentinel and convert in onValueChange
 - [Gifting ERP change workflow](erp-change-workflow.md) — order of operations: schema → typecheck:libs → db push → API route → OpenAPI spec → codegen → UI page → typecheck
+- [ERP module audit](erp-audit-results.md) — full audit of all 35 pages done; 6 modules fixed with DB+API+UI changes

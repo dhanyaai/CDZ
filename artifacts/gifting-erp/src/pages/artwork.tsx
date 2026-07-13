@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { useListArtworkApprovals, useCreateArtworkApproval, useUpdateArtworkStatus, useListClients, getListArtworkApprovalsQueryKey } from "@workspace/api-client-react";
+import { useListArtworkApprovals, useCreateArtworkApproval, useUpdateArtworkStatus, useListClients, useListSalesOrders, getListArtworkApprovalsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -36,6 +36,7 @@ export function Artwork() {
 
   const { data: artworks, isLoading } = useListArtworkApprovals({ status: statusFilter === "All" ? undefined : statusFilter as any });
   const { data: clients } = useListClients();
+  const { data: salesOrders } = useListSalesOrders();
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -184,8 +185,16 @@ export function Artwork() {
               )} />
               
               <FormField control={form.control} name="salesOrderId" render={({ field }) => (
-                <FormItem><FormLabel>Sales Order ID (Optional)</FormLabel>
-                  <FormControl><Input type="number" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value ? Number(e.target.value) : null)} /></FormControl>
+                <FormItem><FormLabel>Sales Order (Optional)</FormLabel>
+                  <Select onValueChange={(v) => field.onChange(v === "__none__" ? null : Number(v))} value={field.value != null ? field.value.toString() : "__none__"}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select sales order (optional)" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">— None —</SelectItem>
+                      {salesOrders?.map((so) => (
+                        <SelectItem key={so.id} value={so.id.toString()}>{so.orderNumber} — {so.clientName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 <FormMessage /></FormItem>
               )} />
 

@@ -976,7 +976,10 @@ export const ListShipmentsResponse = zod.array(ListShipmentsResponseItem)
 export const CreateShipmentBody = zod.object({
   "salesOrderId": zod.number(),
   "courierPartner": zod.string(),
-  "trackingNumber": zod.string().optional()
+  "trackingNumber": zod.string().optional(),
+  "estimatedDelivery": zod.string().optional(),
+  "numberOfBoxes": zod.number().optional(),
+  "totalWeight": zod.number().optional()
 })
 
 
@@ -993,6 +996,9 @@ export const GetShipmentResponse = zod.object({
   "status": zod.string(),
   "trackingNumber": zod.string().nullish(),
   "dispatchDate": zod.string().nullish(),
+  "estimatedDelivery": zod.string().nullish(),
+  "numberOfBoxes": zod.number().nullish(),
+  "totalWeight": zod.number().nullish(),
   "items": zod.array(zod.object({
   "id": zod.number(),
   "deliveryName": zod.string(),
@@ -1011,7 +1017,10 @@ export const UpdateShipmentParams = zod.object({
 export const UpdateShipmentBody = zod.object({
   "courierPartner": zod.string().optional(),
   "trackingNumber": zod.string().optional(),
-  "dispatchDate": zod.string().optional()
+  "dispatchDate": zod.string().optional(),
+  "estimatedDelivery": zod.string().optional(),
+  "numberOfBoxes": zod.number().optional(),
+  "totalWeight": zod.number().optional()
 })
 
 export const UpdateShipmentResponse = zod.object({
@@ -1107,6 +1116,8 @@ export const ListPaymentsResponseItem = zod.object({
   "invoiceId": zod.number(),
   "amount": zod.number(),
   "type": zod.string(),
+  "paymentMode": zod.string().nullish(),
+  "referenceNo": zod.string().nullish(),
   "paymentDate": zod.string(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string()
@@ -1118,6 +1129,8 @@ export const CreatePaymentBody = zod.object({
   "invoiceId": zod.number(),
   "amount": zod.number(),
   "type": zod.string(),
+  "paymentMode": zod.string().optional(),
+  "referenceNo": zod.string().optional(),
   "paymentDate": zod.string(),
   "notes": zod.string().optional()
 })

@@ -29,7 +29,7 @@ export function Categories() {
   const { toast } = useToast();
   const [dialog, setDialog] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", slug: "", description: "", icon: "🎁" });
+  const [form, setForm] = useState({ name: "", slug: "", description: "", hsnCode: "", icon: "🎁" });
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -41,7 +41,7 @@ export function Categories() {
     mutationFn: () => api("/v1/categories", { method: "POST", body: JSON.stringify(form) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["categories"] }); setDialog(false);
-      setForm({ name: "", slug: "", description: "", icon: "🎁" });
+      setForm({ name: "", slug: "", description: "", hsnCode: "", icon: "🎁" });
       toast({ title: "Category created" });
     },
   });
@@ -63,13 +63,13 @@ export function Categories() {
 
   const openNew = () => {
     setEditingId(null);
-    setForm({ name: "", slug: "", description: "", icon: "🎁" });
+    setForm({ name: "", slug: "", description: "", hsnCode: "", icon: "🎁" });
     setDialog(true);
   };
 
   const openEdit = (cat: Category) => {
     setEditingId(cat.id);
-    setForm({ name: cat.name, slug: cat.slug, description: cat.description ?? "", icon: "🎁" });
+    setForm({ name: cat.name, slug: cat.slug, description: cat.description ?? "", hsnCode: (cat as any).hsnCode ?? "", icon: "🎁" });
     setDialog(true);
   };
 
@@ -129,6 +129,9 @@ export function Categories() {
                   <p className="font-mono text-[11px] text-muted-foreground/70 mb-2">{cat.slug}</p>
                   {cat.description && (
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{cat.description}</p>
+                  )}
+                  {(cat as any).hsnCode && (
+                    <p className="font-mono text-[11px] text-muted-foreground/70 mb-1">HSN: {(cat as any).hsnCode}</p>
                   )}
                   <div className="flex items-center gap-1 mt-auto">
                     <Package className="w-3 h-3 text-muted-foreground" />
@@ -193,6 +196,12 @@ export function Categories() {
               placeholder="Description"
               value={form.description}
               onChange={e => setForm({ ...form, description: e.target.value })}
+            />
+            <Input
+              placeholder="HSN / SAC Code (for GST)"
+              value={form.hsnCode}
+              onChange={e => setForm({ ...form, hsnCode: e.target.value })}
+              className="font-mono text-sm"
             />
             <Button
               onClick={handleSubmit}

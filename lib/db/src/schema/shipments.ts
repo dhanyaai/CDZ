@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { salesOrdersTable, deliveryAddressesTable } from "./salesOrders";
@@ -13,6 +13,9 @@ export const shipmentsTable = pgTable("shipments", {
   status: text("status").notNull().default("Preparing"),
   trackingNumber: text("tracking_number"),
   dispatchDate: timestamp("dispatch_date", { withTimezone: true }),
+  estimatedDelivery: timestamp("estimated_delivery", { withTimezone: true }),
+  numberOfBoxes: integer("number_of_boxes"),
+  totalWeight: numeric("total_weight", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

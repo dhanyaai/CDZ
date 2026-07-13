@@ -599,6 +599,12 @@ export interface ShipmentDetail {
   trackingNumber?: string | null;
   /** @nullable */
   dispatchDate?: string | null;
+  /** @nullable */
+  estimatedDelivery?: string | null;
+  /** @nullable */
+  numberOfBoxes?: number | null;
+  /** @nullable */
+  totalWeight?: number | null;
   items: ShipmentItem[];
   createdAt: string;
 }
@@ -607,12 +613,18 @@ export interface ShipmentInput {
   salesOrderId: number;
   courierPartner: string;
   trackingNumber?: string;
+  estimatedDelivery?: string;
+  numberOfBoxes?: number;
+  totalWeight?: number;
 }
 
 export interface ShipmentUpdate {
   courierPartner?: string;
   trackingNumber?: string;
   dispatchDate?: string;
+  estimatedDelivery?: string;
+  numberOfBoxes?: number;
+  totalWeight?: number;
 }
 
 export interface Invoice {
@@ -643,6 +655,10 @@ export interface Payment {
   invoiceId: number;
   amount: number;
   type: string;
+  /** @nullable */
+  paymentMode?: string | null;
+  /** @nullable */
+  referenceNo?: string | null;
   paymentDate: string;
   /** @nullable */
   notes?: string | null;
@@ -653,6 +669,8 @@ export interface PaymentInput {
   invoiceId: number;
   amount: number;
   type: string;
+  paymentMode?: string;
+  referenceNo?: string;
   paymentDate: string;
   notes?: string;
 }
