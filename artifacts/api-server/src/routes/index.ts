@@ -27,6 +27,7 @@ import sampleOrdersRouter from "./sampleOrders";
 import fixedAssetsRouter from "./fixedAssets";
 import productionOrdersRouter from "./productionOrders";
 import orderProcessingFormsRouter from "./orderProcessingForms";
+import uploadsRouter from "./uploads";
 
 const router: IRouter = Router();
 
@@ -58,5 +59,6 @@ router.use(sampleOrdersRouter);
 router.use(fixedAssetsRouter);
 router.use(productionOrdersRouter);
 router.use(orderProcessingFormsRouter);
+router.use(uploadsRouter);
 
 export default router;

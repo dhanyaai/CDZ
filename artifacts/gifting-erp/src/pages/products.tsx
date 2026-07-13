@@ -60,6 +60,7 @@ export function Products() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [managerProductId, setManagerProductId] = useState<number | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
+  const [imageUploading, setImageUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: products, isLoading } = useListProducts({
@@ -131,16 +132,23 @@ export function Products() {
     setDialogOpen(true);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      form.setValue("imageUrl", dataUrl);
-      setImagePreview(dataUrl);
-    };
-    reader.readAsDataURL(file);
+    setImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await fetch("/api/v1/uploads/image", { method: "POST", body: fd });
+      if (!res.ok) throw new Error("Upload failed");
+      const { url } = await res.json();
+      form.setValue("imageUrl", url);
+      setImagePreview(url);
+    } catch {
+      toast({ title: "Image upload failed", variant: "destructive" });
+    } finally {
+      setImageUploading(false);
+    }
   };
 
   const clearImage = () => {
@@ -365,11 +373,12 @@ export function Products() {
                       size="sm"
                       className="w-full"
                       onClick={() => fileInputRef.current?.click()}
+                      disabled={imageUploading}
                     >
                       <Upload className="w-4 h-4 mr-2" />
-                      {imagePreview ? "Change Image" : "Upload Image"}
+                      {imageUploading ? "Uploading…" : imagePreview ? "Change Image" : "Upload Image"}
                     </Button>
-                    <p className="text-xs text-muted-foreground mt-1.5">JPG, PNG, WebP — any size</p>
+                    <p className="text-xs text-muted-foreground mt-1.5">JPG, PNG, WebP — stored in DigitalOcean Spaces</p>
                   </div>
                 </div>
               </div>

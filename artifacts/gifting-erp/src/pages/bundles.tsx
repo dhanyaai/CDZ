@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useListBundles, useCreateBundle, useUpdateBundle, useDeleteBundle, useSuggestBundle, useListProducts, getListBundlesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -9,10 +9,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search, Plus, Edit, Trash2, Wand2 } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Wand2, Upload, X, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const itemSchema = z.object({
@@ -24,15 +25,21 @@ const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
   occasion: z.string().optional(),
+  imageUrl: z.string().optional(),
   items: z.array(itemSchema).min(1, "At least one item is required")
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
+const EMPTY: FormValues = { name: "", description: "", occasion: "", imageUrl: "", items: [{ productId: 0, quantity: 1 }] };
+
 export function Bundles() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [imageUploading, setImageUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [budget, setBudget] = useState("");
   const [suggestOccasion, setSuggestOccasion] = useState("");
@@ -79,7 +86,7 @@ export function Bundles() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: "", description: "", occasion: "", items: [{ productId: 0, quantity: 1 }] }
+    defaultValues: EMPTY
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -89,7 +96,8 @@ export function Bundles() {
 
   const openNew = () => {
     setEditingId(null);
-    form.reset({ name: "", description: "", occasion: "", items: [{ productId: 0, quantity: 1 }] });
+    form.reset(EMPTY);
+    setImagePreview("");
     setDialogOpen(true);
   };
 
@@ -99,16 +107,44 @@ export function Bundles() {
       name: bundle.name,
       description: bundle.description || "",
       occasion: bundle.occasion || "",
+      imageUrl: bundle.imageUrl || "",
       items: bundle.items.map((i: any) => ({ productId: i.productId, quantity: i.quantity }))
     });
+    setImagePreview(bundle.imageUrl || "");
     setDialogOpen(true);
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await fetch("/api/v1/uploads/image", { method: "POST", body: fd });
+      if (!res.ok) throw new Error("Upload failed");
+      const { url } = await res.json();
+      form.setValue("imageUrl", url);
+      setImagePreview(url);
+    } catch {
+      toast({ title: "Image upload failed", variant: "destructive" });
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  const clearImage = () => {
+    form.setValue("imageUrl", "");
+    setImagePreview("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const onSubmit = (data: FormValues) => {
+    const payload = { ...data, imageUrl: data.imageUrl || undefined };
     if (editingId) {
-      updateBundle.mutate({ id: editingId, data });
+      updateBundle.mutate({ id: editingId, data: payload });
     } else {
-      createBundle.mutate({ data });
+      createBundle.mutate({ data: payload });
     }
   };
 
@@ -146,7 +182,7 @@ export function Bundles() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
+                  <TableHead>Bundle</TableHead>
                   <TableHead>Occasion</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead className="text-right">Total Price</TableHead>
@@ -157,11 +193,22 @@ export function Bundles() {
                 {isLoading ? (
                   <TableRow><TableCell colSpan={5}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
                 ) : filteredBundles.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center">No bundles found</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No bundles found</TableCell></TableRow>
                 ) : (
                   filteredBundles.map(bundle => (
                     <TableRow key={bundle.id}>
-                      <TableCell className="font-medium">{bundle.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-3">
+                          {(bundle as any).imageUrl ? (
+                            <img src={(bundle as any).imageUrl} alt={bundle.name} className="w-9 h-9 rounded-lg object-cover border border-border shrink-0" />
+                          ) : (
+                            <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                              <Package className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                          )}
+                          <span>{bundle.name}</span>
+                        </div>
+                      </TableCell>
                       <TableCell>{bundle.occasion || "-"}</TableCell>
                       <TableCell>{bundle.items?.length || 0} items</TableCell>
                       <TableCell className="text-right">₹{Number(bundle.totalPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
@@ -187,8 +234,8 @@ export function Bundles() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Target Budget ($)</label>
-                <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="e.g. 50" />
+                <label className="text-sm font-medium">Target Budget (₹)</label>
+                <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="e.g. 5000" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Occasion</label>
@@ -209,6 +256,51 @@ export function Bundles() {
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+
+              {/* Image upload */}
+              <div className="space-y-2">
+                <Label>Bundle Image</Label>
+                <div className="flex items-center gap-3">
+                  {imagePreview ? (
+                    <div className="relative w-20 h-20 shrink-0">
+                      <img src={imagePreview} alt="Preview" className="w-20 h-20 rounded-lg object-cover border border-border" />
+                      <button
+                        type="button"
+                        onClick={clearImage}
+                        className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center hover:opacity-80"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-20 h-20 rounded-lg bg-muted border-2 border-dashed border-border flex items-center justify-center shrink-0">
+                      <Package className="w-7 h-7 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={imageUploading}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {imageUploading ? "Uploading…" : imagePreview ? "Change Image" : "Upload Image"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-1.5">JPG, PNG, WebP — stored in DigitalOcean Spaces</p>
+                  </div>
+                </div>
+              </div>
+
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem><FormLabel>Bundle Name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
@@ -249,7 +341,7 @@ export function Bundles() {
                 ))}
               </div>
 
-              <Button type="submit" className="w-full" disabled={createBundle.isPending || updateBundle.isPending}>Save</Button>
+              <Button type="submit" className="w-full" disabled={createBundle.isPending || updateBundle.isPending}>Save Bundle</Button>
             </form>
           </Form>
         </DialogContent>
