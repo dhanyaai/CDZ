@@ -12,6 +12,12 @@ export const salesOrdersTable = pgTable("sales_orders", {
   clientId: integer("client_id").notNull().references(() => clientsTable.id, { onDelete: "restrict" }),
   status: text("status").notNull().default("Draft"),
   totalAmount: numeric("total_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  discountPct: numeric("discount_pct", { precision: 5, scale: 2 }).notNull().default("0"),
+  gstAmount: numeric("gst_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  grandTotal: numeric("grand_total", { precision: 14, scale: 2 }).notNull().default("0"),
+  paymentTerms: text("payment_terms"),
+  deliveryDate: timestamp("delivery_date", { withTimezone: true }),
+  poNumber: text("po_number"),
   occasion: text("occasion"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -35,6 +41,7 @@ export const deliveryAddressesTable = pgTable("delivery_addresses", {
   address: text("address").notNull(),
   city: text("city"),
   pincode: text("pincode"),
+  phone: text("phone"),
 });
 
 export const insertSalesOrderSchema = createInsertSchema(salesOrdersTable).omit({ id: true, createdAt: true, updatedAt: true, companyId: true });

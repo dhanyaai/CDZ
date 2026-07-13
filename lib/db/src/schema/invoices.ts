@@ -16,6 +16,8 @@ export const invoicesTable = pgTable("invoices", {
   grandTotal: numeric("grand_total", { precision: 14, scale: 2 }).notNull(),
   status: text("status").notNull().default("Draft"),
   dueDate: timestamp("due_date", { withTimezone: true }),
+  notes: text("notes"),
+  paymentTerms: text("payment_terms"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

@@ -16,21 +16,34 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2, Eye, ShoppingCart, TrendingUp, Clock, CheckCircle2, IndianRupee } from "lucide-react";
+import { Plus, Trash2, Eye, ShoppingCart, TrendingUp, Clock, CheckCircle2, IndianRupee, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 const itemSchema = z.object({
-  productId: z.coerce.number().min(1, "Product is required"),
+  productId: z.coerce.number().min(1, "Product required"),
   quantity: z.coerce.number().min(1),
   unitPrice: z.coerce.number().min(0),
 });
 
+const addressSchema = z.object({
+  name: z.string().min(1, "Recipient name required"),
+  address: z.string().min(1, "Address required"),
+  city: z.string().optional(),
+  pincode: z.string().optional(),
+  phone: z.string().optional(),
+});
+
 const formSchema = z.object({
-  clientId: z.coerce.number().min(1, "Client is required"),
+  clientId: z.coerce.number().min(1, "Client required"),
+  poNumber: z.string().optional(),
   occasion: z.string().optional(),
+  deliveryDate: z.string().optional(),
+  paymentTerms: z.string().optional(),
+  discountPct: z.coerce.number().min(0).max(100).default(0),
   notes: z.string().optional(),
-  items: z.array(itemSchema).min(1, "At least one item is required"),
+  items: z.array(itemSchema).min(1, "At least one item required"),
+  deliveryAddresses: z.array(addressSchema).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -45,6 +58,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 const STATUSES = Object.keys(STATUS_CONFIG);
+const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
 
 export function SalesOrders() {
   const [statusFilter, setStatusFilter] = useState("All");
@@ -71,19 +85,44 @@ export function SalesOrders() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { clientId: 0, occasion: "", notes: "", items: [{ productId: 0, quantity: 1, unitPrice: 0 }] },
+    defaultValues: {
+      clientId: 0, poNumber: "", occasion: "", deliveryDate: "",
+      paymentTerms: "", discountPct: 0, notes: "",
+      items: [{ productId: 0, quantity: 1, unitPrice: 0 }],
+      deliveryAddresses: [],
+    },
   });
 
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: "items" });
-  const onSubmit = (data: FormValues) => createOrder.mutate({ data });
-
-  const totalRevenue = (allOrders ?? []).reduce((s, o) => s + Number(o.totalAmount ?? 0), 0);
-  const activeCount = (allOrders ?? []).filter(o => !["Delivered","Draft"].includes(o.status)).length;
-  const deliveredCount = (allOrders ?? []).filter(o => o.status === "Delivered").length;
-  const draftCount = (allOrders ?? []).filter(o => o.status === "Draft").length;
+  const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({ control: form.control, name: "items" });
+  const { fields: addrFields, append: appendAddr, remove: removeAddr } = useFieldArray({ control: form.control, name: "deliveryAddresses" });
 
   const watchedItems = form.watch("items");
-  const orderTotal = watchedItems.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0);
+  const discountPct = form.watch("discountPct") || 0;
+  const subtotal = watchedItems.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0);
+  const afterDisc = subtotal * (1 - discountPct / 100);
+  const gst = afterDisc * 0.18;
+  const grandTotal = afterDisc + gst;
+
+  const onSubmit = (data: FormValues) => {
+    createOrder.mutate({
+      data: {
+        clientId: data.clientId,
+        poNumber: data.poNumber || undefined,
+        occasion: data.occasion || undefined,
+        deliveryDate: data.deliveryDate || undefined,
+        paymentTerms: data.paymentTerms || undefined,
+        discountPct: data.discountPct,
+        notes: data.notes || undefined,
+        items: data.items,
+        deliveryAddresses: data.deliveryAddresses?.length ? data.deliveryAddresses : undefined,
+      } as any,
+    });
+  };
+
+  const totalRevenue = (allOrders ?? []).reduce((s, o) => s + Number((o as any).grandTotal ?? o.totalAmount ?? 0), 0);
+  const activeCount = (allOrders ?? []).filter(o => !["Delivered", "Draft"].includes(o.status)).length;
+  const deliveredCount = (allOrders ?? []).filter(o => o.status === "Delivered").length;
+  const draftCount = (allOrders ?? []).filter(o => o.status === "Draft").length;
 
   return (
     <div className="space-y-6">
@@ -95,7 +134,6 @@ export function SalesOrders() {
         <Button onClick={() => setDialogOpen(true)}><Plus className="w-4 h-4 mr-2" />New Order</Button>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total Revenue", value: `₹${totalRevenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`, icon: IndianRupee, color: "text-primary" },
@@ -105,29 +143,20 @@ export function SalesOrders() {
         ].map(s => (
           <Card key={s.label} className="elev-1">
             <CardContent className="p-4 flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0 ${s.color}`}>
-                <s.icon className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xl font-bold">{s.value}</div>
-                <div className="text-xs text-muted-foreground">{s.label}</div>
-              </div>
+              <div className={`w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0 ${s.color}`}><s.icon className="w-5 h-5" /></div>
+              <div><div className="text-xl font-bold">{s.value}</div><div className="text-xs text-muted-foreground">{s.label}</div></div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Status stepper display */}
       <div className="hidden md:flex items-center gap-1 bg-muted/40 rounded-xl p-3 overflow-x-auto">
         {STATUSES.map((s, i) => {
           const count = (allOrders ?? []).filter(o => o.status === s).length;
-          const cfg = STATUS_CONFIG[s];
           return (
             <div key={s} className="flex items-center gap-1">
-              <button
-                onClick={() => setStatusFilter(s)}
-                className={`flex flex-col items-center px-3 py-2 rounded-lg text-xs font-medium transition-all min-w-[80px] ${statusFilter === s ? "bg-card shadow-sm ring-1 ring-border" : "hover:bg-card/60"}`}
-              >
+              <button onClick={() => setStatusFilter(s)}
+                className={`flex flex-col items-center px-3 py-2 rounded-lg text-xs font-medium transition-all min-w-[80px] ${statusFilter === s ? "bg-card shadow-sm ring-1 ring-border" : "hover:bg-card/60"}`}>
                 <span className={`text-lg font-bold ${count > 0 ? "text-foreground" : "text-muted-foreground/40"}`}>{count}</span>
                 <span className="text-muted-foreground">{s}</span>
               </button>
@@ -135,10 +164,8 @@ export function SalesOrders() {
             </div>
           );
         })}
-        <button
-          onClick={() => setStatusFilter("All")}
-          className={`flex flex-col items-center px-3 py-2 rounded-lg text-xs font-medium ml-2 transition-all min-w-[60px] ${statusFilter === "All" ? "bg-card shadow-sm ring-1 ring-border" : "hover:bg-card/60"}`}
-        >
+        <button onClick={() => setStatusFilter("All")}
+          className={`flex flex-col items-center px-3 py-2 rounded-lg text-xs font-medium ml-2 transition-all min-w-[60px] ${statusFilter === "All" ? "bg-card shadow-sm ring-1 ring-border" : "hover:bg-card/60"}`}>
           <span className="text-lg font-bold">{(allOrders ?? []).length}</span>
           <span className="text-muted-foreground">All</span>
         </button>
@@ -158,20 +185,22 @@ export function SalesOrders() {
               <TableHead>Order #</TableHead>
               <TableHead>Client</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>PO #</TableHead>
               <TableHead>Occasion</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead className="text-right">Total</TableHead>
+              <TableHead>Delivery Date</TableHead>
+              <TableHead>Payment Terms</TableHead>
+              <TableHead className="text-right">Grand Total</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array(4).fill(0).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
               ))
             ) : orders?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-12">
+                <TableCell colSpan={9} className="text-center py-12">
                   <ShoppingCart className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
                   <p className="text-muted-foreground">No sales orders found</p>
                   <Button variant="outline" size="sm" className="mt-3" onClick={() => setDialogOpen(true)}>
@@ -182,16 +211,21 @@ export function SalesOrders() {
             ) : (
               orders?.map(order => {
                 const cfg = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.Draft;
+                const o = order as any;
                 return (
                   <TableRow key={order.id} className="cursor-pointer hover:bg-muted/30" onClick={() => setLocation(`/sales-orders/${order.id}`)}>
                     <TableCell className="font-medium">{order.orderNumber}</TableCell>
                     <TableCell>{order.clientName}</TableCell>
-                    <TableCell>
-                      <Badge className={`border text-xs ${cfg.color}`}>{cfg.label}</Badge>
-                    </TableCell>
+                    <TableCell><Badge className={`border text-xs ${cfg.color}`}>{cfg.label}</Badge></TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{o.poNumber || "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{order.occasion || "—"}</TableCell>
-                    <TableCell>{format(new Date(order.createdAt), "MMM d, yyyy")}</TableCell>
-                    <TableCell className="text-right font-semibold">₹{Number(order.totalAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {o.deliveryDate ? format(new Date(o.deliveryDate), "MMM d, yyyy") : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{o.paymentTerms || "—"}</TableCell>
+                    <TableCell className="text-right font-semibold">
+                      ₹{Number(o.grandTotal ?? order.totalAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </TableCell>
                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" onClick={() => setLocation(`/sales-orders/${order.id}`)}>
                         <Eye className="w-4 h-4" />
@@ -209,7 +243,9 @@ export function SalesOrders() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Sales Order</DialogTitle></DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+
+              {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="clientId" render={({ field }) => (
                   <FormItem><FormLabel>Client *</FormLabel>
@@ -219,21 +255,46 @@ export function SalesOrders() {
                     </Select>
                   <FormMessage /></FormItem>
                 )} />
+                <FormField control={form.control} name="poNumber" render={({ field }) => (
+                  <FormItem><FormLabel>Customer PO Number</FormLabel><FormControl><Input placeholder="e.g. PO-2024-001" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="occasion" render={({ field }) => (
                   <FormItem><FormLabel>Occasion</FormLabel><FormControl><Input placeholder="Diwali, Anniversary..." {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
+                <FormField control={form.control} name="deliveryDate" render={({ field }) => (
+                  <FormItem><FormLabel>Delivery Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
               </div>
-              <FormField control={form.control} name="notes" render={({ field }) => (
-                <FormItem><FormLabel>Notes</FormLabel><FormControl><Textarea rows={2} {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="paymentTerms" render={({ field }) => (
+                  <FormItem><FormLabel>Payment Terms</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "__none__"}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select terms" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">— None —</SelectItem>
+                        {PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  <FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="discountPct" render={({ field }) => (
+                  <FormItem><FormLabel>Discount %</FormLabel><FormControl><Input type="number" min="0" max="100" step="0.5" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+
+              {/* Line Items */}
               <div className="space-y-3 border rounded-lg p-4">
                 <div className="flex justify-between items-center">
                   <h3 className="font-medium">Line Items</h3>
-                  <Button type="button" variant="outline" size="sm" onClick={() => append({ productId: 0, quantity: 1, unitPrice: 0 })}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => appendItem({ productId: 0, quantity: 1, unitPrice: 0 })}>
                     <Plus className="w-3 h-3 mr-1" />Add Item
                   </Button>
                 </div>
-                {fields.map((field, index) => (
+                {itemFields.map((field, index) => (
                   <div key={field.id} className="grid grid-cols-12 gap-2 items-end">
                     <FormField control={form.control} name={`items.${index}.productId`} render={({ field: sf }) => (
                       <FormItem className="col-span-6"><FormLabel className={index > 0 ? "sr-only" : ""}>Product</FormLabel>
@@ -257,18 +318,69 @@ export function SalesOrders() {
                         <FormControl><Input type="number" step="0.01" min="0" {...f} /></FormControl><FormMessage />
                       </FormItem>
                     )} />
-                    <Button type="button" variant="ghost" size="icon" className="col-span-1 text-destructive" onClick={() => remove(index)} disabled={fields.length === 1}>
+                    <Button type="button" variant="ghost" size="icon" className="col-span-1 text-destructive" onClick={() => removeItem(index)} disabled={itemFields.length === 1}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 ))}
-                {orderTotal > 0 && (
-                  <div className="flex justify-end text-sm font-semibold pt-2 border-t border-border">
-                    <span className="text-muted-foreground mr-2">Order Total:</span>
-                    <span>₹{orderTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+
+                {/* Financial summary */}
+                {subtotal > 0 && (
+                  <div className="bg-muted/40 rounded-lg p-3 space-y-1 text-sm mt-3">
+                    <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>₹{subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+                    {discountPct > 0 && <div className="flex justify-between text-amber-600"><span>Discount ({discountPct}%)</span><span>−₹{(subtotal - afterDisc).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>}
+                    <div className="flex justify-between text-muted-foreground"><span>GST 18%</span><span>₹{gst.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+                    <div className="flex justify-between font-bold text-base pt-1 border-t border-border"><span>Grand Total</span><span>₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
                   </div>
                 )}
               </div>
+
+              {/* Delivery Addresses */}
+              <div className="space-y-3 border rounded-lg p-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-medium flex items-center gap-2"><MapPin className="w-4 h-4" />Delivery Addresses</h3>
+                  <Button type="button" variant="outline" size="sm" onClick={() => appendAddr({ name: "", address: "", city: "", pincode: "", phone: "" })}>
+                    <Plus className="w-3 h-3 mr-1" />Add Address
+                  </Button>
+                </div>
+                {addrFields.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No delivery addresses added yet.</p>
+                )}
+                {addrFields.map((field, index) => (
+                  <div key={field.id} className="border rounded-md p-3 space-y-2 bg-muted/10">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-muted-foreground">Address {index + 1}</span>
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeAddr(index)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <FormField control={form.control} name={`deliveryAddresses.${index}.name`} render={({ field: f }) => (
+                        <FormItem><FormLabel className="text-xs">Recipient Name *</FormLabel><FormControl><Input className="h-8 text-sm" placeholder="Name" {...f} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name={`deliveryAddresses.${index}.phone`} render={({ field: f }) => (
+                        <FormItem><FormLabel className="text-xs">Phone</FormLabel><FormControl><Input className="h-8 text-sm" placeholder="+91 XXXXX XXXXX" {...f} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                    </div>
+                    <FormField control={form.control} name={`deliveryAddresses.${index}.address`} render={({ field: f }) => (
+                      <FormItem><FormLabel className="text-xs">Address *</FormLabel><FormControl><Textarea className="text-sm min-h-[60px]" placeholder="Street, building, floor..." {...f} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <div className="grid grid-cols-2 gap-2">
+                      <FormField control={form.control} name={`deliveryAddresses.${index}.city`} render={({ field: f }) => (
+                        <FormItem><FormLabel className="text-xs">City</FormLabel><FormControl><Input className="h-8 text-sm" placeholder="City" {...f} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name={`deliveryAddresses.${index}.pincode`} render={({ field: f }) => (
+                        <FormItem><FormLabel className="text-xs">Pincode</FormLabel><FormControl><Input className="h-8 text-sm" placeholder="400001" {...f} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <FormField control={form.control} name="notes" render={({ field }) => (
+                <FormItem><FormLabel>Notes</FormLabel><FormControl><Textarea rows={2} placeholder="Internal notes, special instructions..." {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+
               <div className="flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={createOrder.isPending}>Create Order</Button>

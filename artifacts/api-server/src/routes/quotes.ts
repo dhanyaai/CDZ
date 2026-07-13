@@ -4,41 +4,65 @@ import { db, quotesTable, quoteItemsTable, clientsTable } from "@workspace/db";
 
 const router = Router();
 
+function serializeQuote(r: typeof quotesTable.$inferSelect, clientName: string | null) {
+  return {
+    id: r.id,
+    quoteNumber: r.quoteNumber,
+    subject: r.subject ?? null,
+    clientId: r.clientId,
+    clientName: clientName ?? null,
+    opportunityId: r.opportunityId ?? null,
+    status: r.status,
+    validUntil: r.validUntil?.toISOString() ?? null,
+    paymentTerms: r.paymentTerms ?? null,
+    subtotal: Number(r.subtotal),
+    discountPct: Number(r.discountPct),
+    gstAmount: Number(r.gstAmount),
+    totalAmount: Number(r.totalAmount),
+    notes: r.notes ?? null,
+    termsAndConditions: r.termsAndConditions ?? null,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
 router.get("/v1/quotes", async (req, res): Promise<void> => {
   const rows = await db
-    .select({
-      id: quotesTable.id, quoteNumber: quotesTable.quoteNumber,
-      clientId: quotesTable.clientId, clientName: clientsTable.companyName,
-      opportunityId: quotesTable.opportunityId, status: quotesTable.status,
-      validUntil: quotesTable.validUntil, subtotal: quotesTable.subtotal,
-      discountPct: quotesTable.discountPct, gstAmount: quotesTable.gstAmount,
-      totalAmount: quotesTable.totalAmount, notes: quotesTable.notes,
-      createdAt: quotesTable.createdAt,
-    })
+    .select({ q: quotesTable, clientName: clientsTable.companyName })
     .from(quotesTable)
     .leftJoin(clientsTable, eq(quotesTable.clientId, clientsTable.id))
     .where(eq(quotesTable.companyId, req.companyId))
     .orderBy(quotesTable.createdAt);
-  res.json(rows.map((r) => ({
-    ...r,
-    subtotal: Number(r.subtotal), discountPct: Number(r.discountPct),
-    gstAmount: Number(r.gstAmount), totalAmount: Number(r.totalAmount),
-    validUntil: r.validUntil?.toISOString() ?? null,
-    createdAt: r.createdAt.toISOString(),
-  })));
+
+  res.json(rows.map((r) => serializeQuote(r.q, r.clientName)));
 });
 
 router.get("/v1/quotes/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const [quote] = await db.select().from(quotesTable).where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId)));
-  if (!quote) { res.status(404).json({ error: "Not found" }); return; }
+  const [row] = await db
+    .select({
+      q: quotesTable,
+      clientName: clientsTable.companyName,
+      contactPerson: clientsTable.contactPerson,
+      clientEmail: clientsTable.email,
+      clientPhone: clientsTable.phone,
+      clientGst: clientsTable.gstNumber,
+      billingAddress: clientsTable.billingAddress,
+    })
+    .from(quotesTable)
+    .leftJoin(clientsTable, eq(quotesTable.clientId, clientsTable.id))
+    .where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId)));
+
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+
   const items = await db.select().from(quoteItemsTable).where(eq(quoteItemsTable.quoteId, id));
+
   res.json({
-    ...quote,
-    subtotal: Number(quote.subtotal), discountPct: Number(quote.discountPct),
-    gstAmount: Number(quote.gstAmount), totalAmount: Number(quote.totalAmount),
-    validUntil: quote.validUntil?.toISOString() ?? null,
-    createdAt: quote.createdAt.toISOString(),
+    ...serializeQuote(row.q, row.clientName),
+    contactPerson: row.contactPerson ?? null,
+    clientEmail: row.clientEmail ?? null,
+    clientPhone: row.clientPhone ?? null,
+    clientGst: row.clientGst ?? null,
+    billingAddress: row.billingAddress ?? null,
     items: items.map((i) => ({
       ...i,
       unitPrice: Number(i.unitPrice),
@@ -50,7 +74,7 @@ router.get("/v1/quotes/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/quotes", async (req, res): Promise<void> => {
-  const { clientId, opportunityId, validUntil, discountPct, notes, items } = req.body ?? {};
+  const { clientId, opportunityId, validUntil, discountPct, notes, items, subject, paymentTerms, termsAndConditions } = req.body ?? {};
   if (!clientId || !Array.isArray(items) || items.length === 0) {
     res.status(400).json({ error: "clientId and items[] required" }); return;
   }
@@ -64,27 +88,33 @@ router.post("/v1/quotes", async (req, res): Promise<void> => {
   const gst = afterDisc * 0.18;
   const total = afterDisc + gst;
   const quoteNumber = `QT-${Date.now()}`;
+
   const quote = await db.transaction(async (tx) => {
     const [q] = await tx.insert(quotesTable).values({
-      companyId: req.companyId, quoteNumber, clientId, opportunityId,
+      companyId: req.companyId, quoteNumber, subject: subject ?? null,
+      clientId, opportunityId: opportunityId ?? null,
       validUntil: validUntil ? new Date(validUntil) : null,
+      paymentTerms: paymentTerms ?? null,
       subtotal: subtotal.toFixed(2), discountPct: disc.toFixed(2),
-      gstAmount: gst.toFixed(2), totalAmount: total.toFixed(2), notes,
+      gstAmount: gst.toFixed(2), totalAmount: total.toFixed(2),
+      notes: notes ?? null, termsAndConditions: termsAndConditions ?? null,
     }).returning();
+
     await tx.insert(quoteItemsTable).values(
       items.map((i: { description: string; quantity: number; unitPrice: number; productId?: number; imageUrl?: string }) => ({
-        quoteId: q.id,
-        productId: i.productId ?? null,
-        description: i.description,
-        quantity: i.quantity,
-        unitPrice: i.unitPrice.toString(),
-        lineTotal: (i.quantity * i.unitPrice).toString(),
-        imageUrl: i.imageUrl ?? null,
+        quoteId: q.id, productId: i.productId ?? null, description: i.description,
+        quantity: i.quantity, unitPrice: i.unitPrice.toString(),
+        lineTotal: (i.quantity * i.unitPrice).toString(), imageUrl: i.imageUrl ?? null,
       }))
     );
     return q;
   });
-  res.status(201).json({ ...quote, id: quote.id });
+
+  const [row] = await db.select({ q: quotesTable, clientName: clientsTable.companyName })
+    .from(quotesTable).leftJoin(clientsTable, eq(quotesTable.clientId, clientsTable.id))
+    .where(eq(quotesTable.id, quote.id));
+
+  res.status(201).json(serializeQuote(row.q, row.clientName));
 });
 
 router.patch("/v1/quotes/:id", async (req, res): Promise<void> => {
@@ -92,15 +122,34 @@ router.patch("/v1/quotes/:id", async (req, res): Promise<void> => {
   const updates: Record<string, unknown> = {};
   if (req.body.status) updates.status = req.body.status;
   if (req.body.notes !== undefined) updates.notes = req.body.notes;
-  const [q] = await db.update(quotesTable).set(updates).where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId))).returning();
+  if (req.body.paymentTerms !== undefined) updates.paymentTerms = req.body.paymentTerms;
+  if (req.body.validUntil !== undefined) updates.validUntil = req.body.validUntil ? new Date(req.body.validUntil) : null;
+  if (req.body.subject !== undefined) updates.subject = req.body.subject;
+  if (req.body.termsAndConditions !== undefined) updates.termsAndConditions = req.body.termsAndConditions;
+
+  const [q] = await db.update(quotesTable).set(updates)
+    .where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId))).returning();
   if (!q) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(q);
+
+  const [row] = await db.select({ q: quotesTable, clientName: clientsTable.companyName })
+    .from(quotesTable).leftJoin(clientsTable, eq(quotesTable.clientId, clientsTable.id))
+    .where(eq(quotesTable.id, id));
+  res.json(serializeQuote(row.q, row.clientName));
 });
 
 router.delete("/v1/quotes/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   await db.delete(quotesTable).where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId)));
   res.sendStatus(204);
+});
+
+router.post("/v1/quotes/:id/convert", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const [quote] = await db.select().from(quotesTable)
+    .where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId)));
+  if (!quote) { res.status(404).json({ error: "Quote not found" }); return; }
+  if (quote.status !== "accepted") { res.status(400).json({ error: "Quote must be accepted to convert" }); return; }
+  res.json({ message: "Conversion queued", quoteId: id });
 });
 
 export default router;
