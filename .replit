@@ -45,3 +45,12 @@ externalPort = 3003
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+DO_SPACES_BUCKET = "czd"
+DO_SPACES_REGION = "blr1"
+DO_SPACES_ENDPOINT = "https://blr1.digitaloceanspaces.com"
+DO_SPACES_CDN_ENDPOINT = "https://czd.blr1.digitaloceanspaces.com"
+DO_SPACES_ACCESS_KEY_ID = "DO00Y848K8FAXFRUK3L4"
