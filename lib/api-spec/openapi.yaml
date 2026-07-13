@@ -1679,12 +1679,24 @@ components:
         poNumber: { type: string }
         vendorId: { type: integer }
         vendorName: { type: string }
+        vendorContactPerson: { type: ["string", "null"] }
+        vendorEmail: { type: ["string", "null"] }
+        vendorPhone: { type: ["string", "null"] }
+        vendorGst: { type: ["string", "null"] }
+        vendorAddress: { type: ["string", "null"] }
+        vendorCity: { type: ["string", "null"] }
+        vendorState: { type: ["string", "null"] }
+        vendorPincode: { type: ["string", "null"] }
+        vendorPaymentTerms: { type: ["string", "null"] }
+        vendorLeadTimeDays: { type: ["integer", "null"] }
         salesOrderId: { type: ["integer", "null"] }
+        orderNumber: { type: ["string", "null"] }
         status: { type: string }
         totalAmount: { type: number }
         expectedDelivery: { type: ["string", "null"] }
         items: { type: array, items: { $ref: "#/components/schemas/PurchaseOrderItem" } }
         createdAt: { type: string }
+        updatedAt: { type: string }
 
     PurchaseOrderInput:
       type: object

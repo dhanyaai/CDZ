@@ -683,7 +683,18 @@ export const GetPurchaseOrderResponse = zod.object({
   "poNumber": zod.string(),
   "vendorId": zod.number(),
   "vendorName": zod.string(),
+  "vendorContactPerson": zod.string().nullish(),
+  "vendorEmail": zod.string().nullish(),
+  "vendorPhone": zod.string().nullish(),
+  "vendorGst": zod.string().nullish(),
+  "vendorAddress": zod.string().nullish(),
+  "vendorCity": zod.string().nullish(),
+  "vendorState": zod.string().nullish(),
+  "vendorPincode": zod.string().nullish(),
+  "vendorPaymentTerms": zod.string().nullish(),
+  "vendorLeadTimeDays": zod.number().nullish(),
   "salesOrderId": zod.number().nullish(),
+  "orderNumber": zod.string().nullish(),
   "status": zod.string(),
   "totalAmount": zod.number(),
   "expectedDelivery": zod.string().nullish(),
@@ -695,7 +706,8 @@ export const GetPurchaseOrderResponse = zod.object({
   "unitPrice": zod.number(),
   "receivedQty": zod.number().optional()
 })),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
 })
 
 

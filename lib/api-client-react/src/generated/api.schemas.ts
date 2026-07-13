@@ -411,13 +411,36 @@ export interface PurchaseOrderDetail {
   vendorId: number;
   vendorName: string;
   /** @nullable */
+  vendorContactPerson?: string | null;
+  /** @nullable */
+  vendorEmail?: string | null;
+  /** @nullable */
+  vendorPhone?: string | null;
+  /** @nullable */
+  vendorGst?: string | null;
+  /** @nullable */
+  vendorAddress?: string | null;
+  /** @nullable */
+  vendorCity?: string | null;
+  /** @nullable */
+  vendorState?: string | null;
+  /** @nullable */
+  vendorPincode?: string | null;
+  /** @nullable */
+  vendorPaymentTerms?: string | null;
+  /** @nullable */
+  vendorLeadTimeDays?: number | null;
+  /** @nullable */
   salesOrderId?: number | null;
+  /** @nullable */
+  orderNumber?: string | null;
   status: string;
   totalAmount: number;
   /** @nullable */
   expectedDelivery?: string | null;
   items: PurchaseOrderItem[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PurchaseOrderInput {
