@@ -11,4 +11,5 @@ export interface DeliveryAddressInput {
   address: string;
   city?: string;
   pincode?: string;
+  phone?: string;
 }

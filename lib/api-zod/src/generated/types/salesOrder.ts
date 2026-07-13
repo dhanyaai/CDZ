@@ -13,6 +13,15 @@ export interface SalesOrder {
   clientName: string;
   status: string;
   totalAmount: number;
+  discountPct: number;
+  gstAmount: number;
+  grandTotal: number;
+  /** @nullable */
+  paymentTerms?: string | null;
+  /** @nullable */
+  deliveryDate?: string | null;
+  /** @nullable */
+  poNumber?: string | null;
   /** @nullable */
   occasion?: string | null;
   /** @nullable */

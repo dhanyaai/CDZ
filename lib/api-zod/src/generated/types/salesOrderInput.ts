@@ -10,7 +10,11 @@ import type { SalesOrderItemInput } from './salesOrderItemInput';
 
 export interface SalesOrderInput {
   clientId: number;
+  poNumber?: string;
   occasion?: string;
+  deliveryDate?: string;
+  paymentTerms?: string;
+  discountPct?: number;
   notes?: string;
   items: SalesOrderItemInput[];
   deliveryAddresses?: DeliveryAddressInput[];

@@ -110,43 +110,83 @@ export function printInvoice(inv: {
 export function printSalesOrder(order: {
   orderNumber: string;
   clientName: string;
+  contactPerson?: string | null;
+  clientEmail?: string | null;
+  clientPhone?: string | null;
+  clientGst?: string | null;
+  billingAddress?: string | null;
   status: string;
   totalAmount: string | number;
-  createdAt: string;
+  discountPct?: string | number | null;
+  gstAmount?: string | number | null;
+  grandTotal?: string | number | null;
+  paymentTerms?: string | null;
+  deliveryDate?: string | null;
+  poNumber?: string | null;
   occasion?: string | null;
   notes?: string | null;
-  items?: Array<{ id: number; product?: { name: string } | null; productName?: string; quantity: number; unitPrice: string | number; totalPrice: string | number }>;
-  deliveryAddresses?: Array<{ id: number; recipientName: string; address: string; phone?: string | null }>;
+  createdAt: string;
+  items?: Array<{ id: number; product?: { name: string } | null; productName?: string; productImage?: string | null; quantity: number; unitPrice: string | number; totalPrice: string | number }>;
+  deliveryAddresses?: Array<{ id: number; name: string; address: string; city?: string | null; pincode?: string | null; phone?: string | null }>;
 }) {
   const items = order.items ?? [];
   const addresses = order.deliveryAddresses ?? [];
+  const subtotal = Number(order.totalAmount ?? 0);
+  const discountPct = Number(order.discountPct ?? 0);
+  const gstAmount = Number(order.gstAmount ?? 0);
+  const grandTotal = Number(order.grandTotal ?? subtotal + gstAmount);
+  const discountAmt = discountPct > 0 ? (subtotal / (1 - discountPct / 100)) * (discountPct / 100) : 0;
+
   const html = `
     <div class="doc-header">
-      <div><div class="brand">Customize Duniya</div><div class="brand-sub">Sales Order</div></div>
+      <div><div class="brand">Customize Duniya</div><div class="brand-sub">Sales Order Confirmation</div></div>
       <div class="doc-id">
         <h1>${order.orderNumber}</h1>
         <div class="date">${new Date(order.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}</div>
         <span class="${badgeClass(order.status)}">${order.status}</span>
       </div>
     </div>
+
     <div class="meta-grid">
       <div class="meta-section">
-        <h3>Customer</h3>
+        <h3>Bill To</h3>
         <div class="meta-row"><span class="lbl">Client</span><span class="val">${order.clientName}</span></div>
-        ${order.occasion ? `<div class="meta-row"><span class="lbl">Occasion</span><span class="val">${order.occasion}</span></div>` : ""}
+        ${order.contactPerson ? `<div class="meta-row"><span class="lbl">Contact</span><span class="val">${order.contactPerson}</span></div>` : ""}
+        ${order.clientEmail ? `<div class="meta-row"><span class="lbl">Email</span><span class="val">${order.clientEmail}</span></div>` : ""}
+        ${order.clientPhone ? `<div class="meta-row"><span class="lbl">Phone</span><span class="val">${order.clientPhone}</span></div>` : ""}
+        ${order.clientGst ? `<div class="meta-row"><span class="lbl">GSTIN</span><span class="val" style="font-family:monospace;font-size:11px;">${order.clientGst}</span></div>` : ""}
+        ${order.billingAddress ? `<div class="meta-row"><span class="lbl">Billing Addr.</span><span class="val" style="max-width:160px;text-align:right;">${order.billingAddress}</span></div>` : ""}
       </div>
       <div class="meta-section">
-        <h3>Order Info</h3>
-        <div class="meta-row"><span class="lbl">Total Amount</span><span class="val">₹${Number(order.totalAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+        <h3>Order Details</h3>
         <div class="meta-row"><span class="lbl">Order Date</span><span class="val">${new Date(order.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></div>
+        ${order.poNumber ? `<div class="meta-row"><span class="lbl">Customer PO#</span><span class="val">${order.poNumber}</span></div>` : ""}
+        ${order.deliveryDate ? `<div class="meta-row"><span class="lbl">Delivery Date</span><span class="val">${new Date(order.deliveryDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></div>` : ""}
+        ${order.paymentTerms ? `<div class="meta-row"><span class="lbl">Payment Terms</span><span class="val">${order.paymentTerms}</span></div>` : ""}
+        ${order.occasion ? `<div class="meta-row"><span class="lbl">Occasion</span><span class="val">${order.occasion}</span></div>` : ""}
       </div>
     </div>
+
     ${order.notes ? `<div class="note-box"><strong>Notes</strong>${order.notes}</div>` : ""}
+
     <div class="section-title">Line Items</div>
     <table>
-      <thead><tr><th>Product</th><th class="text-right">Qty</th><th class="text-right">Unit Price</th><th class="text-right">Total</th></tr></thead>
+      <thead>
+        <tr>
+          <th style="width:48px;"></th>
+          <th>Product</th>
+          <th class="text-right" style="width:60px;">Qty</th>
+          <th class="text-right" style="width:110px;">Unit Price</th>
+          <th class="text-right" style="width:120px;">Total</th>
+        </tr>
+      </thead>
       <tbody>
         ${items.map(item => `<tr>
+          <td style="padding:8px 12px;">
+            ${item.productImage
+              ? `<img src="${item.productImage}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;border:1px solid #e5e7eb;display:block;" />`
+              : `<div style="width:40px;height:40px;border-radius:6px;background:#ede9fe;display:flex;align-items:center;justify-content:center;font-size:18px;">🎁</div>`}
+          </td>
           <td class="font-bold">${item.product?.name ?? item.productName ?? "—"}</td>
           <td class="text-right">${item.quantity}</td>
           <td class="text-right">₹${Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
@@ -154,17 +194,28 @@ export function printSalesOrder(order: {
         </tr>`).join("")}
       </tbody>
     </table>
+
     <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
       <div class="totals-box">
-        <div class="total-row final"><span>Grand Total</span><span>₹${Number(order.totalAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+        <div class="total-row sub"><span>Subtotal</span><span>₹${subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+        ${discountPct > 0 ? `<div class="total-row discount"><span>Discount (${discountPct}%)</span><span>−₹${discountAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>` : ""}
+        <div class="total-row sub"><span>GST 18%</span><span>₹${gstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+        <div class="total-row final"><span>Grand Total</span><span>₹${grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
       </div>
     </div>
+
     ${addresses.length ? `
       <div class="section-title">Delivery Addresses</div>
       <div class="addresses">
-        ${addresses.map(a => `<div class="address-card"><strong>${a.recipientName}</strong><span>${a.address}</span>${a.phone ? `<br><span>${a.phone}</span>` : ""}</div>`).join("")}
+        ${addresses.map(a => `<div class="address-card">
+          <strong>${a.name}</strong>
+          ${a.phone ? `<span style="color:#6b7280;font-size:11px;display:block;margin-bottom:3px;">${a.phone}</span>` : ""}
+          <span>${a.address}</span>
+          ${(a.city || a.pincode) ? `<span style="display:block;color:#6b7280;">${[a.city, a.pincode].filter(Boolean).join(" — ")}</span>` : ""}
+        </div>`).join("")}
       </div>
     ` : ""}
+
     <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:16px;">Order Confirmation — Customize Duniya Corporate Gifting</p>
   `;
   openWin(order.orderNumber, html);

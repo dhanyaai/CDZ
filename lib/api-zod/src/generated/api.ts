@@ -500,6 +500,12 @@ export const ListSalesOrdersResponseItem = zod.object({
   "clientName": zod.string(),
   "status": zod.string(),
   "totalAmount": zod.number(),
+  "discountPct": zod.number(),
+  "gstAmount": zod.number(),
+  "grandTotal": zod.number(),
+  "paymentTerms": zod.string().nullish(),
+  "deliveryDate": zod.string().nullish(),
+  "poNumber": zod.string().nullish(),
   "occasion": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string()
@@ -509,7 +515,11 @@ export const ListSalesOrdersResponse = zod.array(ListSalesOrdersResponseItem)
 
 export const CreateSalesOrderBody = zod.object({
   "clientId": zod.number(),
+  "poNumber": zod.string().optional(),
   "occasion": zod.string().optional(),
+  "deliveryDate": zod.string().optional(),
+  "paymentTerms": zod.string().optional(),
+  "discountPct": zod.number().optional(),
   "notes": zod.string().optional(),
   "items": zod.array(zod.object({
   "productId": zod.number(),
@@ -520,7 +530,8 @@ export const CreateSalesOrderBody = zod.object({
   "name": zod.string(),
   "address": zod.string(),
   "city": zod.string().optional(),
-  "pincode": zod.string().optional()
+  "pincode": zod.string().optional(),
+  "phone": zod.string().optional()
 })).optional()
 })
 
@@ -534,14 +545,26 @@ export const GetSalesOrderResponse = zod.object({
   "orderNumber": zod.string(),
   "clientId": zod.number(),
   "clientName": zod.string(),
+  "contactPerson": zod.string().nullish(),
+  "clientEmail": zod.string().nullish(),
+  "clientPhone": zod.string().nullish(),
+  "clientGst": zod.string().nullish(),
+  "billingAddress": zod.string().nullish(),
   "status": zod.string(),
   "totalAmount": zod.number(),
+  "discountPct": zod.number(),
+  "gstAmount": zod.number(),
+  "grandTotal": zod.number(),
+  "paymentTerms": zod.string().nullish(),
+  "deliveryDate": zod.string().nullish(),
+  "poNumber": zod.string().nullish(),
   "occasion": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "items": zod.array(zod.object({
   "id": zod.number(),
   "productId": zod.number(),
   "productName": zod.string(),
+  "productImage": zod.string().nullish(),
   "quantity": zod.number(),
   "unitPrice": zod.number(),
   "totalPrice": zod.number()
@@ -551,7 +574,8 @@ export const GetSalesOrderResponse = zod.object({
   "name": zod.string(),
   "address": zod.string(),
   "city": zod.string().nullish(),
-  "pincode": zod.string().nullish()
+  "pincode": zod.string().nullish(),
+  "phone": zod.string().nullish()
 })),
   "createdAt": zod.string()
 })
@@ -563,7 +587,10 @@ export const UpdateSalesOrderParams = zod.object({
 
 export const UpdateSalesOrderBody = zod.object({
   "occasion": zod.string().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "paymentTerms": zod.string().optional(),
+  "deliveryDate": zod.string().optional(),
+  "poNumber": zod.string().optional()
 })
 
 export const UpdateSalesOrderResponse = zod.object({
@@ -573,6 +600,12 @@ export const UpdateSalesOrderResponse = zod.object({
   "clientName": zod.string(),
   "status": zod.string(),
   "totalAmount": zod.number(),
+  "discountPct": zod.number(),
+  "gstAmount": zod.number(),
+  "grandTotal": zod.number(),
+  "paymentTerms": zod.string().nullish(),
+  "deliveryDate": zod.string().nullish(),
+  "poNumber": zod.string().nullish(),
   "occasion": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string()
@@ -598,6 +631,12 @@ export const UpdateSalesOrderStatusResponse = zod.object({
   "clientName": zod.string(),
   "status": zod.string(),
   "totalAmount": zod.number(),
+  "discountPct": zod.number(),
+  "gstAmount": zod.number(),
+  "grandTotal": zod.number(),
+  "paymentTerms": zod.string().nullish(),
+  "deliveryDate": zod.string().nullish(),
+  "poNumber": zod.string().nullish(),
   "occasion": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string()

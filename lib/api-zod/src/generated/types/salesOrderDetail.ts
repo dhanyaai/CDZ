@@ -13,8 +13,27 @@ export interface SalesOrderDetail {
   orderNumber: string;
   clientId: number;
   clientName: string;
+  /** @nullable */
+  contactPerson?: string | null;
+  /** @nullable */
+  clientEmail?: string | null;
+  /** @nullable */
+  clientPhone?: string | null;
+  /** @nullable */
+  clientGst?: string | null;
+  /** @nullable */
+  billingAddress?: string | null;
   status: string;
   totalAmount: number;
+  discountPct: number;
+  gstAmount: number;
+  grandTotal: number;
+  /** @nullable */
+  paymentTerms?: string | null;
+  /** @nullable */
+  deliveryDate?: string | null;
+  /** @nullable */
+  poNumber?: string | null;
   /** @nullable */
   occasion?: string | null;
   /** @nullable */

@@ -1533,6 +1533,7 @@ components:
         id: { type: integer }
         productId: { type: integer }
         productName: { type: string }
+        productImage: { type: ["string", "null"] }
         quantity: { type: integer }
         unitPrice: { type: number }
         totalPrice: { type: number }
@@ -1554,6 +1555,7 @@ components:
         address: { type: string }
         city: { type: ["string", "null"] }
         pincode: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
 
     DeliveryAddressInput:
       type: object
@@ -1563,10 +1565,11 @@ components:
         address: { type: string }
         city: { type: string }
         pincode: { type: string }
+        phone: { type: string }
 
     SalesOrder:
       type: object
-      required: [id, orderNumber, clientId, clientName, status, totalAmount, createdAt]
+      required: [id, orderNumber, clientId, clientName, status, totalAmount, discountPct, gstAmount, grandTotal, createdAt]
       properties:
         id: { type: integer }
         orderNumber: { type: string }
@@ -1574,20 +1577,37 @@ components:
         clientName: { type: string }
         status: { type: string }
         totalAmount: { type: number }
+        discountPct: { type: number }
+        gstAmount: { type: number }
+        grandTotal: { type: number }
+        paymentTerms: { type: ["string", "null"] }
+        deliveryDate: { type: ["string", "null"] }
+        poNumber: { type: ["string", "null"] }
         occasion: { type: ["string", "null"] }
         notes: { type: ["string", "null"] }
         createdAt: { type: string }
 
     SalesOrderDetail:
       type: object
-      required: [id, orderNumber, clientId, clientName, status, totalAmount, items, deliveryAddresses, createdAt]
+      required: [id, orderNumber, clientId, clientName, status, totalAmount, discountPct, gstAmount, grandTotal, items, deliveryAddresses, createdAt]
       properties:
         id: { type: integer }
         orderNumber: { type: string }
         clientId: { type: integer }
         clientName: { type: string }
+        contactPerson: { type: ["string", "null"] }
+        clientEmail: { type: ["string", "null"] }
+        clientPhone: { type: ["string", "null"] }
+        clientGst: { type: ["string", "null"] }
+        billingAddress: { type: ["string", "null"] }
         status: { type: string }
         totalAmount: { type: number }
+        discountPct: { type: number }
+        gstAmount: { type: number }
+        grandTotal: { type: number }
+        paymentTerms: { type: ["string", "null"] }
+        deliveryDate: { type: ["string", "null"] }
+        poNumber: { type: ["string", "null"] }
         occasion: { type: ["string", "null"] }
         notes: { type: ["string", "null"] }
         items: { type: array, items: { $ref: "#/components/schemas/SalesOrderItem" } }
@@ -1599,7 +1619,11 @@ components:
       required: [clientId, items]
       properties:
         clientId: { type: integer }
+        poNumber: { type: string }
         occasion: { type: string }
+        deliveryDate: { type: string }
+        paymentTerms: { type: string }
+        discountPct: { type: number }
         notes: { type: string }
         items: { type: array, items: { $ref: "#/components/schemas/SalesOrderItemInput" } }
         deliveryAddresses: { type: array, items: { $ref: "#/components/schemas/DeliveryAddressInput" } }
@@ -1609,6 +1633,9 @@ components:
       properties:
         occasion: { type: string }
         notes: { type: string }
+        paymentTerms: { type: string }
+        deliveryDate: { type: string }
+        poNumber: { type: string }
 
     # ── Purchase Orders ──
     PurchaseOrderItem:

@@ -14,4 +14,6 @@ export interface DeliveryAddress {
   city?: string | null;
   /** @nullable */
   pincode?: string | null;
+  /** @nullable */
+  phone?: string | null;
 }

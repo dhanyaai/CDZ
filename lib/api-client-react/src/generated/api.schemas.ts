@@ -265,6 +265,8 @@ export interface SalesOrderItem {
   id: number;
   productId: number;
   productName: string;
+  /** @nullable */
+  productImage?: string | null;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
@@ -284,6 +286,8 @@ export interface DeliveryAddress {
   city?: string | null;
   /** @nullable */
   pincode?: string | null;
+  /** @nullable */
+  phone?: string | null;
 }
 
 export interface DeliveryAddressInput {
@@ -291,6 +295,7 @@ export interface DeliveryAddressInput {
   address: string;
   city?: string;
   pincode?: string;
+  phone?: string;
 }
 
 export interface SalesOrder {
@@ -300,6 +305,15 @@ export interface SalesOrder {
   clientName: string;
   status: string;
   totalAmount: number;
+  discountPct: number;
+  gstAmount: number;
+  grandTotal: number;
+  /** @nullable */
+  paymentTerms?: string | null;
+  /** @nullable */
+  deliveryDate?: string | null;
+  /** @nullable */
+  poNumber?: string | null;
   /** @nullable */
   occasion?: string | null;
   /** @nullable */
@@ -312,8 +326,27 @@ export interface SalesOrderDetail {
   orderNumber: string;
   clientId: number;
   clientName: string;
+  /** @nullable */
+  contactPerson?: string | null;
+  /** @nullable */
+  clientEmail?: string | null;
+  /** @nullable */
+  clientPhone?: string | null;
+  /** @nullable */
+  clientGst?: string | null;
+  /** @nullable */
+  billingAddress?: string | null;
   status: string;
   totalAmount: number;
+  discountPct: number;
+  gstAmount: number;
+  grandTotal: number;
+  /** @nullable */
+  paymentTerms?: string | null;
+  /** @nullable */
+  deliveryDate?: string | null;
+  /** @nullable */
+  poNumber?: string | null;
   /** @nullable */
   occasion?: string | null;
   /** @nullable */
@@ -325,7 +358,11 @@ export interface SalesOrderDetail {
 
 export interface SalesOrderInput {
   clientId: number;
+  poNumber?: string;
   occasion?: string;
+  deliveryDate?: string;
+  paymentTerms?: string;
+  discountPct?: number;
   notes?: string;
   items: SalesOrderItemInput[];
   deliveryAddresses?: DeliveryAddressInput[];
@@ -334,6 +371,9 @@ export interface SalesOrderInput {
 export interface SalesOrderUpdate {
   occasion?: string;
   notes?: string;
+  paymentTerms?: string;
+  deliveryDate?: string;
+  poNumber?: string;
 }
 
 export interface PurchaseOrderItem {

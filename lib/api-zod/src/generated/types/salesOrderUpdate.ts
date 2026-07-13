@@ -9,4 +9,7 @@
 export interface SalesOrderUpdate {
   occasion?: string;
   notes?: string;
+  paymentTerms?: string;
+  deliveryDate?: string;
+  poNumber?: string;
 }

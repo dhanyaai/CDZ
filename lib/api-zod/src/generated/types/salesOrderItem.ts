@@ -10,6 +10,8 @@ export interface SalesOrderItem {
   id: number;
   productId: number;
   productName: string;
+  /** @nullable */
+  productImage?: string | null;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
