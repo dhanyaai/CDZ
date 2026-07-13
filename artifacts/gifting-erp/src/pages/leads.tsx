@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, IndianRupee, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle } from "lucide-react";
+import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, IndianRupee, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, LayoutList, Columns3 } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type Lead = {
   id: number; title: string; clientId: number | null; companyName: string | null;
@@ -57,6 +58,7 @@ export function Leads() {
   const [selected, setSelected] = useState<Lead | null>(null);
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [form, setForm] = useState({ ...BLANK_FORM });
   const [editForm, setEditForm] = useState<Partial<Lead>>({});
   const [followUpForm, setFollowUpForm] = useState({ subject: "", dueDate: "", description: "" });
@@ -158,7 +160,7 @@ export function Leads() {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input placeholder="Search leads…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
@@ -170,9 +172,96 @@ export function Leads() {
             {sources.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        <div className="flex items-center border rounded-lg overflow-hidden shrink-0">
+          <button
+            className={`px-3 py-2 flex items-center gap-1.5 text-sm transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+            onClick={() => setViewMode("kanban")}
+            title="Kanban view"
+          >
+            <Columns3 className="w-4 h-4" />
+            <span className="hidden sm:inline">Kanban</span>
+          </button>
+          <button
+            className={`px-3 py-2 flex items-center gap-1.5 text-sm transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+            onClick={() => setViewMode("list")}
+            title="List view"
+          >
+            <LayoutList className="w-4 h-4" />
+            <span className="hidden sm:inline">List</span>
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      {viewMode === "list" && (
+        <div className="border rounded-xl overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="w-[260px]">Lead</TableHead>
+                <TableHead>Company</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Stage</TableHead>
+                <TableHead>Source</TableHead>
+                <TableHead className="text-right">Value (₹)</TableHead>
+                <TableHead>Owner</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No leads match your filters.</TableCell>
+                </TableRow>
+              )}
+              {filtered.map(lead => (
+                <TableRow
+                  key={lead.id}
+                  className="cursor-pointer hover:bg-muted/40 transition-colors"
+                  onClick={() => { setSelected(lead); setEditForm({ ...lead }); }}
+                >
+                  <TableCell className="font-medium max-w-[260px]">
+                    <div className="truncate">{lead.title}</div>
+                    {lead.email && <div className="text-xs text-muted-foreground truncate">{lead.email}</div>}
+                  </TableCell>
+                  <TableCell>
+                    {lead.companyName ? (
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        {lead.companyName}
+                      </div>
+                    ) : <span className="text-muted-foreground/50 text-xs">—</span>}
+                  </TableCell>
+                  <TableCell>
+                    {lead.contactName ? (
+                      <div className="text-sm">
+                        <div>{lead.contactName}</div>
+                        {lead.phone && <div className="text-xs text-muted-foreground">{lead.phone}</div>}
+                      </div>
+                    ) : <span className="text-muted-foreground/50 text-xs">—</span>}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={`border text-xs ${STAGE_COLORS[lead.status] ?? ""}`}>{STAGE_LABELS[lead.status] ?? lead.status}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {lead.source
+                      ? <span className={`px-2 py-0.5 rounded text-xs font-medium ${SOURCE_COLORS[lead.source] ?? "bg-muted text-muted-foreground"}`}>{lead.source}</span>
+                      : <span className="text-muted-foreground/50 text-xs">—</span>}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">
+                    {lead.estimatedValue != null ? `₹${lead.estimatedValue.toLocaleString("en-IN")}` : <span className="text-muted-foreground/50 font-normal text-xs">—</span>}
+                  </TableCell>
+                  <TableCell>
+                    {lead.ownerName
+                      ? <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">{initials(lead.ownerName)}</span><span className="text-sm truncate max-w-[80px]">{lead.ownerName}</span></div>
+                      : <span className="text-muted-foreground/50 text-xs">—</span>}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {viewMode === "kanban" && <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {STAGES.map(stage => {
           const items = byStatus(stage);
           const stageValue = items.reduce((s, l) => s + (l.estimatedValue ?? 0), 0);
@@ -203,7 +292,7 @@ export function Leads() {
             </div>
           );
         })}
-      </div>
+      </div>}
 
       {/* New lead dialog */}
       <Dialog open={dialog} onOpenChange={setDialog}>
