@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, MapPin, Calendar, FileText, Printer, Package, Building2, Phone, Mail, CreditCard, Truck } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, FileText, Printer, Package, Building2, Phone, Mail, CreditCard, Truck, ClipboardCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { printSalesOrder } from "@/lib/print-utils";
@@ -70,6 +70,11 @@ export function SalesOrderDetail({ id }: { id: number }) {
           <Button variant="outline" size="sm" onClick={() => printSalesOrder(order as any)}>
             <Printer className="w-4 h-4 mr-2" />Print
           </Button>
+          <Link href={`/order-processing/${id}`}>
+            <Button variant="outline" size="sm">
+              <ClipboardCheck className="w-4 h-4 mr-2" />Process Order
+            </Button>
+          </Link>
           <div className="flex items-center gap-3 bg-card p-3 rounded-lg border">
             <div className="text-sm font-medium">Status:</div>
             <Select value={order.status} onValueChange={(v) => updateStatus.mutate({ id, data: { status: v as any } })} disabled={updateStatus.isPending}>

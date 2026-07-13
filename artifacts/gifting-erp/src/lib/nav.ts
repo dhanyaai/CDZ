@@ -29,6 +29,7 @@ import {
   Landmark,
   BarChart3,
   FileImage,
+  ClipboardCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -69,6 +70,7 @@ export function getNavItems(opts: { production?: boolean } = {}): NavGroup[] {
       group: "Orders",
       items: [
         { label: "Sales Orders", href: "/sales-orders", icon: ShoppingCart },
+        { label: "Order Processing", href: "/order-processing", icon: ClipboardCheck },
         { label: "Sample Orders", href: "/sample-orders", icon: FlaskConical },
         { label: "Purchase Orders", href: "/purchase-orders", icon: ClipboardList },
         { label: "Vendors", href: "/vendors", icon: Briefcase },

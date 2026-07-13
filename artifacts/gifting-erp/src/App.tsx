@@ -45,6 +45,8 @@ import { FixedAssets } from "@/pages/fixed-assets";
 import { ProductionOrders } from "@/pages/production-orders";
 import { Reports } from "@/pages/reports";
 import { PdfExtractor } from "@/pages/pdf-extractor";
+import { OrderProcessingList } from "@/pages/order-processing-list";
+import { OrderProcessing } from "@/pages/order-processing";
 
 initAuth();
 initTheme();
@@ -62,6 +64,10 @@ function SalesOrderDetailWrapper() {
 function PurchaseOrderDetailWrapper() {
   const [, params] = useRoute("/purchase-orders/:id");
   return <PurchaseOrderDetail id={Number(params?.id)} />;
+}
+function OrderProcessingWrapper() {
+  const [, params] = useRoute("/order-processing/:salesOrderId");
+  return <OrderProcessing salesOrderId={Number(params?.salesOrderId)} />;
 }
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -94,6 +100,8 @@ function Router() {
         <Route path="/sample-orders" component={SampleOrders} />
         <Route path="/sales-orders" component={SalesOrders} />
         <Route path="/sales-orders/:id" component={SalesOrderDetailWrapper} />
+        <Route path="/order-processing" component={OrderProcessingList} />
+        <Route path="/order-processing/:salesOrderId" component={OrderProcessingWrapper} />
         <Route path="/purchase-orders" component={PurchaseOrders} />
         <Route path="/purchase-orders/:id" component={PurchaseOrderDetailWrapper} />
         <Route path="/inventory" component={Inventory} />
