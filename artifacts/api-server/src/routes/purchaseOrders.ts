@@ -6,7 +6,21 @@ const router = Router();
 
 async function getPODetail(id: number, companyId: number) {
   const [row] = await db
-    .select({ po: purchaseOrdersTable, vendorName: vendorsTable.name, orderNumber: salesOrdersTable.orderNumber })
+    .select({
+      po: purchaseOrdersTable,
+      vendorName: vendorsTable.name,
+      vendorContactPerson: vendorsTable.contactPerson,
+      vendorEmail: vendorsTable.email,
+      vendorPhone: vendorsTable.phone,
+      vendorGst: vendorsTable.gstNumber,
+      vendorAddress: vendorsTable.address,
+      vendorCity: vendorsTable.city,
+      vendorState: vendorsTable.state,
+      vendorPincode: vendorsTable.pincode,
+      vendorPaymentTerms: vendorsTable.paymentTerms,
+      vendorLeadTimeDays: vendorsTable.leadTimeDays,
+      orderNumber: salesOrdersTable.orderNumber,
+    })
     .from(purchaseOrdersTable)
     .leftJoin(vendorsTable, eq(purchaseOrdersTable.vendorId, vendorsTable.id))
     .leftJoin(salesOrdersTable, eq(purchaseOrdersTable.salesOrderId, salesOrdersTable.id))
@@ -25,7 +39,18 @@ async function getPODetail(id: number, companyId: number) {
     poNumber: row.po.poNumber,
     vendorId: row.po.vendorId,
     vendorName: row.vendorName ?? "Unknown",
+    vendorContactPerson: row.vendorContactPerson ?? null,
+    vendorEmail: row.vendorEmail ?? null,
+    vendorPhone: row.vendorPhone ?? null,
+    vendorGst: row.vendorGst ?? null,
+    vendorAddress: row.vendorAddress ?? null,
+    vendorCity: row.vendorCity ?? null,
+    vendorState: row.vendorState ?? null,
+    vendorPincode: row.vendorPincode ?? null,
+    vendorPaymentTerms: row.vendorPaymentTerms ?? null,
+    vendorLeadTimeDays: row.vendorLeadTimeDays ?? null,
     salesOrderId: row.po.salesOrderId ?? null,
+    orderNumber: row.orderNumber ?? null,
     status: row.po.status,
     totalAmount: Number(row.po.totalAmount),
     expectedDelivery: row.po.expectedDelivery?.toISOString() ?? null,
@@ -36,8 +61,10 @@ async function getPODetail(id: number, companyId: number) {
       quantity: r.item.quantity,
       unitPrice: Number(r.item.unitPrice),
       receivedQty: r.item.receivedQty,
+      lineTotal: Number(r.item.unitPrice) * r.item.quantity,
     })),
     createdAt: row.po.createdAt.toISOString(),
+    updatedAt: row.po.updatedAt.toISOString(),
   };
 }
 

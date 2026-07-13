@@ -224,63 +224,130 @@ export function printSalesOrder(order: {
 export function printPurchaseOrder(order: {
   poNumber: string;
   vendorName: string;
+  vendorContactPerson?: string | null;
+  vendorEmail?: string | null;
+  vendorPhone?: string | null;
+  vendorGst?: string | null;
+  vendorAddress?: string | null;
+  vendorCity?: string | null;
+  vendorState?: string | null;
+  vendorPincode?: string | null;
+  vendorPaymentTerms?: string | null;
+  vendorLeadTimeDays?: number | null;
   status: string;
   totalAmount: string | number;
   createdAt: string;
   expectedDelivery?: string | null;
   salesOrderId?: number | null;
-  items?: Array<{ id: number; product?: { name: string } | null; productName?: string; quantity: number; receivedQty?: number; receivedQuantity?: number; unitPrice: string | number; totalPrice: string | number }>;
+  orderNumber?: string | null;
+  items?: Array<{
+    id: number;
+    product?: { name: string } | null;
+    productName?: string;
+    quantity: number;
+    receivedQty?: number;
+    receivedQuantity?: number;
+    unitPrice: string | number;
+    lineTotal?: string | number;
+    totalPrice?: string | number;
+  }>;
 }) {
   const items = order.items ?? [];
+  const fmtDate = (d?: string | null) =>
+    d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+  const fmtAmt = (n: string | number) =>
+    `₹${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+
+  const vendorAddress = [order.vendorAddress, order.vendorCity, order.vendorState, order.vendorPincode]
+    .filter(Boolean).join(", ");
+
+  const itemsHtml = items.map(item => {
+    const qty = Number(item.quantity ?? 0);
+    const rcv = Number(item.receivedQty ?? item.receivedQuantity ?? 0);
+    const unitP = Number(item.unitPrice ?? 0);
+    const total = Number(item.lineTotal ?? item.totalPrice ?? unitP * qty);
+    const pct = qty > 0 ? Math.round((rcv / qty) * 100) : 0;
+    const name = item.product?.name ?? item.productName ?? "—";
+    return `<tr>
+      <td class="font-bold">${name}</td>
+      <td class="text-right">${fmtAmt(unitP)}</td>
+      <td class="text-center">${qty}</td>
+      <td class="text-center">
+        <span style="font-weight:600;">${rcv}</span> / ${qty}
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </td>
+      <td class="text-right font-bold">${fmtAmt(total)}</td>
+    </tr>`;
+  }).join("");
+
   const html = `
     <div class="doc-header">
-      <div><div class="brand">Customize Duniya</div><div class="brand-sub">Purchase Order</div></div>
+      <div>
+        <div class="brand">Customize Duniya</div>
+        <div class="brand-sub">Corporate Gifting ERP — Purchase Order</div>
+      </div>
       <div class="doc-id">
         <h1>${order.poNumber}</h1>
-        <div class="date">${new Date(order.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}</div>
+        <div class="date">PO Date: ${fmtDate(order.createdAt)}</div>
         <span class="${badgeClass(order.status)}">${order.status}</span>
       </div>
     </div>
+
     <div class="meta-grid">
       <div class="meta-section">
-        <h3>Vendor</h3>
-        <div class="meta-row"><span class="lbl">Supplier</span><span class="val">${order.vendorName}</span></div>
-        ${order.salesOrderId ? `<div class="meta-row"><span class="lbl">Related SO</span><span class="val">SO-${order.salesOrderId}</span></div>` : ""}
+        <h3>Vendor / Supplier</h3>
+        <div class="meta-row"><span class="lbl">Name</span><span class="val">${order.vendorName}</span></div>
+        ${order.vendorContactPerson ? `<div class="meta-row"><span class="lbl">Contact Person</span><span class="val">${order.vendorContactPerson}</span></div>` : ""}
+        ${order.vendorPhone ? `<div class="meta-row"><span class="lbl">Phone</span><span class="val">${order.vendorPhone}</span></div>` : ""}
+        ${order.vendorEmail ? `<div class="meta-row"><span class="lbl">Email</span><span class="val">${order.vendorEmail}</span></div>` : ""}
+        ${order.vendorGst ? `<div class="meta-row"><span class="lbl">GST No.</span><span class="val">${order.vendorGst}</span></div>` : ""}
+        ${vendorAddress ? `<div class="meta-row"><span class="lbl">Address</span><span class="val" style="text-align:right;max-width:180px;">${vendorAddress}</span></div>` : ""}
       </div>
       <div class="meta-section">
-        <h3>Delivery</h3>
-        <div class="meta-row"><span class="lbl">PO Date</span><span class="val">${new Date(order.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></div>
-        <div class="meta-row"><span class="lbl">Expected</span><span class="val">${order.expectedDelivery ? new Date(order.expectedDelivery).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</span></div>
-        <div class="meta-row"><span class="lbl">Total Amount</span><span class="val">₹${Number(order.totalAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+        <h3>Order Details</h3>
+        <div class="meta-row"><span class="lbl">PO Number</span><span class="val">${order.poNumber}</span></div>
+        <div class="meta-row"><span class="lbl">PO Date</span><span class="val">${fmtDate(order.createdAt)}</span></div>
+        <div class="meta-row"><span class="lbl">Expected Delivery</span><span class="val">${fmtDate(order.expectedDelivery)}</span></div>
+        <div class="meta-row"><span class="lbl">Status</span><span class="val">${order.status}</span></div>
+        ${order.orderNumber ? `<div class="meta-row"><span class="lbl">Linked Sales Order</span><span class="val">${order.orderNumber}</span></div>` : order.salesOrderId ? `<div class="meta-row"><span class="lbl">Linked Sales Order</span><span class="val">SO-${order.salesOrderId}</span></div>` : ""}
+        ${order.vendorPaymentTerms ? `<div class="meta-row"><span class="lbl">Payment Terms</span><span class="val">${order.vendorPaymentTerms}</span></div>` : ""}
+        ${order.vendorLeadTimeDays ? `<div class="meta-row"><span class="lbl">Lead Time</span><span class="val">${order.vendorLeadTimeDays} days</span></div>` : ""}
       </div>
     </div>
+
     <div class="section-title">Line Items</div>
     <table>
-      <thead><tr><th>Product</th><th class="text-right">Unit Price</th><th class="text-center">Ordered</th><th class="text-center">Received</th><th class="text-right">Total</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Product / Description</th>
+          <th class="text-right">Unit Price</th>
+          <th class="text-center">Qty Ordered</th>
+          <th class="text-center">Qty Received</th>
+          <th class="text-right">Line Total</th>
+        </tr>
+      </thead>
       <tbody>
-        ${items.map(item => {
-          const qty = Number(item.quantity ?? 0);
-          const rcv = Number(item.receivedQty ?? item.receivedQuantity ?? 0);
-          const pct = qty > 0 ? Math.round((rcv / qty) * 100) : 0;
-          return `<tr>
-            <td class="font-bold">${item.product?.name ?? item.productName ?? "—"}</td>
-            <td class="text-right">₹${Number(item.unitPrice).toFixed(2)}</td>
-            <td class="text-center">${qty}</td>
-            <td class="text-center">
-              ${rcv} / ${qty}
-              <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-            </td>
-            <td class="text-right font-bold">₹${Number(item.totalPrice ?? Number(item.unitPrice) * qty).toFixed(2)}</td>
-          </tr>`;
-        }).join("")}
+        ${itemsHtml || `<tr><td colspan="5" class="text-center" style="color:#9ca3af;padding:20px;">No items</td></tr>`}
       </tbody>
     </table>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
+
+    <div style="display:flex;justify-content:flex-end;margin-bottom:28px;">
       <div class="totals-box">
-        <div class="total-row final"><span>Grand Total</span><span>₹${Number(order.totalAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+        <div class="total-row sub"><span>Subtotal (${items.length} item${items.length !== 1 ? "s" : ""})</span><span>${fmtAmt(order.totalAmount)}</span></div>
+        <div class="total-row final"><span>Grand Total</span><span>${fmtAmt(order.totalAmount)}</span></div>
       </div>
     </div>
-    <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:16px;">Official Purchase Order — Customize Duniya Corporate Gifting</p>
+
+    <div style="margin-top:24px;padding:12px;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#6b7280;background:#f9fafb;">
+      <strong style="display:block;color:#374151;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Terms &amp; Conditions</strong>
+      Please supply the items as per the specifications listed above. Goods must be delivered by the expected delivery date.
+      ${order.vendorPaymentTerms ? `Payment terms: ${order.vendorPaymentTerms}.` : ""}
+      For queries, contact our procurement team.
+    </div>
+
+    <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:20px;">
+      Official Purchase Order — Customize Duniya Corporate Gifting &nbsp;|&nbsp; Printed ${printedOn()}
+    </p>
   `;
   openWin(order.poNumber, html);
 }
