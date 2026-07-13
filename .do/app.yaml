@@ -7,9 +7,11 @@ region: blr
 # Option A — DigitalOcean dashboard (recommended):
 #   1. Create a new App → choose "GitHub" as source → select your repo
 #   2. In the "Edit Plan" step, paste this file into the App Spec editor
-#      (or let auto-detect populate it, then paste the spec to override)
-#   3. Set secrets when prompted: SESSION_SECRET, DO_SPACES_ACCESS_KEY_ID,
-#      DO_SPACES_SECRET_KEY
+#   3. Set secrets when prompted: DATABASE_URL, SESSION_SECRET,
+#      DO_SPACES_ACCESS_KEY_ID, DO_SPACES_SECRET_KEY
+#
+#   DATABASE_URL format:
+#   postgresql://doadmin:<password>@<host>:25060/defaultdb?sslmode=require
 #
 # Option B — doctl CLI:
 #   doctl apps create --spec .do/app.yaml
@@ -17,15 +19,8 @@ region: blr
 #    or connect the source via `doctl apps update` after creation.)
 # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Managed PostgreSQL — auto-wired to the API via ${db.DATABASE_URL}
-# ---------------------------------------------------------------------------
-databases:
-  - name: db
-    engine: PG
-    version: "16"
-    num_nodes: 1
-    size: db-s-dev-database
+# NOTE: No managed database block here — the app uses an existing
+# DigitalOcean managed PostgreSQL cluster set via DATABASE_URL secret.
 
 # ---------------------------------------------------------------------------
 # API Service  (Express 5, port 8080, routes /api/*)
