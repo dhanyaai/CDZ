@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Save, Printer, Plus, Trash2, CheckSquare, Package, Truck, Palette, Wrench, FileText, Paperclip, Upload, X, File, FileImage, Download } from "lucide-react";
 import { format } from "date-fns";
 
@@ -37,6 +38,8 @@ interface Company {
   id: number;
   name: string;
 }
+
+interface Product { id: number; name: string; sku?: string; }
 
 interface ChecklistItem {
   productName: string;
@@ -403,6 +406,11 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ["companies"],
     queryFn: () => api<Company[]>("/v1/companies"),
+  });
+
+  const { data: products = [] } = useQuery<Product[]>({
+    queryKey: ["products"],
+    queryFn: () => api<Product[]>("/v1/products"),
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1168,7 +1176,20 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                     {formData.checklistItems.map((item, i) => (
                       <tr key={i} className="border-b last:border-0">
                         <td className="py-1.5 px-2">
-                          <Input value={item.productName} placeholder="Product name" className="h-8 text-sm" onChange={(e) => setChecklist(i, "productName", e.target.value)} />
+                          <Select
+                            value={item.productName || "__none__"}
+                            onValueChange={(v) => setChecklist(i, "productName", v === "__none__" ? "" : v)}
+                          >
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue placeholder="Select product…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— Select product —</SelectItem>
+                              {products.map((p) => (
+                                <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </td>
                         <td className="py-1.5 px-2">
                           <Input value={item.inhouseQty} placeholder="0" className="h-8 text-sm" onChange={(e) => setChecklist(i, "inhouseQty", e.target.value)} />
