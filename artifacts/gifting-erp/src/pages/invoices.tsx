@@ -22,6 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, FileText, CheckCircle2, Clock, AlertTriangle, IndianRupee, SendHorizontal, Printer, Package, Building2, CreditCard, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, isPast } from "date-fns";
+import { printTaxInvoice } from "@/lib/print-utils";
 
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
 
@@ -481,28 +482,7 @@ export function Invoices() {
                       </Button>
                     );
                   })}
-                  <Button variant="outline" size="sm" onClick={() => {
-                    const d = invoiceDetail;
-                    const lineRows = d.lines.map(l =>
-                      `<tr><td>${l.description}</td><td>${l.hsnCode || ""}</td><td>${l.quantity} ${l.uom}</td><td>₹${INR(l.unitPrice)}</td><td>₹${INR(l.lineTotal)}</td><td>${l.gstRate}%</td>${isIntraState ? `<td>₹${INR(l.cgst)}</td><td>₹${INR(l.sgst)}</td>` : `<td>₹${INR(l.igst)}</td>`}<td>₹${INR(l.lineGrandTotal)}</td></tr>`
-                    ).join("");
-                    const gstHeaders = isIntraState ? "<th>CGST</th><th>SGST</th>" : "<th>IGST</th>";
-                    const w = window.open("", "_blank");
-                    if (!w) return;
-                    w.document.write(`<!DOCTYPE html><html><head><title>Invoice ${d.invoiceNumber}</title>
-                      <style>body{font-family:Arial,sans-serif;margin:32px;color:#111}table{border-collapse:collapse;width:100%;margin-top:12px}th,td{border:1px solid #e5e7eb;padding:6px 10px;text-align:left}th{background:#f3f4f6}td:nth-child(n+3){text-align:right}.total{font-size:18px;font-weight:bold;margin-top:16px}</style>
-                    </head><body>
-                    <h2>Tax Invoice</h2>
-                    <p>${d.invoiceNumber} &nbsp;|&nbsp; Order: ${d.orderNumber || d.salesOrderId} &nbsp;|&nbsp; Date: ${format(new Date(d.createdAt), "MMM d, yyyy")}</p>
-                    <p><strong>Bill To:</strong> ${d.clientName}${d.clientGst ? ` &nbsp;|&nbsp; GSTIN: ${d.clientGst}` : ""}</p>
-                    ${d.billingAddress ? `<p style="font-size:12px;color:#6b7280">${d.billingAddress}</p>` : ""}
-                    <table><thead><tr><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Taxable</th><th>GST%</th>${gstHeaders}<th>Total</th></tr></thead>
-                    <tbody>${lineRows}</tbody></table>
-                    <p class="total">Subtotal: ₹${INR(d.totalAmount)} &nbsp;|&nbsp; ${isIntraState ? `CGST: ₹${INR(d.cgst)} + SGST: ₹${INR(d.sgst)}` : `IGST: ₹${INR(d.igst)}`} &nbsp;|&nbsp; <strong>Grand Total: ₹${INR(d.grandTotal)}</strong></p>
-                    ${d.amountInWords ? `<p style="font-style:italic;font-size:12px">${d.amountInWords}</p>` : ""}
-                    <script>window.onload=()=>window.print()</script></body></html>`);
-                    w.document.close();
-                  }}>
+                  <Button variant="outline" size="sm" onClick={() => printTaxInvoice(invoiceDetail)}>
                     <Printer className="w-4 h-4 mr-2" />Print
                   </Button>
                 </div>

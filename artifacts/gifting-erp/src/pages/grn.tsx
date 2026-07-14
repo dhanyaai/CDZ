@@ -65,12 +65,32 @@ export function Grn() {
             {data?.map((g) => (
               <TableRow key={g.id}>
                 <TableCell className="font-medium">{g.grnNumber}</TableCell>
-                <TableCell>PO-{g.purchaseOrderId}</TableCell>
+                <TableCell>{(pos?.find(p => p.id === g.purchaseOrderId) as any)?.poNumber ?? `PO-${g.purchaseOrderId}`}</TableCell>
                 <TableCell>{new Date(g.receivedDate).toLocaleDateString()}</TableCell>
                 <TableCell><Badge>{g.status}</Badge></TableCell>
                 <TableCell className="text-muted-foreground text-sm">{g.notes ?? "—"}</TableCell>
                 <TableCell>
-                  <Button size="icon" variant="ghost" title="Print GRN" onClick={() => printGrn({ grnNumber: g.grnNumber, purchaseOrderId: g.purchaseOrderId, receivedDate: g.receivedDate, status: g.status, notes: g.notes })}>
+                  <Button size="icon" variant="ghost" title="Print GRN" onClick={async () => {
+                    try {
+                      const detail = await api<{ id: number; grnNumber: string; purchaseOrderId: number; receivedDate: string; status: string; notes: string | null; items: { productId: number; quantityReceived: number; quantityRejected: number; remarks: string | null }[] }>(`/v1/grn/${g.id}`);
+                      const po = pos?.find((p) => p.id === g.purchaseOrderId);
+                      const resolvedItems = detail.items.map((item) => ({
+                        productName: products?.find((p) => p.id === item.productId)?.name ?? `Product #${item.productId}`,
+                        quantityReceived: item.quantityReceived,
+                        quantityRejected: item.quantityRejected,
+                        remarks: item.remarks,
+                      }));
+                      printGrn({
+                        grnNumber: g.grnNumber, purchaseOrderId: g.purchaseOrderId,
+                        poNumber: (po as any)?.poNumber ?? null,
+                        vendorName: po?.vendorName ?? null,
+                        receivedDate: g.receivedDate, status: g.status, notes: g.notes,
+                        items: resolvedItems,
+                      });
+                    } catch {
+                      toast({ title: "Failed to load GRN detail", variant: "destructive" });
+                    }
+                  }}>
                     <Printer className="w-4 h-4" />
                   </Button>
                 </TableCell>
@@ -86,7 +106,7 @@ export function Grn() {
           <div className="space-y-3">
             <Select value={poId} onValueChange={setPoId}>
               <SelectTrigger><SelectValue placeholder="Purchase Order *" /></SelectTrigger>
-              <SelectContent>{pos?.map((p) => <SelectItem key={p.id} value={String(p.id)}>PO-{p.id} · {p.vendorName}</SelectItem>)}</SelectContent>
+              <SelectContent position="popper" className="max-h-60">{pos?.map((p) => <SelectItem key={p.id} value={String(p.id)}>{(p as any).poNumber ?? `PO-${p.id}`} · {p.vendorName}</SelectItem>)}</SelectContent>
             </Select>
             <div className="space-y-2">
               <div className="text-sm font-medium">Items received</div>
@@ -95,7 +115,7 @@ export function Grn() {
                   <div className="col-span-5">
                     <Select value={l.productId ? String(l.productId) : ""} onValueChange={(v) => { const n = [...lines]; n[i].productId = Number(v); setLines(n); }}>
                       <SelectTrigger><SelectValue placeholder="Product" /></SelectTrigger>
-                      <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}</SelectContent>
+                      <SelectContent position="popper" className="max-h-60">{products?.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <Input className="col-span-2" type="number" placeholder="Received" value={l.quantityReceived || ""} onChange={(e) => { const n = [...lines]; n[i].quantityReceived = Number(e.target.value); setLines(n); }} />

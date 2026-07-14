@@ -20,6 +20,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Truck, Printer, CheckCircle, MapPin, Package, IndianRupee } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { printDeliveryChallan } from "@/lib/print-utils";
 
 const COURIERS = ["BlueDart", "Delhivery", "FedEx", "DHL", "DTDC", "Ekart", "Shadowfax", "Other"];
 
@@ -59,29 +60,6 @@ type ShipmentDetail = {
   createdAt: string;
 };
 
-function printDeliveryChallan(shipment: ShipmentDetail) {
-  const w = window.open("", "_blank");
-  if (!w) return;
-  const items = shipment.items.map(it =>
-    `<tr><td>${it.deliveryName}</td><td>${it.address}</td><td>${it.awbNumber || "—"}</td><td>${it.status}</td></tr>`
-  ).join("");
-  w.document.write(`<!DOCTYPE html><html><head><title>Delivery Challan – ${shipment.shipmentNumber}</title>
-    <style>body{font-family:Arial,sans-serif;margin:32px;color:#111}h2{margin-bottom:4px}table{border-collapse:collapse;width:100%}th{background:#f3f4f6;padding:6px 10px;border:1px solid #e5e7eb;text-align:left}td{padding:6px 10px;border:1px solid #e5e7eb}</style>
-    </head><body>
-    <h2>Delivery Challan</h2>
-    <p style="color:#6b7280;font-size:13px">Shipment #${shipment.shipmentNumber} &nbsp;|&nbsp; Order: ${shipment.orderNumber || shipment.salesOrderId}</p>
-    <table style="margin:12px 0"><tbody>
-      <tr><td style="width:160px;color:#6b7280">Courier</td><td>${shipment.courierPartner}</td></tr>
-      <tr><td style="color:#6b7280">Tracking #</td><td>${shipment.trackingNumber || "—"}</td></tr>
-      <tr><td style="color:#6b7280">Dispatch Date</td><td>${shipment.dispatchDate ? format(new Date(shipment.dispatchDate), "MMM d, yyyy") : "—"}</td></tr>
-      <tr><td style="color:#6b7280">Est. Delivery</td><td>${shipment.estimatedDelivery ? format(new Date(shipment.estimatedDelivery), "MMM d, yyyy") : "—"}</td></tr>
-      <tr><td style="color:#6b7280">Boxes / Weight</td><td>${shipment.numberOfBoxes ?? "—"} boxes / ${shipment.totalWeight != null ? shipment.totalWeight + " kg" : "—"}</td></tr>
-      <tr><td style="color:#6b7280">Freight Cost</td><td>${shipment.freightCost > 0 ? "₹" + shipment.freightCost.toLocaleString("en-IN") : "—"}</td></tr>
-    </tbody></table>
-    ${items ? `<h3>Delivery Addresses</h3><table><thead><tr><th>Name</th><th>Address</th><th>AWB #</th><th>Status</th></tr></thead><tbody>${items}</tbody></table>` : ""}
-    <script>window.onload=()=>window.print()</script></body></html>`);
-  w.document.close();
-}
 
 export function Shipments() {
   const [statusFilter, setStatusFilter] = useState("All");
