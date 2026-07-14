@@ -16,6 +16,7 @@ export const shipmentsTable = pgTable("shipments", {
   estimatedDelivery: timestamp("estimated_delivery", { withTimezone: true }),
   numberOfBoxes: integer("number_of_boxes"),
   totalWeight: numeric("total_weight", { precision: 10, scale: 2 }),
+  freightCost: numeric("freight_cost", { precision: 12, scale: 2 }).notNull().default("0"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [
@@ -30,6 +31,10 @@ export const shipmentItemsTable = pgTable("shipment_items", {
   address: text("address").notNull(),
   status: text("status").notNull().default("Pending"),
   trackingNumber: text("tracking_number"),
+  awbNumber: text("awb_number"),
+  podName: text("pod_name"),
+  podAt: timestamp("pod_at", { withTimezone: true }),
+  podFileKey: text("pod_file_key"),
 });
 
 export const insertShipmentSchema = createInsertSchema(shipmentsTable).omit({ id: true, createdAt: true, updatedAt: true, companyId: true });

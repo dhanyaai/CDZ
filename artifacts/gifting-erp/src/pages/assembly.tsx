@@ -1,22 +1,24 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { useListAssemblyJobs, useCreateAssemblyJob, useUpdateAssemblyJobStatus, useListSalesOrders, getListAssemblyJobsQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useListAssemblyJobs, useCreateAssemblyJob, useListSalesOrders, getListAssemblyJobsQueryKey } from "@workspace/api-client-react";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Play, CheckCircle, XCircle, Gauge } from "lucide-react";
+import { Plus, Play, CheckCircle, XCircle, Gauge, Package, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -28,10 +30,18 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+const STATUS_CONFIG: Record<string, { color: string; bg: string }> = {
+  Pending:      { color: "text-slate-600",  bg: "bg-slate-100 dark:bg-slate-800 dark:text-slate-300" },
+  "In Progress":{ color: "text-amber-700",  bg: "bg-amber-100 dark:bg-amber-900 dark:text-amber-300" },
+  Completed:    { color: "text-emerald-700",bg: "bg-emerald-100 dark:bg-emerald-900 dark:text-emerald-300" },
+  Rejected:     { color: "text-red-700",    bg: "bg-red-100 dark:bg-red-900 dark:text-red-300" },
+};
+
 export function Assembly() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [kitsDialogOpen, setKitsDialogOpen] = useState(false);
+  const [rejectConfirmId, setRejectConfirmId] = useState<number | null>(null);
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [kitsCompleted, setKitsCompleted] = useState("");
   const [updatingKits, setUpdatingKits] = useState(false);
@@ -53,33 +63,21 @@ export function Assembly() {
     },
   });
 
-  const updateStatus = useUpdateAssemblyJobStatus();
-
-  const handleStatusAdvance = (id: number, currentStatus: string) => {
-    let nextStatus: any = null;
-    if (currentStatus === "Pending") nextStatus = "In Progress";
-    else if (currentStatus === "In Progress") nextStatus = "Completed";
-
-    if (nextStatus) {
-      updateStatus.mutate({ id, data: { status: nextStatus } }, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAssemblyJobsQueryKey() });
-          toast({ title: `Status updated to ${nextStatus}` });
-        },
+  const advanceStatus = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      api(`/v1/assembly/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: getListAssemblyJobsQueryKey() });
+      toast({ title: `Status updated to ${vars.status}` });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Status change failed",
+        description: err?.message ?? "Unknown error",
+        variant: "destructive",
       });
-    }
-  };
-
-  const handleStatusReject = (id: number) => {
-    if (confirm("Are you sure you want to reject this job?")) {
-      updateStatus.mutate({ id, data: { status: "Rejected" } }, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAssemblyJobsQueryKey() });
-          toast({ title: "Job rejected", variant: "destructive" });
-        },
-      });
-    }
-  };
+    },
+  });
 
   const handleUpdateKits = async () => {
     if (!selectedJob || kitsCompleted === "") return;
@@ -110,30 +108,21 @@ export function Assembly() {
     createJob.mutate({ data: { ...data, notes: data.notes || undefined } });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Pending": return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
-      case "In Progress": return "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300";
-      case "Completed": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
-      case "Rejected": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
-      default: return "";
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Assembly Jobs</h1>
-        <Button onClick={() => setDialogOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Job</Button>
+        <div>
+          <h1 className="text-3xl font-bold">Assembly Jobs</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Kit assembly with automatic stock backflush on completion</p>
+        </div>
+        <Button onClick={() => setDialogOpen(true)}><Plus className="w-4 h-4 mr-2" />New Job</Button>
       </div>
 
       <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full">
         <TabsList className="flex flex-wrap h-auto">
-          <TabsTrigger value="All">All</TabsTrigger>
-          <TabsTrigger value="Pending">Pending</TabsTrigger>
-          <TabsTrigger value="In Progress">In Progress</TabsTrigger>
-          <TabsTrigger value="Completed">Completed</TabsTrigger>
-          <TabsTrigger value="Rejected">Rejected</TabsTrigger>
+          {["All", "Pending", "In Progress", "Completed", "Rejected"].map(s => (
+            <TabsTrigger key={s} value={s}>{s}</TabsTrigger>
+          ))}
         </TabsList>
       </Tabs>
 
@@ -144,23 +133,32 @@ export function Assembly() {
               <TableHead>Job #</TableHead>
               <TableHead>Sales Order</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-[220px]">Progress</TableHead>
+              <TableHead className="w-[200px]">Progress</TableHead>
               <TableHead>Notes</TableHead>
-              <TableHead>Date Created</TableHead>
+              <TableHead>Created</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={7}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+              Array(3).fill(0).map((_, i) => (
+                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+              ))
             ) : jobs?.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8">No assembly jobs found</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-12">
+                  <Package className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-muted-foreground">No assembly jobs found</p>
+                </TableCell>
+              </TableRow>
             ) : (
               jobs?.map((job) => {
+                const cfg = STATUS_CONFIG[job.status] ?? STATUS_CONFIG.Pending!;
                 const progress = job.totalKits > 0 ? (job.completedKits / job.totalKits) * 100 : 0;
+                const vt: string[] = (job as any).validTransitions ?? [];
                 return (
                   <TableRow key={job.id}>
-                    <TableCell className="font-medium">{job.jobNumber}</TableCell>
+                    <TableCell className="font-medium font-mono">{job.jobNumber}</TableCell>
                     <TableCell>
                       {job.salesOrderId ? (
                         <Link href={`/sales-orders/${job.salesOrderId}`} className="text-primary hover:underline">
@@ -169,9 +167,7 @@ export function Assembly() {
                       ) : "—"}
                     </TableCell>
                     <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(job.status)}`}>
-                        {job.status}
-                      </span>
+                      <Badge className={`text-xs font-medium border-0 ${cfg.bg}`}>{job.status}</Badge>
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1.5">
@@ -185,7 +181,7 @@ export function Assembly() {
                     <TableCell className="text-sm text-muted-foreground max-w-[160px] truncate" title={(job as any).notes ?? ""}>
                       {(job as any).notes || "—"}
                     </TableCell>
-                    <TableCell className="text-sm">{format(new Date(job.createdAt), "MMM d, yyyy")}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{format(new Date(job.createdAt), "MMM d, yyyy")}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-1 justify-end">
                         {job.status === "In Progress" && (
@@ -197,19 +193,30 @@ export function Assembly() {
                             <Gauge className="w-4 h-4" />
                           </Button>
                         )}
-                        {job.status === "Pending" && (
-                          <>
-                            <Button variant="outline" size="sm" onClick={() => handleStatusAdvance(job.id, job.status)}>
-                              <Play className="w-3 h-3 mr-1" /> Start
-                            </Button>
-                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleStatusReject(job.id)}>
-                              <XCircle className="w-4 h-4" />
-                            </Button>
-                          </>
+                        {vt.includes("In Progress") && (
+                          <Button variant="outline" size="sm" onClick={() => advanceStatus.mutate({ id: job.id, status: "In Progress" })}
+                            disabled={advanceStatus.isPending}>
+                            <Play className="w-3 h-3 mr-1" />Start
+                          </Button>
                         )}
-                        {job.status === "In Progress" && (
-                          <Button variant="outline" size="sm" className="border-green-200 text-green-700 hover:bg-green-50" onClick={() => handleStatusAdvance(job.id, job.status)}>
-                            <CheckCircle className="w-3 h-3 mr-1" /> Complete
+                        {vt.includes("Completed") && (
+                          <Button variant="outline" size="sm" className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
+                            onClick={() => advanceStatus.mutate({ id: job.id, status: "Completed" })}
+                            disabled={advanceStatus.isPending}>
+                            <CheckCircle className="w-3 h-3 mr-1" />Complete
+                            <span className="ml-1 text-xs opacity-60">(backflush)</span>
+                          </Button>
+                        )}
+                        {vt.includes("Rejected") && (
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"
+                            title="Reject job" onClick={() => setRejectConfirmId(job.id)}>
+                            <XCircle className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {vt.includes("Pending") && (
+                          <Button variant="outline" size="sm" onClick={() => advanceStatus.mutate({ id: job.id, status: "Pending" })}
+                            disabled={advanceStatus.isPending}>
+                            Re-open
                           </Button>
                         )}
                       </div>
@@ -222,11 +229,14 @@ export function Assembly() {
         </Table>
       </div>
 
+      {/* Create Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New Assembly Job</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>New Assembly Job</DialogTitle></DialogHeader>
+          <div className="flex items-start gap-2 rounded-md bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>Completing a job will <strong>backflush stock</strong> — component inventory will be atomically reduced.</span>
+          </div>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField control={form.control} name="salesOrderId" render={({ field }) => (
@@ -234,51 +244,41 @@ export function Assembly() {
                   <Select onValueChange={(v) => field.onChange(Number(v))} value={field.value ? field.value.toString() : ""}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select sales order" /></SelectTrigger></FormControl>
                     <SelectContent>
-                      {salesOrders?.map((so) => (
+                      {salesOrders?.filter(s => !["Draft", "Cancelled"].includes(s.status)).map((so) => (
                         <SelectItem key={so.id} value={so.id.toString()}>{so.orderNumber} ({so.clientName})</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 <FormMessage /></FormItem>
               )} />
-
               <FormField control={form.control} name="totalKits" render={({ field }) => (
                 <FormItem><FormLabel>Total Kits to Assemble *</FormLabel>
                   <FormControl><Input type="number" min="1" {...field} /></FormControl>
                 <FormMessage /></FormItem>
               )} />
-
               <FormField control={form.control} name="notes" render={({ field }) => (
                 <FormItem><FormLabel>Notes</FormLabel>
                   <FormControl><Textarea {...field} placeholder="Special instructions, packaging notes, etc." /></FormControl>
                 <FormMessage /></FormItem>
               )} />
-
               <Button type="submit" className="w-full" disabled={createJob.isPending}>Create Job</Button>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
 
+      {/* Update Kits Dialog */}
       <Dialog open={kitsDialogOpen} onOpenChange={setKitsDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Update Kits Completed — {selectedJob?.jobNumber}</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Update Kits Completed — {selectedJob?.jobNumber}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">
               Total kits: <span className="font-semibold text-foreground">{selectedJob?.totalKits}</span>
             </p>
             <div className="space-y-2">
               <label className="text-sm font-medium">Kits Completed</label>
-              <Input
-                type="number"
-                min="0"
-                max={selectedJob?.totalKits}
-                value={kitsCompleted}
-                onChange={(e) => setKitsCompleted(e.target.value)}
-                placeholder="Enter count"
-              />
+              <Input type="number" min="0" max={selectedJob?.totalKits}
+                value={kitsCompleted} onChange={(e) => setKitsCompleted(e.target.value)} placeholder="Enter count" />
             </div>
             {kitsCompleted !== "" && selectedJob && (
               <Progress value={(parseInt(kitsCompleted) / selectedJob.totalKits) * 100} className="h-2" />
@@ -290,6 +290,25 @@ export function Assembly() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reject Confirmation */}
+      <AlertDialog open={rejectConfirmId !== null} onOpenChange={o => !o && setRejectConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject Assembly Job?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark the job as Rejected. No stock changes will occur. You can reopen it later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (rejectConfirmId) { advanceStatus.mutate({ id: rejectConfirmId, status: "Rejected" }); setRejectConfirmId(null); } }}>
+              Reject
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

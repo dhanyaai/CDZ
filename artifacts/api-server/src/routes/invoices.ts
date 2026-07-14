@@ -1,17 +1,35 @@
 import { Router } from "express";
 import { eq, and, SQL, isNull } from "drizzle-orm";
-import { db, invoicesTable, paymentsTable, salesOrdersTable, salesOrderItemsTable, clientsTable, productsTable, companySettingsTable } from "@workspace/db";
+import {
+  db, invoicesTable, invoiceLinesTable, paymentsTable,
+  salesOrdersTable, salesOrderItemsTable, clientsTable,
+  productsTable, companySettingsTable,
+} from "@workspace/db";
 import { nextDocNumber } from "../lib/numberSequence";
+import { computeGst, amountInWords } from "../services/gstEngine";
+import { INVOICE_TRANSITIONS, validTransitions, assertTransition, StatusError } from "../services/stateMachine";
 
 const router = Router();
 
 async function getSettings(companyId: number) {
-  const [s] = await db.select({ invoicePrefix: companySettingsTable.invoicePrefix, fyStartMonth: companySettingsTable.fyStartMonth })
-    .from(companySettingsTable).where(eq(companySettingsTable.companyId, companyId));
-  return { prefix: s?.invoicePrefix ?? "INV", fyStartMonth: s?.fyStartMonth ?? 4 };
+  const [s] = await db.select({
+    invoicePrefix: companySettingsTable.invoicePrefix,
+    fyStartMonth: companySettingsTable.fyStartMonth,
+    stateCode: companySettingsTable.stateCode,
+  }).from(companySettingsTable).where(eq(companySettingsTable.companyId, companyId));
+  return {
+    prefix: s?.invoicePrefix ?? "INV",
+    fyStartMonth: s?.fyStartMonth ?? 4,
+    stateCode: s?.stateCode ?? null,
+  };
 }
 
-function serializeInvoice(inv: typeof invoicesTable.$inferSelect, clientName: string | null, orderNumber: string | null, clientGst?: string | null) {
+function serializeInvoice(
+  inv: typeof invoicesTable.$inferSelect,
+  clientName: string | null,
+  orderNumber: string | null,
+  clientGst?: string | null,
+) {
   return {
     id: inv.id,
     invoiceNumber: inv.invoiceNumber,
@@ -23,7 +41,14 @@ function serializeInvoice(inv: typeof invoicesTable.$inferSelect, clientName: st
     totalAmount: Number(inv.totalAmount),
     gstAmount: Number(inv.gstAmount),
     grandTotal: Number(inv.grandTotal),
+    cgst: Number(inv.cgst),
+    sgst: Number(inv.sgst),
+    igst: Number(inv.igst),
+    placeOfSupplyStateCode: inv.placeOfSupplyStateCode ?? null,
+    roundOff: Number(inv.roundOff),
+    amountInWords: inv.amountInWords ?? null,
     status: inv.status,
+    validTransitions: validTransitions(INVOICE_TRANSITIONS, inv.status),
     dueDate: inv.dueDate?.toISOString() ?? null,
     notes: inv.notes ?? null,
     paymentTerms: inv.paymentTerms ?? null,
@@ -38,7 +63,12 @@ router.get("/v1/invoices", async (req, res): Promise<void> => {
   if (clientId) conditions.push(eq(invoicesTable.clientId, parseInt(clientId, 10)));
 
   const rows = await db
-    .select({ invoice: invoicesTable, clientName: clientsTable.companyName, orderNumber: salesOrdersTable.orderNumber, clientGst: clientsTable.gstNumber })
+    .select({
+      invoice: invoicesTable,
+      clientName: clientsTable.companyName,
+      orderNumber: salesOrdersTable.orderNumber,
+      clientGst: clientsTable.gstNumber,
+    })
     .from(invoicesTable)
     .leftJoin(clientsTable, eq(invoicesTable.clientId, clientsTable.id))
     .leftJoin(salesOrdersTable, eq(invoicesTable.salesOrderId, salesOrdersTable.id))
@@ -49,9 +79,9 @@ router.get("/v1/invoices", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/invoices", async (req, res): Promise<void> => {
-  const { salesOrderId, gstPercent, dueDate, notes, paymentTerms } = req.body ?? {};
-  if (!salesOrderId || gstPercent == null) {
-    res.status(400).json({ error: "salesOrderId and gstPercent are required" }); return;
+  const { salesOrderId, dueDate, notes, paymentTerms } = req.body ?? {};
+  if (!salesOrderId) {
+    res.status(400).json({ error: "salesOrderId is required" }); return;
   }
 
   const [order] = await db
@@ -60,32 +90,99 @@ router.post("/v1/invoices", async (req, res): Promise<void> => {
     .where(and(eq(salesOrdersTable.id, salesOrderId), eq(salesOrdersTable.companyId, req.companyId)));
   if (!order) { res.status(404).json({ error: "Sales order not found" }); return; }
 
-  const totalAmount = Number(order.order.grandTotal ?? order.order.totalAmount);
-  const gstAmount = totalAmount * (gstPercent / 100);
-  const grandTotal = totalAmount + gstAmount;
+  const [client] = await db
+    .select({ stateCode: clientsTable.stateCode })
+    .from(clientsTable)
+    .where(eq(clientsTable.id, order.clientId));
 
-  const { prefix, fyStartMonth } = await getSettings(req.companyId);
+  const soItems = await db
+    .select({ item: salesOrderItemsTable, product: productsTable })
+    .from(salesOrderItemsTable)
+    .leftJoin(productsTable, eq(salesOrderItemsTable.productId, productsTable.id))
+    .where(eq(salesOrderItemsTable.salesOrderId, salesOrderId));
+
+  const { prefix, fyStartMonth, stateCode: companyStateCode } = await getSettings(req.companyId);
+  const clientStateCode = client?.stateCode ?? null;
 
   const invoice = await db.transaction(async (tx) => {
     const invoiceNumber = await nextDocNumber(tx, req.companyId, "INV", prefix, fyStartMonth);
+
+    let totalAmount = 0;
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalIgst = 0;
+
+    const lineValues = soItems.map(({ item, product }) => {
+      const qty = item.quantity;
+      const unitPrice = Number(item.unitPrice);
+      const lineTotal = qty * unitPrice;
+      const gstRate = Number(product?.gstRate ?? 18);
+      const gst = computeGst(companyStateCode, clientStateCode, lineTotal, gstRate);
+
+      totalAmount += lineTotal;
+      totalCgst += Number(gst.cgst);
+      totalSgst += Number(gst.sgst);
+      totalIgst += Number(gst.igst);
+
+      return {
+        invoiceId: 0,
+        productId: item.productId,
+        description: product?.name ?? "Item",
+        hsnCode: product?.hsnCode ?? null,
+        uom: product?.uom ?? "PCS",
+        quantity: String(qty),
+        unitPrice: String(unitPrice),
+        lineTotal: String(lineTotal),
+        gstRate: String(gstRate),
+        cgst: gst.cgst,
+        sgst: gst.sgst,
+        igst: gst.igst,
+        lineTaxTotal: gst.taxTotal,
+        lineGrandTotal: String((lineTotal + Number(gst.taxTotal)).toFixed(2)),
+      };
+    });
+
+    const gstAmount = totalCgst + totalSgst + totalIgst;
+    const rawGrand = totalAmount + gstAmount;
+    const roundOff = Math.round(rawGrand) - rawGrand;
+    const grandTotal = rawGrand + roundOff;
+
     const [inv] = await tx.insert(invoicesTable).values({
       companyId: req.companyId,
       invoiceNumber,
       salesOrderId,
       clientId: order.clientId,
-      totalAmount: String(totalAmount),
-      gstAmount: String(gstAmount),
-      grandTotal: String(grandTotal),
+      totalAmount: String(totalAmount.toFixed(2)),
+      gstAmount: String(gstAmount.toFixed(2)),
+      grandTotal: String(grandTotal.toFixed(2)),
+      cgst: String(totalCgst.toFixed(2)),
+      sgst: String(totalSgst.toFixed(2)),
+      igst: String(totalIgst.toFixed(2)),
+      placeOfSupplyStateCode: clientStateCode,
+      roundOff: String(roundOff.toFixed(2)),
+      amountInWords: amountInWords(grandTotal),
       status: "Draft",
       dueDate: dueDate ? new Date(dueDate) : null,
       notes: notes ?? null,
       paymentTerms: paymentTerms ?? null,
     }).returning();
+
+    if (lineValues.length > 0) {
+      await tx.insert(invoiceLinesTable).values(
+        lineValues.map((l) => ({ ...l, invoiceId: inv.id }))
+      );
+    }
+
     return inv;
   });
 
   const [row] = await db
-    .select({ invoice: invoicesTable, clientName: clientsTable.companyName, orderNumber: salesOrdersTable.orderNumber, clientGst: clientsTable.gstNumber })
+    .select({
+      invoice: invoicesTable,
+      clientName: clientsTable.companyName,
+      orderNumber: salesOrdersTable.orderNumber,
+      clientGst: clientsTable.gstNumber,
+    })
     .from(invoicesTable)
     .leftJoin(clientsTable, eq(invoicesTable.clientId, clientsTable.id))
     .leftJoin(salesOrdersTable, eq(invoicesTable.salesOrderId, salesOrdersTable.id))
@@ -97,7 +194,14 @@ router.post("/v1/invoices", async (req, res): Promise<void> => {
 router.get("/v1/invoices/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const [row] = await db
-    .select({ invoice: invoicesTable, clientName: clientsTable.companyName, orderNumber: salesOrdersTable.orderNumber, clientGst: clientsTable.gstNumber, contactPerson: clientsTable.contactPerson, billingAddress: clientsTable.billingAddress })
+    .select({
+      invoice: invoicesTable,
+      clientName: clientsTable.companyName,
+      orderNumber: salesOrdersTable.orderNumber,
+      clientGst: clientsTable.gstNumber,
+      contactPerson: clientsTable.contactPerson,
+      billingAddress: clientsTable.billingAddress,
+    })
     .from(invoicesTable)
     .leftJoin(clientsTable, eq(invoicesTable.clientId, clientsTable.id))
     .leftJoin(salesOrdersTable, eq(invoicesTable.salesOrderId, salesOrdersTable.id))
@@ -105,11 +209,10 @@ router.get("/v1/invoices/:id", async (req, res): Promise<void> => {
 
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
 
-  const items = await db
-    .select({ item: salesOrderItemsTable, product: productsTable })
-    .from(salesOrderItemsTable)
-    .leftJoin(productsTable, eq(salesOrderItemsTable.productId, productsTable.id))
-    .where(eq(salesOrderItemsTable.salesOrderId, row.invoice.salesOrderId));
+  const lines = await db
+    .select()
+    .from(invoiceLinesTable)
+    .where(eq(invoiceLinesTable.invoiceId, id));
 
   const payments = await db.select().from(paymentsTable)
     .where(and(eq(paymentsTable.invoiceId, id), eq(paymentsTable.companyId, req.companyId)))
@@ -119,21 +222,26 @@ router.get("/v1/invoices/:id", async (req, res): Promise<void> => {
     ...serializeInvoice(row.invoice, row.clientName, row.orderNumber, row.clientGst),
     contactPerson: row.contactPerson ?? null,
     billingAddress: row.billingAddress ?? null,
-    items: items.map((r) => ({
-      id: r.item.id,
-      productId: r.item.productId,
-      productName: r.product?.name ?? "Unknown",
-      productImage: r.product?.imageUrl ?? null,
-      hsnCode: r.product?.hsnCode ?? null,
-      gstRate: r.product?.gstRate ?? "18",
-      uom: r.product?.uom ?? "PCS",
-      quantity: r.item.quantity,
-      unitPrice: Number(r.item.unitPrice),
-      totalPrice: r.item.quantity * Number(r.item.unitPrice),
+    lines: lines.map((l) => ({
+      id: l.id,
+      productId: l.productId ?? null,
+      description: l.description,
+      hsnCode: l.hsnCode ?? null,
+      uom: l.uom,
+      quantity: Number(l.quantity),
+      unitPrice: Number(l.unitPrice),
+      lineTotal: Number(l.lineTotal),
+      gstRate: Number(l.gstRate),
+      cgst: Number(l.cgst),
+      sgst: Number(l.sgst),
+      igst: Number(l.igst),
+      lineTaxTotal: Number(l.lineTaxTotal),
+      lineGrandTotal: Number(l.lineGrandTotal),
     })),
     payments: payments.map((p) => ({
       id: p.id, amount: Number(p.amount),
-      type: p.type, paymentDate: p.paymentDate.toISOString(), notes: p.notes ?? null,
+      type: p.type, paymentMode: p.paymentMode ?? null, referenceNo: p.referenceNo ?? null,
+      paymentDate: p.paymentDate.toISOString(), notes: p.notes ?? null,
     })),
   });
 });
@@ -151,11 +259,52 @@ router.patch("/v1/invoices/:id", async (req, res): Promise<void> => {
   if (!inv) { res.status(404).json({ error: "Invoice not found" }); return; }
 
   const [row] = await db
-    .select({ invoice: invoicesTable, clientName: clientsTable.companyName, orderNumber: salesOrdersTable.orderNumber, clientGst: clientsTable.gstNumber })
+    .select({
+      invoice: invoicesTable,
+      clientName: clientsTable.companyName,
+      orderNumber: salesOrdersTable.orderNumber,
+      clientGst: clientsTable.gstNumber,
+    })
     .from(invoicesTable)
     .leftJoin(clientsTable, eq(invoicesTable.clientId, clientsTable.id))
     .leftJoin(salesOrdersTable, eq(invoicesTable.salesOrderId, salesOrdersTable.id))
     .where(eq(invoicesTable.id, id));
+
+  res.json(serializeInvoice(row.invoice, row.clientName, row.orderNumber, row.clientGst));
+});
+
+router.patch("/v1/invoices/:id/status", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const { status } = req.body ?? {};
+  if (!status) { res.status(400).json({ error: "status is required" }); return; }
+
+  const [inv] = await db.select().from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, req.companyId)));
+  if (!inv) { res.status(404).json({ error: "Invoice not found" }); return; }
+
+  try {
+    assertTransition(INVOICE_TRANSITIONS, inv.status, status, "Invoice");
+  } catch (err) {
+    if (err instanceof StatusError) {
+      res.status(err.status).json({ error: err.message }); return;
+    }
+    throw err;
+  }
+
+  const [updated] = await db.update(invoicesTable).set({ status })
+    .where(eq(invoicesTable.id, id)).returning();
+
+  const [row] = await db
+    .select({
+      invoice: invoicesTable,
+      clientName: clientsTable.companyName,
+      orderNumber: salesOrdersTable.orderNumber,
+      clientGst: clientsTable.gstNumber,
+    })
+    .from(invoicesTable)
+    .leftJoin(clientsTable, eq(invoicesTable.clientId, clientsTable.id))
+    .leftJoin(salesOrdersTable, eq(invoicesTable.salesOrderId, salesOrdersTable.id))
+    .where(eq(invoicesTable.id, updated.id));
 
   res.json(serializeInvoice(row.invoice, row.clientName, row.orderNumber, row.clientGst));
 });
@@ -200,13 +349,9 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
     const grandTotal = Number(invoice.grandTotal);
 
     let newStatus = invoice.status;
-    if (totalPaid >= grandTotal) {
-      newStatus = "Paid";
-    } else if (totalPaid > 0) {
-      newStatus = "Partially Paid";
-    } else if (invoice.status === "Draft") {
-      newStatus = "Issued";
-    }
+    if (totalPaid >= grandTotal) newStatus = "Paid";
+    else if (totalPaid > 0) newStatus = "Partially Paid";
+    else if (invoice.status === "Draft") newStatus = "Issued";
 
     if (newStatus !== invoice.status) {
       await tx.update(invoicesTable).set({ status: newStatus }).where(eq(invoicesTable.id, invoiceId));
@@ -221,6 +366,19 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
     paymentDate: payment.paymentDate.toISOString(),
     notes: payment.notes ?? null, createdAt: payment.createdAt.toISOString(),
   });
+});
+
+router.delete("/v1/invoices/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const [inv] = await db.select().from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, req.companyId)));
+  if (!inv) { res.status(404).json({ error: "Invoice not found" }); return; }
+  if (!["Draft", "Cancelled"].includes(inv.status)) {
+    res.status(400).json({ error: "Only Draft or Cancelled invoices can be deleted" }); return;
+  }
+  await db.update(invoicesTable).set({ deletedAt: new Date() })
+    .where(eq(invoicesTable.id, id));
+  res.status(204).send();
 });
 
 export default router;

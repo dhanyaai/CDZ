@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { salesOrdersTable } from "./salesOrders";
 import { clientsTable } from "./clients";
 import { companiesTable } from "./companies";
+import { productsTable } from "./products";
 
 export const invoicesTable = pgTable("invoices", {
   id: serial("id").primaryKey(),
@@ -31,6 +32,24 @@ export const invoicesTable = pgTable("invoices", {
   uniqueIndex("invoices_company_number_idx").on(t.companyId, t.invoiceNumber),
 ]);
 
+export const invoiceLinesTable = pgTable("invoice_lines", {
+  id: serial("id").primaryKey(),
+  invoiceId: integer("invoice_id").notNull().references(() => invoicesTable.id, { onDelete: "cascade" }),
+  productId: integer("product_id").references(() => productsTable.id, { onDelete: "set null" }),
+  description: text("description").notNull(),
+  hsnCode: text("hsn_code"),
+  uom: text("uom").notNull().default("PCS"),
+  quantity: numeric("quantity", { precision: 12, scale: 2 }).notNull(),
+  unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull(),
+  lineTotal: numeric("line_total", { precision: 14, scale: 2 }).notNull(),
+  gstRate: numeric("gst_rate", { precision: 5, scale: 2 }).notNull().default("18"),
+  cgst: numeric("cgst", { precision: 14, scale: 2 }).notNull().default("0"),
+  sgst: numeric("sgst", { precision: 14, scale: 2 }).notNull().default("0"),
+  igst: numeric("igst", { precision: 14, scale: 2 }).notNull().default("0"),
+  lineTaxTotal: numeric("line_tax_total", { precision: 14, scale: 2 }).notNull().default("0"),
+  lineGrandTotal: numeric("line_grand_total", { precision: 14, scale: 2 }).notNull().default("0"),
+});
+
 export const paymentsTable = pgTable("payments", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().default(1).references(() => companiesTable.id, { onDelete: "cascade" }),
@@ -45,7 +64,10 @@ export const paymentsTable = pgTable("payments", {
 });
 
 export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({ id: true, createdAt: true, updatedAt: true, companyId: true });
+export const insertInvoiceLineSchema = createInsertSchema(invoiceLinesTable).omit({ id: true });
 export const insertPaymentSchema = createInsertSchema(paymentsTable).omit({ id: true, createdAt: true, companyId: true });
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type InsertInvoiceLine = z.infer<typeof insertInvoiceLineSchema>;
+export type InvoiceLine = typeof invoiceLinesTable.$inferSelect;
 export type Invoice = typeof invoicesTable.$inferSelect;
 export type Payment = typeof paymentsTable.$inferSelect;

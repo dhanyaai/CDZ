@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { eq, and, SQL } from "drizzle-orm";
 import { db, assemblyJobsTable, assemblyItemsTable, salesOrdersTable, productsTable } from "@workspace/db";
+import { ASSEMBLY_TRANSITIONS, assertTransition, StatusError, validTransitions } from "../services/stateMachine";
+import { advanceAssembly } from "../services/assemblyService";
 
 const router = Router();
 
@@ -25,8 +27,10 @@ async function getJobDetail(id: number, companyId: number) {
     salesOrderId: row.job.salesOrderId,
     orderNumber: row.orderNumber ?? null,
     status: row.job.status,
+    validTransitions: validTransitions(ASSEMBLY_TRANSITIONS, row.job.status),
     totalKits: row.job.totalKits,
     completedKits: row.job.completedKits,
+    notes: row.job.notes ?? null,
     items: items.map((r) => ({
       id: r.item.id,
       productId: r.item.productId,
@@ -58,6 +62,7 @@ router.get("/v1/assembly", async (req, res): Promise<void> => {
     salesOrderId: r.job.salesOrderId,
     orderNumber: r.orderNumber ?? null,
     status: r.job.status,
+    validTransitions: validTransitions(ASSEMBLY_TRANSITIONS, r.job.status),
     totalKits: r.job.totalKits,
     completedKits: r.job.completedKits,
     createdAt: r.job.createdAt.toISOString(),
@@ -65,7 +70,7 @@ router.get("/v1/assembly", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/assembly", async (req, res): Promise<void> => {
-  const { salesOrderId, totalKits, notes } = req.body ?? {};
+  const { salesOrderId, totalKits, notes, items } = req.body ?? {};
   if (!salesOrderId || !totalKits) {
     res.status(400).json({ error: "salesOrderId and totalKits are required" });
     return;
@@ -85,7 +90,20 @@ router.post("/v1/assembly", async (req, res): Promise<void> => {
     notes,
   }).returning();
 
-  await db.update(assemblyJobsTable).set({ jobNumber: `AJ-${String(job.id).padStart(5, "0")}` }).where(eq(assemblyJobsTable.id, job.id));
+  await db.update(assemblyJobsTable)
+    .set({ jobNumber: `AJ-${String(job.id).padStart(5, "0")}` })
+    .where(eq(assemblyJobsTable.id, job.id));
+
+  if (Array.isArray(items) && items.length > 0) {
+    await db.insert(assemblyItemsTable).values(
+      items.map((item: { productId: number; quantity: number }) => ({
+        assemblyJobId: job.id,
+        productId: item.productId,
+        quantity: item.quantity,
+        status: "Pending",
+      }))
+    );
+  }
 
   const detail = await getJobDetail(job.id, req.companyId);
   res.status(201).json(detail);
@@ -104,7 +122,8 @@ router.patch("/v1/assembly/:id", async (req, res): Promise<void> => {
   if (req.body.completedKits != null) updates.completedKits = req.body.completedKits;
   if (req.body.notes != null) updates.notes = req.body.notes;
 
-  await db.update(assemblyJobsTable).set(updates).where(and(eq(assemblyJobsTable.id, id), eq(assemblyJobsTable.companyId, req.companyId)));
+  await db.update(assemblyJobsTable).set(updates)
+    .where(and(eq(assemblyJobsTable.id, id), eq(assemblyJobsTable.companyId, req.companyId)));
   const detail = await getJobDetail(id, req.companyId);
   if (!detail) { res.status(404).json({ error: "Assembly job not found" }); return; }
   res.json(detail);
@@ -114,12 +133,30 @@ router.patch("/v1/assembly/:id/status", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const { status } = req.body ?? {};
   if (!status) { res.status(400).json({ error: "status is required" }); return; }
-  const [job] = await db.update(assemblyJobsTable).set({ status })
-    .where(and(eq(assemblyJobsTable.id, id), eq(assemblyJobsTable.companyId, req.companyId)))
-    .returning();
-  if (!job) { res.status(404).json({ error: "Assembly job not found" }); return; }
+
+  try {
+    await advanceAssembly(id, req.companyId, status);
+  } catch (err) {
+    if (err instanceof StatusError) {
+      res.status(err.status).json({ error: err.message }); return;
+    }
+    throw err;
+  }
+
   const detail = await getJobDetail(id, req.companyId);
   res.json(detail);
+});
+
+router.post("/v1/assembly/:id/items", async (req, res): Promise<void> => {
+  const assemblyJobId = parseInt(req.params.id as string, 10);
+  const { productId, quantity } = req.body ?? {};
+  if (!productId || !quantity) {
+    res.status(400).json({ error: "productId and quantity are required" }); return;
+  }
+  const [item] = await db.insert(assemblyItemsTable).values({
+    assemblyJobId, productId, quantity, status: "Pending",
+  }).returning();
+  res.status(201).json(item);
 });
 
 export default router;
