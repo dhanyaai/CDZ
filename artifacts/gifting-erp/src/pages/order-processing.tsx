@@ -39,7 +39,7 @@ interface Company {
   name: string;
 }
 
-interface Product { id: number; name: string; sku?: string; }
+interface Product { id: number; name: string; sku?: string; stockLevel: number; }
 
 interface ChecklistItem {
   productName: string;
@@ -1178,7 +1178,14 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                         <td className="py-1.5 px-2">
                           <Select
                             value={item.productName || "__none__"}
-                            onValueChange={(v) => setChecklist(i, "productName", v === "__none__" ? "" : v)}
+                            onValueChange={(v) => {
+                              const name = v === "__none__" ? "" : v;
+                              setChecklist(i, "productName", name);
+                              if (name) {
+                                const p = products.find((p) => p.name === name);
+                                if (p != null) setChecklist(i, "inhouseQty", String(p.stockLevel));
+                              }
+                            }}
                           >
                             <SelectTrigger className="h-8 text-sm">
                               <SelectValue placeholder="Select product…" />
