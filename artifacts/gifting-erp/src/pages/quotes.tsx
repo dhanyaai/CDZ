@@ -238,7 +238,7 @@ export function Quotes() {
             {/* Basic Info */}
             <Select value={clientId} onValueChange={setClientId}>
               <SelectTrigger><SelectValue placeholder="Client *" /></SelectTrigger>
-              <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.companyName}</SelectItem>)}</SelectContent>
+              <SelectContent position="popper" className="max-h-60">{clients?.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.companyName}</SelectItem>)}</SelectContent>
             </Select>
 
             <Input placeholder="Quote subject / title (optional)" value={subject} onChange={e => setSubject(e.target.value)} />
@@ -250,7 +250,7 @@ export function Quotes() {
 
             <Select value={paymentTerms || "__none__"} onValueChange={v => setPaymentTerms(v === "__none__" ? "" : v)}>
               <SelectTrigger><SelectValue placeholder="Payment terms (optional)" /></SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper">
                 <SelectItem value="__none__">— No payment terms —</SelectItem>
                 {PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
@@ -274,7 +274,7 @@ export function Quotes() {
                         else pickProduct(i, v);
                       }}>
                       <SelectTrigger className="flex-1 text-sm"><SelectValue placeholder="Select product…" /></SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" className="max-h-60">
                         <SelectItem value="__custom__">— Custom description —</SelectItem>
                         {(products ?? []).map(p => (
                           <SelectItem key={p.id} value={String(p.id)}>

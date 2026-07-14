@@ -308,7 +308,7 @@ export function Leads() {
                 <label className="text-sm font-medium">Link to Existing Client</label>
                 <Select value={form.clientId || "__none__"} onValueChange={v => setForm({ ...form, clientId: v === "__none__" ? "" : v, companyName: v !== "__none__" ? (clients?.find(c => String(c.id) === v)?.companyName ?? form.companyName) : form.companyName })}>
                   <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="max-h-60">
                     <SelectItem value="__none__">— None / New prospect —</SelectItem>
                     {clients?.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.companyName}</SelectItem>)}
                   </SelectContent>
@@ -328,7 +328,7 @@ export function Leads() {
                 <label className="text-sm font-medium">Assigned To</label>
                 <Select value={form.ownerId || "__none__"} onValueChange={v => setForm({ ...form, ownerId: v === "__none__" ? "" : v })}>
                   <SelectTrigger><SelectValue placeholder="Select salesperson…" /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="max-h-60">
                     <SelectItem value="__none__">— Unassigned —</SelectItem>
                     {users?.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.name} ({u.role})</SelectItem>)}
                   </SelectContent>
@@ -350,7 +350,7 @@ export function Leads() {
                 <label className="text-sm font-medium">Source</label>
                 <Select value={form.source} onValueChange={v => setForm({ ...form, source: v })}>
                   <SelectTrigger><SelectValue placeholder="Lead source…" /></SelectTrigger>
-                  <SelectContent>{["Web", "Referral", "Cold call", "LinkedIn", "Event", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  <SelectContent position="popper">{["Web", "Referral", "Cold call", "LinkedIn", "Event", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">

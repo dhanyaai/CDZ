@@ -267,7 +267,7 @@ export function Shipments() {
                 <FormItem><FormLabel>Sales Order *</FormLabel>
                   <Select onValueChange={(v) => field.onChange(Number(v))} value={field.value ? field.value.toString() : ""}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select sales order" /></SelectTrigger></FormControl>
-                    <SelectContent>
+                    <SelectContent position="popper" className="max-h-60">
                       {salesOrders?.map((so) => (
                         <SelectItem key={so.id} value={so.id.toString()}>{so.orderNumber} ({so.clientName})</SelectItem>
                       ))}
@@ -279,7 +279,7 @@ export function Shipments() {
                 <FormItem><FormLabel>Courier Partner *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value || "__none__"}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select courier" /></SelectTrigger></FormControl>
-                    <SelectContent>
+                    <SelectContent position="popper">
                       {COURIERS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                     </SelectContent>
                   </Select>

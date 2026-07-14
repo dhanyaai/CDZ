@@ -3,3 +3,4 @@
 - [ERP module audit](erp-audit-results.md) — full audit of all 35 pages done; 8 modules fixed total (6 with DB+API+UI, 2 UI-only)
 - [Phase 2 state machine](phase2-state-machine.md) — SO/PO/GRN transition maps, stock reservation, gapless numbers; key design decisions
 - [Seed credentials](seed-creds.md) — admin@gifterp.com/admin123; other role emails/passwords
+- [Radix Select in scrollable dialogs](radix-select-popper.md) — SelectContent inside max-h/overflow-y-auto dialogs needs position="popper" or options render at top of screen
