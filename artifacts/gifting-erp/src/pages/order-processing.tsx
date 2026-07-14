@@ -16,6 +16,23 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Save, Printer, Plus, Trash2, CheckSquare, Package, Truck, Palette, Wrench, FileText } from "lucide-react";
 import { format } from "date-fns";
 
+interface SalesOrderItem {
+  id: number;
+  productId: number;
+  productName: string;
+  productImage?: string | null;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+interface SalesOrderDetail {
+  id: number;
+  orderNumber: string;
+  clientName: string;
+  items: SalesOrderItem[];
+}
+
 interface ChecklistItem {
   productName: string;
   inhouseQty: string;
@@ -142,7 +159,7 @@ function SignatureRow({ dateLabel, timeLabel, signLabel, dateVal, timeVal, signV
   );
 }
 
-function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: string; clientName: string; deliveryDate?: string }) {
+function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: string; clientName: string; deliveryDate?: string; items?: SalesOrderItem[] }) {
   const fmt = (v: string | undefined) => v || "—";
   const yesNo = (v: boolean | undefined) => v ? "Yes ☑" : "No ☑";
 
@@ -153,6 +170,17 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
       <td>${item.procureQty || ""}</td>
       <td>${item.totalReceiveNote || ""}</td>
     </tr>`).join("");
+
+  const itemsRows = (meta.items ?? []).map((item, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${item.productName}</td>
+      <td style="text-align:right">${item.quantity}</td>
+      <td style="text-align:right">₹${Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+      <td style="text-align:right">₹${Number(item.totalPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+    </tr>`).join("");
+
+  const itemsTotal = (meta.items ?? []).reduce((sum, item) => sum + Number(item.totalPrice), 0);
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Order Processing Form — ${meta.orderNumber}</title>
   <style>
@@ -188,6 +216,16 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
   </div>
 
   <h1>Order Processing Form</h1>
+
+  ${itemsRows ? `
+  <div class="section">
+    <div class="section-title">Sales Order Items</div>
+    <table class="checklist">
+      <thead><tr><th>#</th><th>Product</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Total</th></tr></thead>
+      <tbody>${itemsRows || "<tr><td colspan='5' style='text-align:center;color:#888;'>No items</td></tr>"}</tbody>
+      <tfoot><tr style="background:#ede9fe;font-weight:700;"><td colspan="4" style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Grand Total</td><td style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">₹${itemsTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td></tr></tfoot>
+    </table>
+  </div>` : ""}
 
   <table class="info">
     <tr><td class="lbl">Order By (Sales Person)</td><td>${fmt(data.orderBy)}</td><td class="lbl">Delivery Date</td><td>${fmt(meta.deliveryDate)}</td></tr>
@@ -347,6 +385,12 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
     enabled: !!salesOrderId,
   });
 
+  const { data: salesOrder } = useQuery<SalesOrderDetail>({
+    queryKey: ["sales-order-detail", salesOrderId],
+    queryFn: () => api<SalesOrderDetail>(`/v1/sales-orders/${salesOrderId}`),
+    enabled: !!salesOrderId,
+  });
+
   useEffect(() => {
     if (existingForm) {
       setFormId(existingForm.id);
@@ -433,7 +477,7 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => printOrderProcessingForm(formData, meta)}
+            onClick={() => printOrderProcessingForm(formData, { ...meta, items: salesOrder?.items })}
           >
             <Printer className="w-4 h-4 mr-2" /> Print
           </Button>
@@ -472,6 +516,58 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
 
         {/* ORDER INFO TAB */}
         <TabsContent value="order-info">
+          {salesOrder?.items && salesOrder.items.length > 0 && (
+            <Card className="mb-4">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Sales Order Items</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/50 border-b">
+                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8">#</th>
+                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Product</th>
+                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Qty</th>
+                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Unit Price</th>
+                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {salesOrder.items.map((item, i) => (
+                        <tr key={item.id} className="border-b last:border-b-0 hover:bg-muted/20">
+                          <td className="px-4 py-2.5 text-muted-foreground">{i + 1}</td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              {item.productImage && (
+                                <img src={item.productImage} alt={item.productName} className="w-9 h-9 rounded-md object-cover border flex-shrink-0" />
+                              )}
+                              <span className="font-medium">{item.productName}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">{item.quantity}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                            ₹{Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums font-medium">
+                            ₹{Number(item.totalPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-primary/5 border-t-2 border-primary/20">
+                        <td colSpan={4} className="px-4 py-2.5 text-right font-semibold text-sm">Grand Total</td>
+                        <td className="px-4 py-2.5 text-right font-bold tabular-nums text-primary">
+                          ₹{salesOrder.items.reduce((sum, item) => sum + Number(item.totalPrice), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader><CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Order Information</CardTitle></CardHeader>
             <CardContent className="space-y-6">
