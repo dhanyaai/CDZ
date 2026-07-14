@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "@/lib/api";
@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Save, Printer, Plus, Trash2, CheckSquare, Package, Truck, Palette, Wrench, FileText } from "lucide-react";
+import { ArrowLeft, Save, Printer, Plus, Trash2, CheckSquare, Package, Truck, Palette, Wrench, FileText, Paperclip, Upload, X, File, FileImage, Download } from "lucide-react";
 import { format } from "date-fns";
 
 interface SalesOrderItem {
@@ -102,6 +102,7 @@ interface OrderFormData {
   dispatchInchargeSignedBy: string;
   checklistItems: ChecklistItem[];
   itemProductionSource: Record<number, string>;
+  attachments: Array<{ name: string; url: string; type: string }>;
 }
 
 interface ProcessingFormResponse {
@@ -135,6 +136,7 @@ const EMPTY: OrderFormData = {
   dispatchIncharge: "", dispatchInchargeDate: "", dispatchInchargeTime: "", dispatchInchargeSignedBy: "",
   checklistItems: [{ productName: "", inhouseQty: "", procureQty: "", totalReceiveNote: "" }],
   itemProductionSource: {},
+  attachments: [],
 };
 
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
@@ -403,6 +405,42 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
     queryFn: () => api<Company[]>("/v1/companies"),
   });
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const results: Array<{ name: string; url: string; type: string }> = [];
+      for (const file of Array.from(files)) {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/v1/uploads/file", { method: "POST", body: form });
+        if (!res.ok) throw new Error(`Upload failed for ${file.name}`);
+        const data = await res.json() as { url: string; name: string; type: string };
+        results.push(data);
+      }
+      setFormData((prev) => ({
+        ...prev,
+        attachments: [...(prev.attachments ?? []), ...results],
+      }));
+      toast({ title: `${results.length} file${results.length > 1 ? "s" : ""} uploaded` });
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      attachments: prev.attachments.filter((_, i) => i !== index),
+    }));
+  };
+
   useEffect(() => {
     if (existingForm) {
       setFormId(existingForm.id);
@@ -622,6 +660,92 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
               <Field label="More Information (if any)">
                 <Textarea rows={3} value={formData.moreInfo} placeholder="Additional notes…" onChange={(e) => set("moreInfo", e.target.value)} />
               </Field>
+            </CardContent>
+          </Card>
+
+          {/* ATTACHMENTS CARD */}
+          <Card className="mt-4">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <Paperclip className="w-4 h-4" /> Attachments
+                </CardTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {uploading ? "Uploading…" : "Upload Files"}
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf,.svg,.ai,.eps,.cdr,.zip,.doc,.docx,.xls,.xlsx,.txt"
+                  className="hidden"
+                  onChange={(e) => handleFileUpload(e.target.files)}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {(formData.attachments ?? []).length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="w-full border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/40 hover:bg-muted/30 transition-colors cursor-pointer"
+                >
+                  <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+                  <p className="text-sm text-muted-foreground">Click to upload files</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">Images, PDF, SVG, AI, CDR, ZIP, Word, Excel (max 25 MB each)</p>
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  {(formData.attachments ?? []).map((att, i) => {
+                    const isImage = att.type.startsWith("image/");
+                    return (
+                      <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg border bg-muted/20 group">
+                        {isImage ? (
+                          <img src={att.url} alt={att.name} className="w-10 h-10 rounded object-cover border flex-shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded border bg-background flex items-center justify-center flex-shrink-0">
+                            {att.type === "application/pdf" ? (
+                              <FileText className="w-5 h-5 text-red-500" />
+                            ) : (
+                              <File className="w-5 h-5 text-muted-foreground" />
+                            )}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{att.name}</p>
+                          <p className="text-xs text-muted-foreground">{att.type}</p>
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <a href={att.url} target="_blank" rel="noopener noreferrer">
+                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7">
+                              <Download className="w-3.5 h-3.5" />
+                            </Button>
+                          </a>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => removeAttachment(i)}>
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="w-full mt-2 py-2 text-xs text-muted-foreground border border-dashed rounded-lg hover:border-primary/40 hover:text-primary transition-colors"
+                  >
+                    + Add more files
+                  </button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
