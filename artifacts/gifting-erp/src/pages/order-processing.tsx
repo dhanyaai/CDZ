@@ -516,58 +516,6 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
 
         {/* ORDER INFO TAB */}
         <TabsContent value="order-info">
-          {salesOrder?.items && salesOrder.items.length > 0 && (
-            <Card className="mb-4">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Sales Order Items</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-muted/50 border-b">
-                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8">#</th>
-                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Product</th>
-                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Qty</th>
-                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Unit Price</th>
-                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {salesOrder.items.map((item, i) => (
-                        <tr key={item.id} className="border-b last:border-b-0 hover:bg-muted/20">
-                          <td className="px-4 py-2.5 text-muted-foreground">{i + 1}</td>
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center gap-2.5">
-                              {item.productImage && (
-                                <img src={item.productImage} alt={item.productName} className="w-9 h-9 rounded-md object-cover border flex-shrink-0" />
-                              )}
-                              <span className="font-medium">{item.productName}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums">{item.quantity}</td>
-                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                            ₹{Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums font-medium">
-                            ₹{Number(item.totalPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-primary/5 border-t-2 border-primary/20">
-                        <td colSpan={4} className="px-4 py-2.5 text-right font-semibold text-sm">Grand Total</td>
-                        <td className="px-4 py-2.5 text-right font-bold tabular-nums text-primary">
-                          ₹{salesOrder.items.reduce((sum, item) => sum + Number(item.totalPrice), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
           <Card>
             <CardHeader><CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Order Information</CardTitle></CardHeader>
             <CardContent className="space-y-6">
@@ -664,6 +612,59 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
               </Field>
             </CardContent>
           </Card>
+
+          {salesOrder?.items && salesOrder.items.length > 0 && (
+            <Card className="mt-4">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Sales Order Items</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/50 border-b">
+                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8">#</th>
+                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Product</th>
+                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Qty</th>
+                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Unit Price</th>
+                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {salesOrder.items.map((item, i) => (
+                        <tr key={item.id} className="border-b last:border-b-0 hover:bg-muted/20">
+                          <td className="px-4 py-2.5 text-muted-foreground">{i + 1}</td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              {item.productImage && (
+                                <img src={item.productImage} alt={item.productName} className="w-9 h-9 rounded-md object-cover border flex-shrink-0" />
+                              )}
+                              <span className="font-medium">{item.productName}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">{item.quantity}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                            ₹{Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums font-medium">
+                            ₹{Number(item.totalPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-primary/5 border-t-2 border-primary/20">
+                        <td colSpan={4} className="px-4 py-2.5 text-right font-semibold text-sm">Grand Total</td>
+                        <td className="px-4 py-2.5 text-right font-bold tabular-nums text-primary">
+                          ₹{salesOrder.items.reduce((sum, item) => sum + Number(item.totalPrice), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* PROCUREMENT TAB */}
