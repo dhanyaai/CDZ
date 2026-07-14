@@ -40,6 +40,7 @@ interface Company {
 }
 
 interface Product { id: number; name: string; sku?: string; stockLevel: number; }
+interface User { id: number; name: string; role: string; }
 
 interface ChecklistItem {
   productName: string;
@@ -413,6 +414,11 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
     queryFn: () => api<Product[]>("/v1/products"),
   });
 
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ["users"],
+    queryFn: () => api<User[]>("/v1/users"),
+  });
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -624,7 +630,20 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                   <Input type="date" value={formData.confirmedOrderDate} onChange={(e) => set("confirmedOrderDate", e.target.value)} />
                 </Field>
                 <Field label="Order By (Sales Person)">
-                  <Input value={formData.orderBy} placeholder="Sales person name" onChange={(e) => set("orderBy", e.target.value)} />
+                  <Select
+                    value={formData.orderBy || "__none__"}
+                    onValueChange={(v) => set("orderBy", v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select sales person…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Select person —</SelectItem>
+                      {users.map((u) => (
+                        <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
                 <Field label="Firm / Company Name">
                   <Input value={formData.firmName} placeholder={meta.clientName || "Company name"} onChange={(e) => set("firmName", e.target.value)} />
