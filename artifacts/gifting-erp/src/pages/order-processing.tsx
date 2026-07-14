@@ -626,8 +626,6 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8">#</th>
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Product</th>
                         <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Qty</th>
-                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Unit Price</th>
-                        <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -643,23 +641,9 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                             </div>
                           </td>
                           <td className="px-4 py-2.5 text-right tabular-nums">{item.quantity}</td>
-                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                            ₹{Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums font-medium">
-                            ₹{Number(item.totalPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                          </td>
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot>
-                      <tr className="bg-primary/5 border-t-2 border-primary/20">
-                        <td colSpan={4} className="px-4 py-2.5 text-right font-semibold text-sm">Grand Total</td>
-                        <td className="px-4 py-2.5 text-right font-bold tabular-nums text-primary">
-                          ₹{salesOrder.items.reduce((sum, item) => sum + Number(item.totalPrice), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    </tfoot>
                   </table>
                 </div>
               </CardContent>
