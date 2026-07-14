@@ -71,3 +71,9 @@ id = "ysCjHGSqQM7HzRsqmA2mT"
 uri = "file://attached_assets/gifting_erp_bug_report.pdf"
 type = "pdf"
 title = "Corporate Gifting ERP — Bug Report (7 bugs, July 11 2026)"
+
+[[outputs]]
+id = "RZ94Pj4YlcIYgrKHWUTpk"
+uri = "file://attached_assets/Pasted-Build-a-full-stack-Corporate-Gifting-ERP-web-applicatio_1779724248008.txt"
+type = "text"
+title = "Corporate Gifting ERP — Original Build Prompt"
