@@ -1,8 +1,15 @@
 import { Router } from "express";
-import { eq, and, SQL } from "drizzle-orm";
-import { db, invoicesTable, paymentsTable, salesOrdersTable, salesOrderItemsTable, clientsTable, productsTable } from "@workspace/db";
+import { eq, and, SQL, isNull } from "drizzle-orm";
+import { db, invoicesTable, paymentsTable, salesOrdersTable, salesOrderItemsTable, clientsTable, productsTable, companySettingsTable } from "@workspace/db";
+import { nextDocNumber } from "../lib/numberSequence";
 
 const router = Router();
+
+async function getSettings(companyId: number) {
+  const [s] = await db.select({ invoicePrefix: companySettingsTable.invoicePrefix, fyStartMonth: companySettingsTable.fyStartMonth })
+    .from(companySettingsTable).where(eq(companySettingsTable.companyId, companyId));
+  return { prefix: s?.invoicePrefix ?? "INV", fyStartMonth: s?.fyStartMonth ?? 4 };
+}
 
 function serializeInvoice(inv: typeof invoicesTable.$inferSelect, clientName: string | null, orderNumber: string | null, clientGst?: string | null) {
   return {
@@ -26,7 +33,7 @@ function serializeInvoice(inv: typeof invoicesTable.$inferSelect, clientName: st
 
 router.get("/v1/invoices", async (req, res): Promise<void> => {
   const { status, clientId } = req.query as { status?: string; clientId?: string };
-  const conditions: SQL[] = [eq(invoicesTable.companyId, req.companyId)];
+  const conditions: SQL[] = [eq(invoicesTable.companyId, req.companyId), isNull(invoicesTable.deletedAt)];
   if (status) conditions.push(eq(invoicesTable.status, status));
   if (clientId) conditions.push(eq(invoicesTable.clientId, parseInt(clientId, 10)));
 
@@ -51,28 +58,31 @@ router.post("/v1/invoices", async (req, res): Promise<void> => {
     .select({ order: salesOrdersTable, clientId: salesOrdersTable.clientId })
     .from(salesOrdersTable)
     .where(and(eq(salesOrdersTable.id, salesOrderId), eq(salesOrdersTable.companyId, req.companyId)));
-
   if (!order) { res.status(404).json({ error: "Sales order not found" }); return; }
 
   const totalAmount = Number(order.order.grandTotal ?? order.order.totalAmount);
   const gstAmount = totalAmount * (gstPercent / 100);
   const grandTotal = totalAmount + gstAmount;
 
-  const [invoice] = await db.insert(invoicesTable).values({
-    companyId: req.companyId,
-    invoiceNumber: "INV-TEMP",
-    salesOrderId,
-    clientId: order.clientId,
-    totalAmount: String(totalAmount),
-    gstAmount: String(gstAmount),
-    grandTotal: String(grandTotal),
-    status: "Draft",
-    dueDate: dueDate ? new Date(dueDate) : null,
-    notes: notes ?? null,
-    paymentTerms: paymentTerms ?? null,
-  }).returning();
+  const { prefix, fyStartMonth } = await getSettings(req.companyId);
 
-  await db.update(invoicesTable).set({ invoiceNumber: `INV-${String(invoice.id).padStart(5, "0")}` }).where(eq(invoicesTable.id, invoice.id));
+  const invoice = await db.transaction(async (tx) => {
+    const invoiceNumber = await nextDocNumber(tx, req.companyId, "INV", prefix, fyStartMonth);
+    const [inv] = await tx.insert(invoicesTable).values({
+      companyId: req.companyId,
+      invoiceNumber,
+      salesOrderId,
+      clientId: order.clientId,
+      totalAmount: String(totalAmount),
+      gstAmount: String(gstAmount),
+      grandTotal: String(grandTotal),
+      status: "Draft",
+      dueDate: dueDate ? new Date(dueDate) : null,
+      notes: notes ?? null,
+      paymentTerms: paymentTerms ?? null,
+    }).returning();
+    return inv;
+  });
 
   const [row] = await db
     .select({ invoice: invoicesTable, clientName: clientsTable.companyName, orderNumber: salesOrdersTable.orderNumber, clientGst: clientsTable.gstNumber })
@@ -114,6 +124,9 @@ router.get("/v1/invoices/:id", async (req, res): Promise<void> => {
       productId: r.item.productId,
       productName: r.product?.name ?? "Unknown",
       productImage: r.product?.imageUrl ?? null,
+      hsnCode: r.product?.hsnCode ?? null,
+      gstRate: r.product?.gstRate ?? "18",
+      uom: r.product?.uom ?? "PCS",
       quantity: r.item.quantity,
       unitPrice: Number(r.item.unitPrice),
       totalPrice: r.item.quantity * Number(r.item.unitPrice),
@@ -170,21 +183,37 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
   const [invoice] = await db.select().from(invoicesTable)
     .where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.companyId, req.companyId)));
   if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
-
-  const [payment] = await db.insert(paymentsTable).values({
-    companyId: req.companyId, invoiceId, amount: String(amount),
-    type, paymentMode: paymentMode ?? null, referenceNo: referenceNo ?? null,
-    paymentDate: new Date(paymentDate), notes,
-  }).returning();
-
-  const allPayments = await db.select().from(paymentsTable)
-    .where(and(eq(paymentsTable.invoiceId, invoiceId), eq(paymentsTable.companyId, req.companyId)));
-  const totalPaid = allPayments.reduce((s, p) => s + Number(p.amount), 0);
-  if (totalPaid >= Number(invoice.grandTotal)) {
-    await db.update(invoicesTable).set({ status: "Paid" }).where(eq(invoicesTable.id, invoiceId));
-  } else if (invoice.status === "Draft") {
-    await db.update(invoicesTable).set({ status: "Sent" }).where(eq(invoicesTable.id, invoiceId));
+  if (invoice.status === "Paid") {
+    res.status(400).json({ error: "Invoice is already fully paid" }); return;
   }
+
+  const [payment] = await db.transaction(async (tx) => {
+    const [p] = await tx.insert(paymentsTable).values({
+      companyId: req.companyId, invoiceId, amount: String(amount),
+      type, paymentMode: paymentMode ?? null, referenceNo: referenceNo ?? null,
+      paymentDate: new Date(paymentDate), notes,
+    }).returning();
+
+    const allPayments = await tx.select().from(paymentsTable)
+      .where(and(eq(paymentsTable.invoiceId, invoiceId), eq(paymentsTable.companyId, req.companyId)));
+    const totalPaid = allPayments.reduce((s, p2) => s + Number(p2.amount), 0);
+    const grandTotal = Number(invoice.grandTotal);
+
+    let newStatus = invoice.status;
+    if (totalPaid >= grandTotal) {
+      newStatus = "Paid";
+    } else if (totalPaid > 0) {
+      newStatus = "Partially Paid";
+    } else if (invoice.status === "Draft") {
+      newStatus = "Issued";
+    }
+
+    if (newStatus !== invoice.status) {
+      await tx.update(invoicesTable).set({ status: newStatus }).where(eq(invoicesTable.id, invoiceId));
+    }
+
+    return [p];
+  });
 
   res.status(201).json({
     id: payment.id, invoiceId: payment.invoiceId, amount: Number(payment.amount),

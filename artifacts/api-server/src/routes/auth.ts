@@ -19,7 +19,7 @@ router.post("/v1/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
-  const token = createSession(user.id, user.companyId);
+  const token = createSession(user.id, user.companyId, user.role ?? "");
 
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, user.companyId));
 

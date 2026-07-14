@@ -9,7 +9,10 @@ function getFyLabel(date: Date, fyStartMonth: number): string {
   return `${String(fyStartYear).slice(2)}-${String(fyEndYear).slice(2)}`;
 }
 
+type DbLike = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export async function nextDocNumber(
+  txOrDb: DbLike,
   companyId: number,
   docType: string,
   prefix: string,
@@ -17,7 +20,7 @@ export async function nextDocNumber(
 ): Promise<string> {
   const fyLabel = getFyLabel(new Date(), fyStartMonth);
 
-  const [existing] = await db
+  const [existing] = await (txOrDb as typeof db)
     .select()
     .from(numberSequencesTable)
     .where(
@@ -32,17 +35,16 @@ export async function nextDocNumber(
   let next: number;
   if (existing) {
     next = existing.lastNumber + 1;
-    await db
+    await (txOrDb as typeof db)
       .update(numberSequencesTable)
       .set({ lastNumber: next })
       .where(eq(numberSequencesTable.id, existing.id));
   } else {
-    next = 1;
-    await db
+    await (txOrDb as typeof db)
       .insert(numberSequencesTable)
       .values({ companyId, docType, fyLabel, lastNumber: 1 })
       .onConflictDoNothing();
-    const [row] = await db
+    const [row] = await (txOrDb as typeof db)
       .select()
       .from(numberSequencesTable)
       .where(
@@ -52,17 +54,18 @@ export async function nextDocNumber(
           eq(numberSequencesTable.fyLabel, fyLabel),
         ),
       );
-    if (row && row.lastNumber !== 1) {
-      next = row.lastNumber + 1;
-      await db
+    if (row && row.lastNumber > 1) {
+      await (txOrDb as typeof db)
         .update(numberSequencesTable)
         .set({ lastNumber: sql`${numberSequencesTable.lastNumber} + 1` })
         .where(eq(numberSequencesTable.id, row.id));
-      const [updated] = await db
+      const [updated] = await (txOrDb as typeof db)
         .select()
         .from(numberSequencesTable)
         .where(eq(numberSequencesTable.id, row.id));
       next = updated!.lastNumber;
+    } else {
+      next = 1;
     }
   }
 

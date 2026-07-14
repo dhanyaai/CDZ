@@ -3,18 +3,32 @@ import { useGetPurchaseOrder, useUpdatePurchaseOrderStatus, getGetPurchaseOrderQ
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Calendar, User, ShoppingBag, Printer, Phone, Mail, MapPin, FileText, Clock } from "lucide-react";
+import { ArrowLeft, Calendar, User, ShoppingBag, Printer, Phone, Mail, MapPin, FileText, Clock, ChevronRight, XCircle, PackageCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { printPurchaseOrder } from "@/lib/print-utils";
 
+const STATUS_COLORS: Record<string, string> = {
+  Draft: "bg-slate-500/10 text-slate-400 border-slate-500/20",
+  Ordered: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  "Partially Received": "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  "Fully Received": "bg-green-500/10 text-green-400 border-green-500/20",
+  Cancelled: "bg-red-500/10 text-red-400 border-red-500/20",
+};
+
+const TRANSITION_LABELS: Record<string, { label: string; variant: "default" | "outline" | "destructive" }> = {
+  Ordered: { label: "Send to Vendor", variant: "default" },
+  "Partially Received": { label: "Mark Partial", variant: "outline" },
+  "Fully Received": { label: "Mark Fully Received", variant: "default" },
+  Cancelled: { label: "Cancel PO", variant: "destructive" },
+};
+
 export function PurchaseOrderDetail({ id }: { id: number }) {
   const { data: order, isLoading } = useGetPurchaseOrder(id, { query: { enabled: !!id, queryKey: getGetPurchaseOrderQueryKey(id) } });
-  
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -23,20 +37,13 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetPurchaseOrderQueryKey(id) });
         toast({ title: "Status updated" });
-      }
-    }
+      },
+      onError: (error: any) => {
+        const message = error?.response?.data?.error ?? error?.message ?? "Failed to update status";
+        toast({ title: "Cannot update status", description: message, variant: "destructive" });
+      },
+    },
   });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Ordered": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
-      case "Partially Received": return "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300";
-      case "Fully Received": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
-      default: return "";
-    }
-  };
-
-  const allStatuses = ["Ordered", "Partially Received", "Fully Received"];
 
   if (isLoading) {
     return <div className="space-y-6"><Skeleton className="h-20 w-full" /><Skeleton className="h-[400px]" /></div>;
@@ -47,7 +54,9 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
   }
 
   const o = order as any;
+  const validTransitions: string[] = o.validTransitions ?? [];
   const vendorAddressParts = [o.vendorAddress, o.vendorCity, o.vendorState, o.vendorPincode].filter(Boolean);
+  const grnAutoStatuses = ["Ordered", "Partially Received", "Fully Received"];
 
   return (
     <div className="space-y-6">
@@ -59,41 +68,53 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
             {order.poNumber}
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
-              {order.status}
-            </span>
+            <Badge className={`border text-sm ${STATUS_COLORS[order.status] ?? ""}`}>{order.status}</Badge>
           </h1>
           <p className="text-muted-foreground mt-1 text-lg flex items-center gap-2">
             <User className="w-4 h-4" /> {order.vendorName}
           </p>
         </div>
-        
-        <div className="flex items-center gap-3">
+
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={() => printPurchaseOrder(o)}>
             <Printer className="w-4 h-4 mr-2" />Print
           </Button>
-          <div className="flex items-center gap-3 bg-card p-3 rounded-lg border">
-            <div className="text-sm font-medium">Update Status:</div>
-            <Select 
-              value={order.status} 
-              onValueChange={(v) => updateStatus.mutate({ id, data: { status: v as any } })}
-              disabled={updateStatus.isPending}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {allStatuses.map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Link href="/grn">
+            <Button variant="outline" size="sm">
+              <PackageCheck className="w-4 h-4 mr-2" />Post GRN
+            </Button>
+          </Link>
+          {validTransitions
+            .filter(s => !grnAutoStatuses.includes(s) || s === "Ordered" || s === "Cancelled")
+            .map(toStatus => {
+              const cfg = TRANSITION_LABELS[toStatus] ?? { label: toStatus, variant: "default" as const };
+              return (
+                <Button
+                  key={toStatus}
+                  variant={cfg.variant}
+                  size="sm"
+                  onClick={() => updateStatus.mutate({ id, data: { status: toStatus as any } })}
+                  disabled={updateStatus.isPending}
+                >
+                  {toStatus === "Cancelled"
+                    ? <XCircle className="w-4 h-4 mr-1.5" />
+                    : <ChevronRight className="w-4 h-4 mr-1.5" />
+                  }
+                  {cfg.label}
+                </Button>
+              );
+            })}
         </div>
       </div>
 
+      {["Partially Received", "Fully Received"].includes(order.status) && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-blue-500/5 border border-blue-500/20 rounded-lg px-4 py-2">
+          <PackageCheck className="w-4 h-4 text-blue-400 shrink-0" />
+          <span>Status auto-updates when GRNs are posted against this PO.</span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Vendor Details */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><User className="w-4 h-4" /> Vendor Details</CardTitle>
@@ -138,7 +159,6 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
           </CardContent>
         </Card>
 
-        {/* PO Summary */}
         <Card>
           <CardHeader>
             <CardTitle>PO Summary</CardTitle>
@@ -146,7 +166,7 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
               <span className="text-muted-foreground">Total Amount</span>
-              <span className="font-bold text-lg">₹{Number(order.totalAmount ?? 0).toFixed(2)}</span>
+              <span className="font-bold text-lg">₹{Number(order.totalAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
             </div>
             <div className="flex justify-between items-center border-b pb-2">
               <span className="text-muted-foreground flex items-center gap-2"><Calendar className="w-4 h-4"/> Created</span>
@@ -154,7 +174,7 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
             </div>
             <div className="flex justify-between items-center border-b pb-2">
               <span className="text-muted-foreground flex items-center gap-2"><Calendar className="w-4 h-4"/> Expected</span>
-              <span>{order.expectedDelivery ? format(new Date(order.expectedDelivery), "MMM d, yyyy") : "-"}</span>
+              <span>{order.expectedDelivery ? format(new Date(order.expectedDelivery), "MMM d, yyyy") : "—"}</span>
             </div>
             {order.salesOrderId && (
               <div className="flex justify-between items-center border-b pb-2">
@@ -173,7 +193,6 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
           </CardContent>
         </Card>
 
-        {/* Line Items — full width second row */}
         <Card className="col-span-1 md:col-span-3">
           <CardHeader>
             <CardTitle>Line Items</CardTitle>
@@ -183,8 +202,10 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Product</TableHead>
+                  <TableHead>HSN</TableHead>
                   <TableHead className="text-right">Unit Price</TableHead>
                   <TableHead className="text-center">Received / Ordered</TableHead>
+                  <TableHead className="text-right">Pending</TableHead>
                   <TableHead className="text-right">Line Total</TableHead>
                 </TableRow>
               </TableHeader>
@@ -192,13 +213,15 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
                 {order.items?.map((item: any) => {
                   const qty = Number(item.quantity ?? 0);
                   const received = Number(item.receivedQty ?? item.receivedQuantity ?? 0);
+                  const pending = Number(item.pendingQty ?? Math.max(0, qty - received));
                   const unitPrice = Number(item.unitPrice ?? 0);
                   const lineTotal = Number(item.lineTotal ?? item.totalPrice ?? unitPrice * qty);
                   const progress = qty > 0 ? (received / qty) * 100 : 0;
                   return (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.product?.name || item.productName}</TableCell>
-                      <TableCell className="text-right">₹{unitPrice.toFixed(2)}</TableCell>
+                      <TableCell className="font-medium">{item.productName}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{item.hsnCode ?? "—"}</TableCell>
+                      <TableCell className="text-right">₹{unitPrice.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</TableCell>
                       <TableCell className="w-[220px]">
                         <div className="space-y-1.5">
                           <div className="flex justify-between text-xs text-muted-foreground">
@@ -208,7 +231,13 @@ export function PurchaseOrderDetail({ id }: { id: number }) {
                           <Progress value={progress} className="h-2" />
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">₹{lineTotal.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">
+                        {pending > 0
+                          ? <span className="text-amber-500 font-medium">{pending}</span>
+                          : <span className="text-green-500">✓</span>
+                        }
+                      </TableCell>
+                      <TableCell className="text-right font-medium">₹{lineTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</TableCell>
                     </TableRow>
                   );
                 })}

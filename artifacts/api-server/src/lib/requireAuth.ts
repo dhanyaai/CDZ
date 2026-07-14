@@ -20,5 +20,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
   req.userId = session.userId;
   req.companyId = session.companyId;
+  req.userRole = session.role;
   next();
 }

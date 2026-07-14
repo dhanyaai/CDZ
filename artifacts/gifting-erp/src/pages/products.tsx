@@ -263,7 +263,7 @@ export function Products() {
               <TableHead className="text-right">Cost</TableHead>
               <TableHead className="text-right">Price</TableHead>
               <TableHead className="text-right">Margin</TableHead>
-              <TableHead className="text-center">Stock</TableHead>
+              <TableHead className="text-center">Stock (Avail / Res / Total)</TableHead>
               <TableHead>Vendor</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -319,10 +319,17 @@ export function Products() {
                       </span>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={isOut ? "destructive" : isLow ? "outline" : "secondary"}
-                        className={isLow && !isOut ? "border-amber-500/50 text-amber-500" : ""}>
-                        {product.stockLevel}
-                      </Badge>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <Badge variant={isOut ? "destructive" : isLow ? "outline" : "secondary"}
+                          className={isLow && !isOut ? "border-amber-500/50 text-amber-500" : ""}>
+                          {(product as any).availableQty ?? product.stockLevel}
+                        </Badge>
+                        {(product as any).reservedQty > 0 && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {(product as any).reservedQty} res / {product.stockLevel} tot
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{product.vendorName || "—"}</TableCell>
                     <TableCell className="text-right">

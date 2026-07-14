@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 const TTL_MS = 1000 * 60 * 60 * 24 * 7;
 
-type Session = { userId: number; companyId: number; expiresAt: number };
+type Session = { userId: number; companyId: number; role: string; expiresAt: number };
 
 const store = new Map<string, Session>();
 
@@ -10,20 +10,20 @@ export function generateToken(): string {
   return randomBytes(32).toString("hex");
 }
 
-export function createSession(userId: number, companyId: number): string {
+export function createSession(userId: number, companyId: number, role: string): string {
   const token = generateToken();
-  store.set(token, { userId, companyId, expiresAt: Date.now() + TTL_MS });
+  store.set(token, { userId, companyId, role, expiresAt: Date.now() + TTL_MS });
   return token;
 }
 
-export function getSession(token: string): { userId: number; companyId: number } | null {
+export function getSession(token: string): { userId: number; companyId: number; role: string } | null {
   const s = store.get(token);
   if (!s) return null;
   if (s.expiresAt < Date.now()) {
     store.delete(token);
     return null;
   }
-  return { userId: s.userId, companyId: s.companyId };
+  return { userId: s.userId, companyId: s.companyId, role: s.role };
 }
 
 export function updateSessionCompany(token: string, companyId: number): boolean {

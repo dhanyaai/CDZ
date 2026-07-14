@@ -1,11 +1,16 @@
 import { Router } from "express";
-import { eq, and, SQL } from "drizzle-orm";
-import { db, salesOrdersTable, salesOrderItemsTable, deliveryAddressesTable, clientsTable, productsTable } from "@workspace/db";
+import { eq, and, SQL, isNull } from "drizzle-orm";
+import { db, salesOrdersTable, salesOrderItemsTable, deliveryAddressesTable, clientsTable, productsTable, companySettingsTable } from "@workspace/db";
+import { SO_TRANSITIONS, validTransitions, StatusError } from "../services/stateMachine";
+import { confirmSO, cancelSO, advanceSO } from "../services/soService";
+import { nextDocNumber } from "../lib/numberSequence";
 
 const router = Router();
 
-function padId(id: number) {
-  return `SO-${String(id).padStart(5, "0")}`;
+async function getSettings(companyId: number) {
+  const [s] = await db.select({ soPrefix: companySettingsTable.soPrefix, fyStartMonth: companySettingsTable.fyStartMonth })
+    .from(companySettingsTable).where(eq(companySettingsTable.companyId, companyId));
+  return { prefix: s?.soPrefix ?? "SO", fyStartMonth: s?.fyStartMonth ?? 4 };
 }
 
 async function getOrderDetail(id: number, companyId: number) {
@@ -21,7 +26,7 @@ async function getOrderDetail(id: number, companyId: number) {
     })
     .from(salesOrdersTable)
     .leftJoin(clientsTable, eq(salesOrdersTable.clientId, clientsTable.id))
-    .where(and(eq(salesOrdersTable.id, id), eq(salesOrdersTable.companyId, companyId)));
+    .where(and(eq(salesOrdersTable.id, id), eq(salesOrdersTable.companyId, companyId), isNull(salesOrdersTable.deletedAt)));
 
   if (!order) return null;
 
@@ -47,6 +52,7 @@ async function getOrderDetail(id: number, companyId: number) {
     clientGst: order.clientGst ?? null,
     billingAddress: order.billingAddress ?? null,
     status: order.order.status,
+    validTransitions: validTransitions(SO_TRANSITIONS, order.order.status),
     totalAmount: Number(order.order.totalAmount),
     discountPct: Number(order.order.discountPct ?? 0),
     gstAmount: Number(order.order.gstAmount ?? 0),
@@ -61,6 +67,9 @@ async function getOrderDetail(id: number, companyId: number) {
       productId: r.item.productId,
       productName: r.product?.name ?? "Unknown",
       productImage: r.product?.imageUrl ?? null,
+      hsnCode: r.product?.hsnCode ?? null,
+      gstRate: r.product?.gstRate ?? "18",
+      uom: r.product?.uom ?? "PCS",
       quantity: r.item.quantity,
       unitPrice: Number(r.item.unitPrice),
       totalPrice: r.item.quantity * Number(r.item.unitPrice),
@@ -79,7 +88,7 @@ async function getOrderDetail(id: number, companyId: number) {
 
 router.get("/v1/sales-orders", async (req, res): Promise<void> => {
   const { status, clientId } = req.query as { status?: string; clientId?: string };
-  const conditions: SQL[] = [eq(salesOrdersTable.companyId, req.companyId)];
+  const conditions: SQL[] = [eq(salesOrdersTable.companyId, req.companyId), isNull(salesOrdersTable.deletedAt)];
   if (status) conditions.push(eq(salesOrdersTable.status, status));
   if (clientId) conditions.push(eq(salesOrdersTable.clientId, parseInt(clientId, 10)));
 
@@ -96,6 +105,7 @@ router.get("/v1/sales-orders", async (req, res): Promise<void> => {
     clientId: r.order.clientId,
     clientName: r.clientName ?? "Unknown",
     status: r.order.status,
+    validTransitions: validTransitions(SO_TRANSITIONS, r.order.status),
     totalAmount: Number(r.order.totalAmount),
     discountPct: Number(r.order.discountPct ?? 0),
     gstAmount: Number(r.order.gstAmount ?? 0),
@@ -126,47 +136,49 @@ router.post("/v1/sales-orders", async (req, res): Promise<void> => {
   const gst = afterDisc * 0.18;
   const grand = afterDisc + gst;
 
-  const [order] = await db.insert(salesOrdersTable).values({
-    companyId: req.companyId,
-    orderNumber: `SO-TEMP`,
-    clientId,
-    occasion: occasion ?? null,
-    notes: notes ?? null,
-    totalAmount: String(afterDisc.toFixed(2)),
-    discountPct: String(disc.toFixed(2)),
-    gstAmount: String(gst.toFixed(2)),
-    grandTotal: String(grand.toFixed(2)),
-    paymentTerms: paymentTerms ?? null,
-    deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
-    poNumber: poNumber ?? null,
-    status: "Draft",
-  }).returning();
+  const { prefix, fyStartMonth } = await getSettings(req.companyId);
 
-  await db.update(salesOrdersTable)
-    .set({ orderNumber: padId(order.id) })
-    .where(eq(salesOrdersTable.id, order.id));
+  const order = await db.transaction(async (tx) => {
+    const orderNumber = await nextDocNumber(tx, req.companyId, "SO", prefix, fyStartMonth);
+    const [o] = await tx.insert(salesOrdersTable).values({
+      companyId: req.companyId,
+      orderNumber,
+      clientId,
+      occasion: occasion ?? null,
+      notes: notes ?? null,
+      totalAmount: String(afterDisc.toFixed(2)),
+      discountPct: String(disc.toFixed(2)),
+      gstAmount: String(gst.toFixed(2)),
+      grandTotal: String(grand.toFixed(2)),
+      paymentTerms: paymentTerms ?? null,
+      deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+      poNumber: poNumber ?? null,
+      status: "Draft",
+    }).returning();
 
-  await db.insert(salesOrderItemsTable).values(
-    items.map((i: { productId: number; quantity: number; unitPrice: number }) => ({
-      salesOrderId: order.id,
-      productId: i.productId,
-      quantity: i.quantity,
-      unitPrice: String(i.unitPrice),
-    }))
-  );
-
-  if (Array.isArray(deliveryAddresses) && deliveryAddresses.length > 0) {
-    await db.insert(deliveryAddressesTable).values(
-      deliveryAddresses.map((a: { name: string; address: string; city?: string; pincode?: string; phone?: string }) => ({
-        salesOrderId: order.id,
-        name: a.name,
-        address: a.address,
-        city: a.city ?? null,
-        pincode: a.pincode ?? null,
-        phone: a.phone ?? null,
+    await tx.insert(salesOrderItemsTable).values(
+      items.map((i: { productId: number; quantity: number; unitPrice: number }) => ({
+        salesOrderId: o.id,
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: String(i.unitPrice),
       }))
     );
-  }
+
+    if (Array.isArray(deliveryAddresses) && deliveryAddresses.length > 0) {
+      await tx.insert(deliveryAddressesTable).values(
+        deliveryAddresses.map((a: { name: string; address: string; city?: string; pincode?: string; phone?: string }) => ({
+          salesOrderId: o.id,
+          name: a.name,
+          address: a.address,
+          city: a.city ?? null,
+          pincode: a.pincode ?? null,
+          phone: a.phone ?? null,
+        }))
+      );
+    }
+    return o;
+  });
 
   const detail = await getOrderDetail(order.id, req.companyId);
   res.status(201).json(detail);
@@ -175,10 +187,7 @@ router.post("/v1/sales-orders", async (req, res): Promise<void> => {
 router.get("/v1/sales-orders/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const detail = await getOrderDetail(id, req.companyId);
-  if (!detail) {
-    res.status(404).json({ error: "Sales order not found" });
-    return;
-  }
+  if (!detail) { res.status(404).json({ error: "Sales order not found" }); return; }
   res.json(detail);
 });
 
@@ -191,7 +200,9 @@ router.patch("/v1/sales-orders/:id", async (req, res): Promise<void> => {
   if (req.body.poNumber != null) updates.poNumber = req.body.poNumber;
   if (req.body.deliveryDate != null) updates.deliveryDate = new Date(req.body.deliveryDate);
 
-  const [order] = await db.update(salesOrdersTable).set(updates).where(and(eq(salesOrdersTable.id, id), eq(salesOrdersTable.companyId, req.companyId))).returning();
+  const [order] = await db.update(salesOrdersTable).set(updates)
+    .where(and(eq(salesOrdersTable.id, id), eq(salesOrdersTable.companyId, req.companyId), isNull(salesOrdersTable.deletedAt)))
+    .returning();
   if (!order) { res.status(404).json({ error: "Sales order not found" }); return; }
   const detail = await getOrderDetail(id, req.companyId);
   res.json(detail);
@@ -202,11 +213,37 @@ router.patch("/v1/sales-orders/:id/status", async (req, res): Promise<void> => {
   const { status } = req.body ?? {};
   if (!status) { res.status(400).json({ error: "status is required" }); return; }
 
-  const [order] = await db.update(salesOrdersTable).set({ status }).where(and(eq(salesOrdersTable.id, id), eq(salesOrdersTable.companyId, req.companyId))).returning();
-  if (!order) { res.status(404).json({ error: "Sales order not found" }); return; }
+  try {
+    if (status === "Confirmed") {
+      await confirmSO(id, req.companyId);
+    } else if (status === "Cancelled") {
+      await cancelSO(id, req.companyId);
+    } else {
+      await advanceSO(id, req.companyId, status);
+    }
+    const detail = await getOrderDetail(id, req.companyId);
+    res.json(detail);
+  } catch (err) {
+    if (err instanceof StatusError) {
+      res.status(err.status).json({ error: err.message });
+    } else {
+      throw err;
+    }
+  }
+});
 
-  const detail = await getOrderDetail(id, req.companyId);
-  res.json(detail);
+router.delete("/v1/sales-orders/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const [so] = await db.select().from(salesOrdersTable)
+    .where(and(eq(salesOrdersTable.id, id), eq(salesOrdersTable.companyId, req.companyId)));
+  if (!so) { res.status(404).json({ error: "Sales order not found" }); return; }
+  if (!["Draft", "Cancelled"].includes(so.status)) {
+    res.status(400).json({ error: "Only Draft or Cancelled orders can be deleted" }); return;
+  }
+  await db.update(salesOrdersTable)
+    .set({ deletedAt: new Date() })
+    .where(eq(salesOrdersTable.id, id));
+  res.sendStatus(204);
 });
 
 export default router;

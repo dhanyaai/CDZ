@@ -89,7 +89,7 @@ router.post("/v1/companies/:id/switch", async (req, res): Promise<void> => {
     destroySession(auth.slice(7));
   }
 
-  const newToken = createSession(req.userId, id);
+  const newToken = createSession(req.userId, id, req.userRole ?? "");
   await db.update(usersTable).set({ companyId: id }).where(eq(usersTable.id, req.userId));
 
   res.json({ success: true, token: newToken, companyId: id, companyName: company.name, productionEnabled: company.productionEnabled });
