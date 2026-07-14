@@ -72,7 +72,7 @@ interface OrderFormData {
   procurementRemarks: string;
   designStartDate: string;
   designStartTime: string;
-  designerAttachments: string;
+  designerAttachments: Array<{ name: string; url: string; type: string }>;
   mockupApprovalEndDate: string;
   mockupApprovalEndTime: string;
   mockupApprovalSignedBy: string;
@@ -124,7 +124,7 @@ const EMPTY: OrderFormData = {
   totalAmount: "", advanceReceived: "", balanceAmount: "", moreInfo: "",
   procurementDate: "", procurementTime: "", materialReceived: false,
   materialReceivedDate: "", materialReceivedTime: "", procurementSignedBy: "", procurementRemarks: "",
-  designStartDate: "", designStartTime: "", designerAttachments: "",
+  designStartDate: "", designStartTime: "", designerAttachments: [],
   mockupApprovalEndDate: "", mockupApprovalEndTime: "", mockupApprovalSignedBy: "",
   preProductionApprovalEndDate: "", preProductionApprovalEndTime: "", preProductionApprovalSignedBy: "",
   designerRemarks: "",
@@ -283,7 +283,7 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
     <div class="row">
       <div class="item"><div class="lbl">Design Start Date</div><div class="val">${fmt(data.designStartDate)}</div></div>
       <div class="item"><div class="lbl">Design Start Time</div><div class="val">${fmt(data.designStartTime)}</div></div>
-      <div class="item"><div class="lbl">Attachments</div><div class="val">${fmt(data.designerAttachments)}</div></div>
+      <div class="item"><div class="lbl">Attachments</div><div class="val">${Array.isArray(data.designerAttachments) ? (data.designerAttachments as Array<{name:string;url:string}>).map(a => `<a href="${a.url}" target="_blank">${a.name}</a>`).join(", ") : fmt(data.designerAttachments as string)}</div></div>
     </div>
     <div class="row">
       <div class="item">
@@ -441,10 +441,52 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
     }));
   };
 
+  const designerFileInputRef = useRef<HTMLInputElement>(null);
+  const [designerUploading, setDesignerUploading] = useState(false);
+
+  const handleDesignerFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setDesignerUploading(true);
+    try {
+      const results: Array<{ name: string; url: string; type: string }> = [];
+      for (const file of Array.from(files)) {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/v1/uploads/file", { method: "POST", body: form });
+        if (!res.ok) throw new Error(`Upload failed for ${file.name}`);
+        const data = await res.json() as { url: string; name: string; type: string };
+        results.push(data);
+      }
+      setFormData((prev) => ({
+        ...prev,
+        designerAttachments: [...(Array.isArray(prev.designerAttachments) ? prev.designerAttachments : []), ...results],
+      }));
+      toast({ title: `${results.length} file${results.length > 1 ? "s" : ""} uploaded` });
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setDesignerUploading(false);
+      if (designerFileInputRef.current) designerFileInputRef.current.value = "";
+    }
+  };
+
+  const removeDesignerAttachment = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      designerAttachments: (Array.isArray(prev.designerAttachments) ? prev.designerAttachments : []).filter((_, i) => i !== index),
+    }));
+  };
+
   useEffect(() => {
     if (existingForm) {
       setFormId(existingForm.id);
-      setFormData({ ...EMPTY, ...(existingForm.formData as Partial<OrderFormData>) });
+      const raw = existingForm.formData as Partial<OrderFormData>;
+      setFormData({
+        ...EMPTY,
+        ...raw,
+        designerAttachments: Array.isArray(raw.designerAttachments) ? raw.designerAttachments : [],
+        attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
+      });
     }
   }, [existingForm]);
 
@@ -854,16 +896,95 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
           <Card>
             <CardHeader><CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Designer</CardTitle></CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Design Start Date">
                   <Input type="date" value={formData.designStartDate} onChange={(e) => set("designStartDate", e.target.value)} />
                 </Field>
                 <Field label="Design Start Time">
                   <Input type="time" value={formData.designStartTime} onChange={(e) => set("designStartTime", e.target.value)} />
                 </Field>
-                <Field label="Attachments / References">
-                  <Input value={formData.designerAttachments} placeholder="File names or notes" onChange={(e) => set("designerAttachments", e.target.value)} />
-                </Field>
+              </div>
+
+              {/* Designer Attachments */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5" /> Attachments / References
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={designerUploading}
+                    onClick={() => designerFileInputRef.current?.click()}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {designerUploading ? "Uploading…" : "Upload Files"}
+                  </Button>
+                  <input
+                    ref={designerFileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf,.svg,.ai,.eps,.cdr,.zip,.doc,.docx,.xls,.xlsx,.txt"
+                    className="hidden"
+                    onChange={(e) => handleDesignerFileUpload(e.target.files)}
+                  />
+                </div>
+                {(Array.isArray(formData.designerAttachments) ? formData.designerAttachments : []).length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => designerFileInputRef.current?.click()}
+                    disabled={designerUploading}
+                    className="w-full border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:border-primary/40 hover:bg-muted/30 transition-colors cursor-pointer"
+                  >
+                    <Upload className="w-7 h-7 mx-auto mb-1.5 text-muted-foreground/50" />
+                    <p className="text-sm text-muted-foreground">Click to upload design references</p>
+                    <p className="text-xs text-muted-foreground/70 mt-0.5">Images, PDF, SVG, AI, CDR, ZIP (max 25 MB each)</p>
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    {(Array.isArray(formData.designerAttachments) ? formData.designerAttachments : []).map((att, i) => {
+                      const isImage = att.type.startsWith("image/");
+                      return (
+                        <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg border bg-muted/20 group">
+                          {isImage ? (
+                            <img src={att.url} alt={att.name} className="w-10 h-10 rounded object-cover border flex-shrink-0" />
+                          ) : (
+                            <div className="w-10 h-10 rounded border bg-background flex items-center justify-center flex-shrink-0">
+                              {att.type === "application/pdf" ? (
+                                <FileText className="w-5 h-5 text-red-500" />
+                              ) : (
+                                <File className="w-5 h-5 text-muted-foreground" />
+                              )}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{att.name}</p>
+                            <p className="text-xs text-muted-foreground">{att.type}</p>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <a href={att.url} target="_blank" rel="noopener noreferrer">
+                              <Button type="button" variant="ghost" size="icon" className="h-7 w-7">
+                                <Download className="w-3.5 h-3.5" />
+                              </Button>
+                            </a>
+                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => removeDesignerAttachment(i)}>
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => designerFileInputRef.current?.click()}
+                      disabled={designerUploading}
+                      className="w-full mt-1 py-2 text-xs text-muted-foreground border border-dashed rounded-lg hover:border-primary/40 hover:text-primary transition-colors"
+                    >
+                      + Add more files
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
