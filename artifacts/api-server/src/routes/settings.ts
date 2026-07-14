@@ -22,9 +22,10 @@ router.get("/v1/settings/company", async (req, res): Promise<void> => {
 router.patch("/v1/settings/company", requireAdmin, async (req, res): Promise<void> => {
   const current = await getOrCreateSettings(req.companyId);
   const allowed = [
-    "companyName", "legalName", "gstNumber", "pan", "email", "phone",
-    "address", "city", "state", "pincode", "website", "logoUrl",
-    "invoicePrefix", "quotePrefix", "defaultGstPct", "currency",
+    "companyName", "legalName", "gstNumber", "stateCode", "pan", "email", "phone",
+    "address", "city", "state", "pincode", "website", "logoUrl", "bankDetails",
+    "invoicePrefix", "soPrefix", "poPrefix", "grnPrefix", "shipPrefix", "quotePrefix",
+    "defaultGstPct", "currency", "fyStartMonth",
   ] as const;
   const updates: Record<string, unknown> = {};
   for (const k of allowed) if (req.body?.[k] !== undefined) updates[k] = req.body[k];

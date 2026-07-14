@@ -18,6 +18,13 @@ export const invoicesTable = pgTable("invoices", {
   dueDate: timestamp("due_date", { withTimezone: true }),
   notes: text("notes"),
   paymentTerms: text("payment_terms"),
+  cgst: numeric("cgst", { precision: 14, scale: 2 }).notNull().default("0"),
+  sgst: numeric("sgst", { precision: 14, scale: 2 }).notNull().default("0"),
+  igst: numeric("igst", { precision: 14, scale: 2 }).notNull().default("0"),
+  placeOfSupplyStateCode: text("place_of_supply_state_code"),
+  roundOff: numeric("round_off", { precision: 8, scale: 2 }).notNull().default("0"),
+  amountInWords: text("amount_in_words"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

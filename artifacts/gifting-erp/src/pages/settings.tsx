@@ -15,6 +15,7 @@ type Settings = {
   companyName: string;
   legalName: string | null;
   gstNumber: string | null;
+  stateCode: string | null;
   pan: string | null;
   email: string | null;
   phone: string | null;
@@ -23,10 +24,17 @@ type Settings = {
   state: string | null;
   pincode: string | null;
   website: string | null;
+  logoUrl: string | null;
+  bankDetails: string | null;
   invoicePrefix: string;
+  soPrefix: string;
+  poPrefix: string;
+  grnPrefix: string;
+  shipPrefix: string;
   quotePrefix: string;
   defaultGstPct: string;
   currency: string;
+  fyStartMonth: number;
 };
 
 export function Settings() {
@@ -173,10 +181,34 @@ export function Settings() {
                 {field("state", "State")}
                 {field("pincode", "Pincode")}
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                {field("gstNumber", "GSTIN")}
+                {field("stateCode", "State Code (2-digit, e.g. 07 = Delhi)")}
+              </div>
+              <div>
+                <Label htmlFor="bankDetails">Bank Details (for invoices)</Label>
+                <textarea
+                  id="bankDetails"
+                  className="mt-1.5 w-full min-h-[72px] rounded-md border border-input bg-background px-3 py-2 text-sm resize-none disabled:opacity-60"
+                  value={(form.bankDetails as string) ?? ""}
+                  onChange={(e) => setForm({ ...form, bankDetails: e.target.value })}
+                  disabled={!isAdmin}
+                  placeholder="Bank: HDFC Bank&#10;A/C: 50100XXXXXXXX&#10;IFSC: HDFC0001234"
+                />
+              </div>
               <div className="grid grid-cols-3 gap-4">
                 {field("invoicePrefix", "Invoice # prefix")}
+                {field("soPrefix", "SO # prefix")}
+                {field("poPrefix", "PO # prefix")}
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {field("grnPrefix", "GRN # prefix")}
+                {field("shipPrefix", "Shipment # prefix")}
                 {field("quotePrefix", "Quote # prefix")}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 {field("defaultGstPct", "Default GST %")}
+                {field("fyStartMonth", "FY Start Month (4 = April)", "number")}
               </div>
               {!isAdmin && (
                 <p className="text-xs text-amber-600">Read-only — only Admin users can edit company settings.</p>

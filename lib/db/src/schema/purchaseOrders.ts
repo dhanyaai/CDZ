@@ -15,6 +15,7 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   status: text("status").notNull().default("Ordered"),
   totalAmount: numeric("total_amount", { precision: 14, scale: 2 }).notNull().default("0"),
   expectedDelivery: timestamp("expected_delivery", { withTimezone: true }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

@@ -27,15 +27,23 @@ const PRODUCT_TYPES = [
   { value: "other", label: "Other" },
 ];
 
+const GST_RATES = [0, 5, 12, 18, 28];
+
 const formSchema = z.object({
   name: z.string().min(1),
+  sku: z.string().optional(),
   brand: z.string().optional(),
   productType: z.string().optional(),
   category: z.string().min(1),
+  hsnCode: z.string().optional(),
+  gstRate: z.coerce.number().default(18),
+  uom: z.string().default("PCS"),
   costPrice: z.coerce.number().min(0),
   sellingPrice: z.coerce.number().min(0),
   stockLevel: z.coerce.number().min(0).default(0),
   lowStockThreshold: z.coerce.number().min(0).default(10),
+  reorderQty: z.coerce.number().min(0).default(0),
+  brandable: z.boolean().default(false),
   vendorId: z.coerce.number().optional().nullable(),
   imageUrl: z.string().optional(),
 });
@@ -43,8 +51,10 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const EMPTY_FORM: FormValues = {
-  name: "", brand: "", productType: "", category: "",
+  name: "", sku: "", brand: "", productType: "", category: "",
+  hsnCode: "", gstRate: 18, uom: "PCS",
   costPrice: 0, sellingPrice: 0, stockLevel: 0, lowStockThreshold: 10,
+  reorderQty: 0, brandable: false,
   vendorId: null, imageUrl: "",
 };
 
@@ -118,13 +128,19 @@ export function Products() {
     setEditingId(product.id);
     form.reset({
       name: product.name,
+      sku: product.sku || "",
       brand: product.brand || "",
       productType: product.productType || "",
       category: product.category,
+      hsnCode: product.hsnCode || "",
+      gstRate: product.gstRate ?? 18,
+      uom: product.uom || "PCS",
       costPrice: product.costPrice,
       sellingPrice: product.sellingPrice,
       stockLevel: product.stockLevel,
       lowStockThreshold: product.lowStockThreshold ?? 10,
+      reorderQty: product.reorderQty ?? 0,
+      brandable: product.brandable ?? false,
       vendorId: product.vendorId,
       imageUrl: product.imageUrl || "",
     });
@@ -241,9 +257,9 @@ export function Products() {
           <TableHeader>
             <TableRow>
               <TableHead>Product</TableHead>
-              <TableHead>Brand</TableHead>
-              <TableHead>Type</TableHead>
               <TableHead>Category</TableHead>
+              <TableHead>HSN</TableHead>
+              <TableHead className="text-center">GST%</TableHead>
               <TableHead className="text-right">Cost</TableHead>
               <TableHead className="text-right">Price</TableHead>
               <TableHead className="text-right">Margin</TableHead>
@@ -288,14 +304,12 @@ export function Products() {
                         <span>{product.name}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{(product as any).brand || "—"}</TableCell>
-                    <TableCell>
-                      {(product as any).productType ? (
-                        <Badge variant="outline" className="text-xs">{productTypeLabel((product as any).productType)}</Badge>
-                      ) : "—"}
-                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="text-xs">{product.category}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm font-mono">{(product as any).hsnCode || "—"}</TableCell>
+                    <TableCell className="text-center">
+                      <span className="text-xs font-medium">{(product as any).gstRate ?? 18}%</span>
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">₹{cost.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</TableCell>
                     <TableCell className="text-right font-medium">₹{sell.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</TableCell>
@@ -388,9 +402,15 @@ export function Products() {
               )} />
 
               <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="sku" render={({ field }) => (
+                  <FormItem><FormLabel>SKU</FormLabel><FormControl><Input placeholder="e.g. MUG-001" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
                 <FormField control={form.control} name="brand" render={({ field }) => (
                   <FormItem><FormLabel>Brand</FormLabel><FormControl><Input placeholder="e.g. Nike, Fastrack" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="productType" render={({ field }) => (
                   <FormItem><FormLabel>Product Type</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || "__none__"}>
@@ -402,18 +422,44 @@ export function Products() {
                     </Select>
                   <FormMessage /></FormItem>
                 )} />
+                <FormField control={form.control} name="category" render={({ field }) => (
+                  <FormItem><FormLabel>Category *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {categoryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  <FormMessage /></FormItem>
+                )} />
               </div>
 
-              <FormField control={form.control} name="category" render={({ field }) => (
-                <FormItem><FormLabel>Category *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      {categoryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                <FormMessage /></FormItem>
-              )} />
+              {/* India compliance */}
+              <div className="grid grid-cols-3 gap-4">
+                <FormField control={form.control} name="hsnCode" render={({ field }) => (
+                  <FormItem><FormLabel>HSN Code</FormLabel><FormControl><Input placeholder="e.g. 9608" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="gstRate" render={({ field }) => (
+                  <FormItem><FormLabel>GST %</FormLabel>
+                    <Select onValueChange={v => field.onChange(Number(v))} value={String(field.value)}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {GST_RATES.map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  <FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="uom" render={({ field }) => (
+                  <FormItem><FormLabel>UOM</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {["PCS","BOX","SET","KG","LTR","MTR","DOZ","PAC"].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  <FormMessage /></FormItem>
+                )} />
+              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="costPrice" render={({ field }) => (
@@ -424,12 +470,15 @@ export function Products() {
                 )} />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <FormField control={form.control} name="stockLevel" render={({ field }) => (
                   <FormItem><FormLabel>Stock Level</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="lowStockThreshold" render={({ field }) => (
-                  <FormItem><FormLabel>Low Stock Alert At</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Low Stock Alert</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="reorderQty" render={({ field }) => (
+                  <FormItem><FormLabel>Reorder Qty</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
 
@@ -443,6 +492,13 @@ export function Products() {
                     </SelectContent>
                   </Select>
                 <FormMessage /></FormItem>
+              )} />
+
+              <FormField control={form.control} name="brandable" render={({ field }) => (
+                <FormItem className="flex items-center gap-3 space-y-0">
+                  <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                  <FormLabel className="cursor-pointer font-normal">Brandable (can print client logo)</FormLabel>
+                </FormItem>
               )} />
 
               <Button type="submit" className="w-full" disabled={createProduct.isPending || updateProduct.isPending}>Save Product</Button>

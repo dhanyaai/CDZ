@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { companiesTable } from "./companies";
@@ -11,10 +11,15 @@ export const clientsTable = pgTable("clients", {
   email: text("email").notNull(),
   phone: text("phone"),
   gstNumber: text("gst_number"),
+  stateCode: text("state_code"),
   industry: text("industry"),
   tags: text("tags"),
   billingAddress: text("billing_address"),
   shippingAddress: text("shipping_address"),
+  creditLimit: numeric("credit_limit", { precision: 14, scale: 2 }).notNull().default("0"),
+  paymentTerms: text("payment_terms"),
+  stage: text("stage").notNull().default("Lead"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

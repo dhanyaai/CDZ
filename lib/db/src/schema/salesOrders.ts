@@ -20,6 +20,7 @@ export const salesOrdersTable = pgTable("sales_orders", {
   poNumber: text("po_number"),
   occasion: text("occasion"),
   notes: text("notes"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

@@ -16,6 +16,8 @@ import {
   leadsTable, opportunitiesTable,
   quotesTable, quoteItemsTable,
   fixedAssetsTable,
+  warehousesTable, companySettingsTable,
+  permissionsTable, rolePermissionsTable,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { randomBytes, scryptSync } from "node:crypto";
@@ -35,6 +37,9 @@ function daysAgo(n: number) {
 
 async function truncate() {
   await db.execute(sql`TRUNCATE TABLE
+    role_permissions, permissions,
+    audit_logs, number_sequences,
+    vendor_products, inventory, warehouses,
     goods_receipt_items, goods_receipts,
     quote_items, quotes,
     opportunities, leads,
@@ -47,7 +52,7 @@ async function truncate() {
     delivery_addresses, sales_order_items, sales_orders,
     bundle_items, bundles, products, categories, vendors,
     client_interactions, contacts, clients,
-    warehouse_locations, users, companies
+    warehouse_locations, company_settings, users, companies
     RESTART IDENTITY CASCADE`);
 }
 
@@ -67,14 +72,44 @@ async function seed() {
     productionEnabled: true,
   }]).returning();
 
+  // ── Company Settings ──────────────────────────────────────────────────────────
+  console.log("Company Settings...");
+  await db.insert(companySettingsTable).values({
+    companyId: co.id,
+    companyName: "Customize Duniya",
+    legalName: "Customize Duniya Pvt Ltd",
+    gstNumber: "27AABCU9603R1ZX",
+    stateCode: "27",
+    pan: "AABCU9603R",
+    email: "hello@customizeduniya.in",
+    phone: "+91-11-4567-8900",
+    address: "B-204, Okhla Industrial Estate Phase III",
+    city: "New Delhi",
+    state: "Delhi",
+    pincode: "110020",
+    website: "https://customizeduniya.in",
+    bankDetails: "Bank: HDFC Bank\nA/C No: 50100XXXXXXXX\nIFSC: HDFC0001234\nBranch: Okhla Industrial Estate",
+    invoicePrefix: "INV",
+    soPrefix: "SO",
+    poPrefix: "PO",
+    grnPrefix: "GRN",
+    shipPrefix: "SHP",
+    quotePrefix: "QT",
+    fyStartMonth: 4,
+    defaultGstPct: "18",
+    currency: "INR",
+  });
+
   // ── Users ─────────────────────────────────────────────────────────────────────
   console.log("Users...");
-  const [admin, priya, arjun, vikram, anita] = await db.insert(usersTable).values([
-    { name: "Rajesh Mehta",   email: "admin@gifterp.com",  passwordHash: hashPassword("admin123"), role: "Admin",     companyId: co.id },
-    { name: "Priya Sharma",   email: "priya@gifterp.com",  passwordHash: hashPassword("sales123"), role: "Sales",     companyId: co.id },
-    { name: "Arjun Nair",     email: "arjun@gifterp.com",  passwordHash: hashPassword("sales123"), role: "Sales",     companyId: co.id },
-    { name: "Vikram Singh",   email: "vikram@gifterp.com", passwordHash: hashPassword("wh123"),    role: "Warehouse", companyId: co.id },
-    { name: "Anita Patel",    email: "anita@gifterp.com",  passwordHash: hashPassword("fin123"),   role: "Finance",   companyId: co.id },
+  const [admin, priya, arjun, vikram, anita, sunil, kavita] = await db.insert(usersTable).values([
+    { name: "Rajesh Mehta",   email: "admin@gifterp.com",    passwordHash: hashPassword("admin123"),    role: "Admin",      companyId: co.id },
+    { name: "Priya Sharma",   email: "priya@gifterp.com",    passwordHash: hashPassword("sales123"),    role: "Sales",      companyId: co.id },
+    { name: "Arjun Nair",     email: "arjun@gifterp.com",    passwordHash: hashPassword("sales123"),    role: "Sales",      companyId: co.id },
+    { name: "Vikram Singh",   email: "vikram@gifterp.com",   passwordHash: hashPassword("wh123"),       role: "Warehouse",  companyId: co.id },
+    { name: "Anita Patel",    email: "anita@gifterp.com",    passwordHash: hashPassword("fin123"),      role: "Finance",    companyId: co.id },
+    { name: "Sunil Agarwal",  email: "sunil@gifterp.com",    passwordHash: hashPassword("pur123"),      role: "Purchase",   companyId: co.id },
+    { name: "Kavita Rao",     email: "kavita@gifterp.com",   passwordHash: hashPassword("prod123"),     role: "Production", companyId: co.id },
   ]).returning();
 
   await db.insert(userCompaniesTable).values([
@@ -83,6 +118,16 @@ async function seed() {
     { userId: arjun.id,  companyId: co.id },
     { userId: vikram.id, companyId: co.id },
     { userId: anita.id,  companyId: co.id },
+    { userId: sunil.id,  companyId: co.id },
+    { userId: kavita.id, companyId: co.id },
+  ]);
+
+  // ── Warehouses ────────────────────────────────────────────────────────────────
+  console.log("Warehouses...");
+  await db.insert(warehousesTable).values([
+    { companyId: co.id, name: "Main Warehouse — Gurugram",  code: "MWH-GGN", address: "Sector 18, Gurugram, Haryana 122015", isDefault: 1 },
+    { companyId: co.id, name: "Delhi Hub",                  code: "DEL-HUB", address: "Connaught Place, New Delhi 110001",    isDefault: 0 },
+    { companyId: co.id, name: "Mumbai Hub",                 code: "MUM-HUB", address: "BKC, Mumbai 400051",                  isDefault: 0 },
   ]);
 
   // ── Warehouse Locations ───────────────────────────────────────────────────────
@@ -124,22 +169,22 @@ async function seed() {
     succulentKit, notebook, mug, tShirt, slingBag,
     waterBottle, keychain, penStand, usbHub, giftBox,
   ] = await db.insert(productsTable).values([
-    // name, category, costPrice, sellingPrice, stockLevel, lowStockThreshold, vendorId
-    { companyId: co.id, name: "Executive Diary & Pen Set",     category: "Stationery",         costPrice: "320",  sellingPrice: "550",  stockLevel: 250, lowStockThreshold: 30, vendorId: craftVendor.id, imageUrl: "https://images.unsplash.com/photo-1517697471339-4aa32003c11a?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Genuine Leather Wallet",        category: "Bags & Accessories", costPrice: "480",  sellingPrice: "850",  stockLevel: 180, lowStockThreshold: 20, vendorId: luxeVendor.id,  imageUrl: "https://images.unsplash.com/photo-1548036161-63da0e2c4b3a?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Wireless Earbuds Pro",          category: "Electronics",        costPrice: "1200", sellingPrice: "1999", stockLevel: 85,  lowStockThreshold: 15, vendorId: techVendor.id,  imageUrl: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Premium Chocolate Box (18pc)",  category: "Food & Beverage",    costPrice: "250",  sellingPrice: "450",  stockLevel: 320, lowStockThreshold: 50, vendorId: foodVendor.id,  imageUrl: "https://images.unsplash.com/photo-1481349518771-20055b2a7b24?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Mixed Dry Fruits Tin (500g)",   category: "Food & Beverage",    costPrice: "380",  sellingPrice: "650",  stockLevel: 210, lowStockThreshold: 40, vendorId: foodVendor.id,  imageUrl: "https://images.unsplash.com/photo-1596560703905-17b38cc18867?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Indoor Succulent Plant Kit",    category: "Lifestyle",          costPrice: "280",  sellingPrice: "499",  stockLevel: 8,   lowStockThreshold: 20, vendorId: craftVendor.id, imageUrl: "https://images.unsplash.com/photo-1459156212016-c812468e2115?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Branded Hardbound Notebook",    category: "Stationery",         costPrice: "180",  sellingPrice: "320",  stockLevel: 420, lowStockThreshold: 60, vendorId: printVendor.id, imageUrl: "https://images.unsplash.com/photo-1544816155-9e2040e0c9a8?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Ceramic Coffee Mug (Set of 2)", category: "Drinkware",          costPrice: "200",  sellingPrice: "380",  stockLevel: 150, lowStockThreshold: 25, vendorId: craftVendor.id, imageUrl: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Company-Branded T-Shirt",       category: "Apparel",            costPrice: "300",  sellingPrice: "499",  stockLevel: 5,   lowStockThreshold: 30, vendorId: luxeVendor.id,  imageUrl: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Canvas Sling Bag",              category: "Bags & Accessories", costPrice: "350",  sellingPrice: "599",  stockLevel: 120, lowStockThreshold: 20, vendorId: luxeVendor.id,  imageUrl: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Custom Water Bottle 750ml",     category: "Drinkware",          costPrice: "195",  sellingPrice: "360",  stockLevel: 95,  lowStockThreshold: 20, vendorId: craftVendor.id, imageUrl: "https://images.unsplash.com/photo-1602143407296-ab22a1585ad0?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Premium Keychain Set (3pc)",    category: "Bags & Accessories", costPrice: "45",   sellingPrice: "89",   stockLevel: 480, lowStockThreshold: 80, vendorId: printVendor.id, imageUrl: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Bamboo Pen Stand",              category: "Office Gifts",       costPrice: "175",  sellingPrice: "320",  stockLevel: 130, lowStockThreshold: 25, vendorId: craftVendor.id, imageUrl: "https://images.unsplash.com/photo-1585386959984-a4155224a1ad?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "USB-C Hub 7-in-1",             category: "Electronics",        costPrice: "450",  sellingPrice: "799",  stockLevel: 40,  lowStockThreshold: 10, vendorId: techVendor.id,  imageUrl: "https://images.unsplash.com/photo-1625895197185-efcec01cffe0?w=400&h=400&fit=crop&auto=format&q=80" },
-    { companyId: co.id, name: "Premium Gift Wrap Box Set",     category: "Lifestyle",          costPrice: "150",  sellingPrice: "280",  stockLevel: 360, lowStockThreshold: 50, vendorId: printVendor.id, imageUrl: "https://images.unsplash.com/photo-1549465220-1a57ef4ad1d3?w=400&h=400&fit=crop&auto=format&q=80" },
+    // name, category, hsnCode, gstRate, uom, brandable, costPrice, sellingPrice, stockLevel, lowStockThreshold, reorderQty, vendorId
+    { companyId: co.id, name: "Executive Diary & Pen Set",     category: "Stationery",         hsnCode: "4820", gstRate: "12", uom: "SET", brandable: true,  costPrice: "320",  sellingPrice: "550",  stockLevel: 250, lowStockThreshold: 30, reorderQty: 100, vendorId: craftVendor.id, imageUrl: "https://images.unsplash.com/photo-1517697471339-4aa32003c11a?w=400&h=400&fit=crop&auto=format&q=80" },
+    { companyId: co.id, name: "Genuine Leather Wallet",        category: "Bags & Accessories", hsnCode: "4205", gstRate: "18", uom: "PCS", brandable: true,  costPrice: "480",  sellingPrice: "850",  stockLevel: 180, lowStockThreshold: 20, reorderQty: 50,  vendorId: luxeVendor.id,  imageUrl: "https://images.unsplash.com/photo-1548036161-63da0e2c4b3a?w=400&h=400&fit=crop&auto=format&q=80" },
+    { companyId: co.id, name: "Wireless Earbuds Pro",          category: "Electronics",        hsnCode: "8518", gstRate: "18", uom: "PCS", brandable: false, costPrice: "1200", sellingPrice: "1999", stockLevel: 85,  lowStockThreshold: 15, reorderQty: 30,  vendorId: techVendor.id,  imageUrl: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=400&h=400&fit=crop&auto=format&q=80" },
+    { companyId: co.id, name: "Premium Chocolate Box (18pc)",  category: "Food & Beverage",    hsnCode: "1806", gstRate: "5",  uom: "BOX", brandable: false, costPrice: "250",  sellingPrice: "450",  stockLevel: 320, lowStockThreshold: 50, reorderQty: 150, vendorId: foodVendor.id,  imageUrl: "https://images.unsplash.com/photo-1481349518771-20055b2a7b24?w=400&h=400&fit=crop&auto=format&q=80", isPerishable: true, shelfLifeDays: 180 },
+    { companyId: co.id, name: "Mixed Dry Fruits Tin (500g)",   category: "Food & Beverage",    hsnCode: "0813", gstRate: "5",  uom: "PCS", brandable: false, costPrice: "380",  sellingPrice: "650",  stockLevel: 210, lowStockThreshold: 40, reorderQty: 100, vendorId: foodVendor.id,  imageUrl: "https://images.unsplash.com/photo-1596560703905-17b38cc18867?w=400&h=400&fit=crop&auto=format&q=80", isPerishable: true, shelfLifeDays: 365 },
+    { companyId: co.id, name: "Indoor Succulent Plant Kit",    category: "Lifestyle",          hsnCode: "0602", gstRate: "0",  uom: "PCS", brandable: false, costPrice: "280",  sellingPrice: "499",  stockLevel: 8,   lowStockThreshold: 20, reorderQty: 25,  vendorId: craftVendor.id, imageUrl: "https://images.unsplash.com/photo-1459156212016-c812468e2115?w=400&h=400&fit=crop&auto=format&q=80", isPerishable: true, shelfLifeDays: 30 },
+    { companyId: co.id, name: "Branded Hardbound Notebook",    category: "Stationery",         hsnCode: "4820", gstRate: "12", uom: "PCS", brandable: true,  costPrice: "180",  sellingPrice: "320",  stockLevel: 420, lowStockThreshold: 60, reorderQty: 200, vendorId: printVendor.id, imageUrl: "https://images.unsplash.com/photo-1544816155-9e2040e0c9a8?w=400&h=400&fit=crop&auto=format&q=80" },
+    { companyId: co.id, name: "Ceramic Coffee Mug (Set of 2)", category: "Drinkware",          hsnCode: "6911", gstRate: "18", uom: "SET", brandable: true,  costPrice: "200",  sellingPrice: "380",  stockLevel: 150, lowStockThreshold: 25, reorderQty: 75,  vendorId: craftVendor.id, imageUrl: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&h=400&fit=crop&auto=format&q=80" },
+    { companyId: co.id, name: "Company-Branded T-Shirt",       category: "Apparel",            hsnCode: "6109", gstRate: "12", uom: "PCS", brandable: true,  costPrice: "300",  sellingPrice: "499",  stockLevel: 5,   lowStockThreshold: 30, reorderQty: 50,  vendorId: luxeVendor.id,  imageUrl: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop&auto=format&q=80" },
+    { companyId: co.id, name: "Canvas Sling Bag",              category: "Bags & Accessories", hsnCode: "4202", gstRate: "18", uom: "PCS", brandable: true,  costPrice: "350",  sellingPrice: "599",  stockLevel: 120, lowStockThreshold: 20, reorderQty: 50,  vendorId: luxeVendor.id,  imageUrl: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop&auto=format&q=80" },
+    { companyId: co.id, name: "Custom Water Bottle 750ml",     category: "Drinkware",          hsnCode: "3924", gstRate: "18", uom: "PCS", brandable: true,  costPrice: "195",  sellingPrice: "360",  stockLevel: 95,  lowStockThreshold: 20, reorderQty: 50,  vendorId: craftVendor.id, imageUrl: "https://images.unsplash.com/photo-1602143407296-ab22a1585ad0?w=400&h=400&fit=crop&auto=format&q=80" },
+    { companyId: co.id, name: "Premium Keychain Set (3pc)",    category: "Bags & Accessories", hsnCode: "8308", gstRate: "12", uom: "SET", brandable: true,  costPrice: "45",   sellingPrice: "89",   stockLevel: 480, lowStockThreshold: 80, reorderQty: 200, vendorId: printVendor.id, imageUrl: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop&auto=format&q=80" },
+    { companyId: co.id, name: "Bamboo Pen Stand",              category: "Office Gifts",       hsnCode: "4421", gstRate: "12", uom: "PCS", brandable: true,  costPrice: "175",  sellingPrice: "320",  stockLevel: 130, lowStockThreshold: 25, reorderQty: 50,  vendorId: craftVendor.id, imageUrl: "https://images.unsplash.com/photo-1585386959984-a4155224a1ad?w=400&h=400&fit=crop&auto=format&q=80" },
+    { companyId: co.id, name: "USB-C Hub 7-in-1",             category: "Electronics",        hsnCode: "8471", gstRate: "18", uom: "PCS", brandable: false, costPrice: "450",  sellingPrice: "799",  stockLevel: 40,  lowStockThreshold: 10, reorderQty: 20,  vendorId: techVendor.id,  imageUrl: "https://images.unsplash.com/photo-1625895197185-efcec01cffe0?w=400&h=400&fit=crop&auto=format&q=80" },
+    { companyId: co.id, name: "Premium Gift Wrap Box Set",     category: "Lifestyle",          hsnCode: "4819", gstRate: "18", uom: "SET", brandable: true,  costPrice: "150",  sellingPrice: "280",  stockLevel: 360, lowStockThreshold: 50, reorderQty: 150, vendorId: printVendor.id, imageUrl: "https://images.unsplash.com/photo-1549465220-1a57ef4ad1d3?w=400&h=400&fit=crop&auto=format&q=80" },
   ]).returning();
 
   // ── Bundles ───────────────────────────────────────────────────────────────────
@@ -167,14 +212,14 @@ async function seed() {
   // ── Clients ───────────────────────────────────────────────────────────────────
   console.log("Clients...");
   const [tcs, infosys, wipro, hdfc, reliance, zomato, paytm, oyo] = await db.insert(clientsTable).values([
-    { companyId: co.id, companyName: "Tata Consultancy Services",  contactPerson: "Rahul Verma",    email: "rahul@tcs.com",         phone: "+91-9876543210", gstNumber: "27AAACT1234F1Z5", industry: "Technology",    tags: "enterprise,repeat",  billingAddress: "TCS House, Fort, Mumbai 400001",         shippingAddress: "TCS House, Fort, Mumbai 400001" },
-    { companyId: co.id, companyName: "Infosys Limited",            contactPerson: "Suresh Kumar",   email: "suresh@infosys.com",    phone: "+91-9876500001", gstNumber: "29AABCI1234J1ZP", industry: "Technology",    tags: "enterprise",         billingAddress: "Electronics City, Bangalore 560100",     shippingAddress: "Electronics City, Bangalore 560100" },
-    { companyId: co.id, companyName: "Wipro Technologies",         contactPerson: "Meena Iyer",     email: "meena@wipro.com",       phone: "+91-9876500002", gstNumber: "29AABCW2345K2ZQ", industry: "Technology",    tags: "large-account",      billingAddress: "Doddakannelli, Bangalore 560035",        shippingAddress: "Doddakannelli, Bangalore 560035" },
-    { companyId: co.id, companyName: "HDFC Bank Ltd",              contactPerson: "Sunita Kapoor",  email: "sunita@hdfcbank.com",   phone: "+91-9876500003", gstNumber: "27AAACH5234G1Z2", industry: "Banking",       tags: "fintech,premium",    billingAddress: "HDFC Tower, Lower Parel, Mumbai 400013", shippingAddress: "HDFC Tower, Lower Parel, Mumbai 400013" },
-    { companyId: co.id, companyName: "Reliance Industries",        contactPerson: "Amit Shah",      email: "amit.shah@ril.com",     phone: "+91-9876500004", gstNumber: "27AAACR4849R1ZQ", industry: "Conglomerate",  tags: "enterprise,priority",billingAddress: "Maker Chambers, Mumbai 400021",          shippingAddress: "Jamnagar 361142" },
-    { companyId: co.id, companyName: "Zomato Limited",             contactPerson: "Deepika Roy",    email: "deepika@zomato.com",    phone: "+91-9876500005", gstNumber: "07AABCZ5678L1ZH", industry: "Food & Tech",   tags: "startup,festive",    billingAddress: "Ground Floor, Gurgaon 122001",           shippingAddress: "Ground Floor, Gurgaon 122001" },
-    { companyId: co.id, companyName: "Paytm Payments Bank",        contactPerson: "Neeraj Bajaj",   email: "neeraj@paytm.com",      phone: "+91-9876500006", gstNumber: "09AABCP1234M1ZK", industry: "Fintech",       tags: "startup,premium",    billingAddress: "B-121, Noida Special Zone, 201301",      shippingAddress: "B-121, Noida Special Zone, 201301" },
-    { companyId: co.id, companyName: "OYO Rooms India",            contactPerson: "Ritesh Khanna",  email: "ritesh@oyorooms.com",   phone: "+91-9876500007", gstNumber: "07AABCO5678P1ZL", industry: "Hospitality",   tags: "startup",            billingAddress: "DLF Cyber City, Gurgaon 122002",         shippingAddress: "DLF Cyber City, Gurgaon 122002" },
+    { companyId: co.id, companyName: "Tata Consultancy Services",  contactPerson: "Rahul Verma",    email: "rahul@tcs.com",         phone: "+91-9876543210", gstNumber: "27AAACT1234F1Z5", stateCode: "27", industry: "Technology",    tags: "enterprise,repeat",   creditLimit: "5000000", paymentTerms: "30 days", stage: "Active", billingAddress: "TCS House, Fort, Mumbai 400001",         shippingAddress: "TCS House, Fort, Mumbai 400001" },
+    { companyId: co.id, companyName: "Infosys Limited",            contactPerson: "Suresh Kumar",   email: "suresh@infosys.com",    phone: "+91-9876500001", gstNumber: "29AABCI1234J1ZP", stateCode: "29", industry: "Technology",    tags: "enterprise",          creditLimit: "3000000", paymentTerms: "30 days", stage: "Active", billingAddress: "Electronics City, Bangalore 560100",     shippingAddress: "Electronics City, Bangalore 560100" },
+    { companyId: co.id, companyName: "Wipro Technologies",         contactPerson: "Meena Iyer",     email: "meena@wipro.com",       phone: "+91-9876500002", gstNumber: "29AABCW2345K2ZQ", stateCode: "29", industry: "Technology",    tags: "large-account",       creditLimit: "2000000", paymentTerms: "45 days", stage: "Active", billingAddress: "Doddakannelli, Bangalore 560035",        shippingAddress: "Doddakannelli, Bangalore 560035" },
+    { companyId: co.id, companyName: "HDFC Bank Ltd",              contactPerson: "Sunita Kapoor",  email: "sunita@hdfcbank.com",   phone: "+91-9876500003", gstNumber: "27AAACH5234G1Z2", stateCode: "27", industry: "Banking",       tags: "fintech,premium",     creditLimit: "4000000", paymentTerms: "15 days", stage: "Active", billingAddress: "HDFC Tower, Lower Parel, Mumbai 400013", shippingAddress: "HDFC Tower, Lower Parel, Mumbai 400013" },
+    { companyId: co.id, companyName: "Reliance Industries",        contactPerson: "Amit Shah",      email: "amit.shah@ril.com",     phone: "+91-9876500004", gstNumber: "27AAACR4849R1ZQ", stateCode: "27", industry: "Conglomerate",  tags: "enterprise,priority", creditLimit: "8000000", paymentTerms: "30 days", stage: "Active", billingAddress: "Maker Chambers, Mumbai 400021",          shippingAddress: "Jamnagar 361142" },
+    { companyId: co.id, companyName: "Zomato Limited",             contactPerson: "Deepika Roy",    email: "deepika@zomato.com",    phone: "+91-9876500005", gstNumber: "07AABCZ5678L1ZH", stateCode: "07", industry: "Food & Tech",   tags: "startup,festive",     creditLimit: "1000000", paymentTerms: "30 days", stage: "Active", billingAddress: "Ground Floor, Gurgaon 122001",           shippingAddress: "Ground Floor, Gurgaon 122001" },
+    { companyId: co.id, companyName: "Paytm Payments Bank",        contactPerson: "Neeraj Bajaj",   email: "neeraj@paytm.com",      phone: "+91-9876500006", gstNumber: "09AABCP1234M1ZK", stateCode: "09", industry: "Fintech",       tags: "startup,premium",     creditLimit: "800000",  paymentTerms: "30 days", stage: "Active", billingAddress: "B-121, Noida Special Zone, 201301",      shippingAddress: "B-121, Noida Special Zone, 201301" },
+    { companyId: co.id, companyName: "OYO Rooms India",            contactPerson: "Ritesh Khanna",  email: "ritesh@oyorooms.com",   phone: "+91-9876500007", gstNumber: "07AABCO5678P1ZL", stateCode: "07", industry: "Hospitality",   tags: "startup",             creditLimit: "500000",  paymentTerms: "45 days", stage: "Active", billingAddress: "DLF Cyber City, Gurgaon 122002",         shippingAddress: "DLF Cyber City, Gurgaon 122002" },
   ]).returning();
 
   // ── Contacts ──────────────────────────────────────────────────────────────────
@@ -488,15 +533,67 @@ async function seed() {
     { companyId: co.id, assetCode: "FA-006", name: "Dell OptiPlex 7090 (×5 units)",     category: "IT Equipment",     purchaseDate: "2024-07-01", purchaseCost: "225000", usefulLifeYears: 4, residualValue: "15000", currentBookValue: "183750", locationId: del.id, status: "Active",      description: "Office computers — Delhi Sales Office" },
   ]);
 
+  // ── Permissions & Role Permissions ───────────────────────────────────────────
+  console.log("Permissions...");
+  const permCodes = [
+    { code: "sales_order.view",       description: "View sales orders" },
+    { code: "sales_order.create",     description: "Create sales orders" },
+    { code: "sales_order.confirm",    description: "Confirm sales orders" },
+    { code: "sales_order.cancel",     description: "Cancel sales orders" },
+    { code: "purchase_order.view",    description: "View purchase orders" },
+    { code: "purchase_order.create",  description: "Create purchase orders" },
+    { code: "purchase_order.confirm", description: "Confirm purchase orders" },
+    { code: "grn.create",             description: "Create goods receipts" },
+    { code: "invoice.view",           description: "View invoices" },
+    { code: "invoice.create",         description: "Create invoices" },
+    { code: "invoice.payment",        description: "Record payments" },
+    { code: "product.view",           description: "View products" },
+    { code: "product.create",         description: "Create / edit products" },
+    { code: "product.delete",         description: "Delete products" },
+    { code: "client.view",            description: "View clients" },
+    { code: "client.create",          description: "Create / edit clients" },
+    { code: "inventory.view",         description: "View inventory" },
+    { code: "inventory.adjust",       description: "Adjust inventory" },
+    { code: "assembly.view",          description: "View assembly jobs" },
+    { code: "assembly.manage",        description: "Manage assembly jobs" },
+    { code: "settings.edit",          description: "Edit company settings" },
+    { code: "user.manage",            description: "Manage users" },
+    { code: "report.view",            description: "View analytics & reports" },
+  ];
+
+  await db.insert(permissionsTable).values(permCodes);
+
+  const rolePerms: { role: string; permissionCode: string }[] = [];
+  const all = permCodes.map(p => p.code);
+
+  const byRole: Record<string, string[]> = {
+    Admin:      all,
+    Sales:      ["sales_order.view","sales_order.create","sales_order.confirm","client.view","client.create","product.view","invoice.view","report.view"],
+    Purchase:   ["purchase_order.view","purchase_order.create","purchase_order.confirm","grn.create","product.view","inventory.view","inventory.adjust","report.view"],
+    Warehouse:  ["inventory.view","inventory.adjust","assembly.view","assembly.manage","product.view","sales_order.view","purchase_order.view"],
+    Finance:    ["invoice.view","invoice.create","invoice.payment","report.view","client.view","sales_order.view","purchase_order.view"],
+    Production: ["assembly.view","assembly.manage","inventory.view","product.view","sales_order.view"],
+  };
+
+  for (const [role, codes] of Object.entries(byRole)) {
+    for (const permissionCode of codes) {
+      rolePerms.push({ role, permissionCode });
+    }
+  }
+  await db.insert(rolePermissionsTable).values(rolePerms);
+
   console.log("\n✅ Seed complete!");
-  console.log("   Company  : Customize Duniya");
-  console.log("   Users    : 5  (admin@gifterp.com / admin123)");
-  console.log("   Clients  : 8  Vendors: 5  Products: 15");
-  console.log("   Locations: 3  Categories: 8  Bundles: 4");
+  console.log("   Company  : Customize Duniya (stateCode: 27 / Maharashtra)");
+  console.log("   Users    : 7  (admin@gifterp.com / admin123)");
+  console.log("             Purchase: sunil@gifterp.com / pur123");
+  console.log("             Production: kavita@gifterp.com / prod123");
+  console.log("   Clients  : 8  (with stateCode + creditLimit)");
+  console.log("   Vendors  : 5  Products: 15 (with HSN codes + GST rates)");
+  console.log("   Locations: 3  Warehouses: 3  Categories: 8  Bundles: 4");
   console.log("   SO: 12  PO: 8  GRN: 3  Invoices: 6  Payments: 4");
   console.log("   Leads: 6  Opportunities: 4  Quotes: 8");
-  console.log("   Inventory movements: 36 (spread across 4 age buckets)");
-  console.log("   Fixed Assets: 6");
+  console.log("   Inventory movements: 36  Fixed Assets: 6");
+  console.log("   Permissions: 23  Role-Permissions: " + rolePerms.length);
 }
 
 seed().catch(console.error).finally(() => process.exit());
