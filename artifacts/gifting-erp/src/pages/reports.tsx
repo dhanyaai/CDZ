@@ -18,6 +18,7 @@ import { format } from "date-fns";
 import {
   TrendingUp, DollarSign, ShoppingCart, AlertCircle, Package, Users,
   Building2, Factory, BarChart3, FileText, Truck, Landmark, CalendarDays, Archive,
+  Download, Receipt,
 } from "lucide-react";
 
 // ─── date presets ─────────────────────────────────────────────────────────────
@@ -779,6 +780,212 @@ function ProductionTab({ cid }: TabProps) {
   );
 }
 
+// ─── GSTR-1 Tab ───────────────────────────────────────────────────────────────
+interface Gstr1B2bItem { invoiceNumber: string; invoiceDate: string; invoiceValue: number; placeOfSupply: string; reverseCharge: string; items: { hsnCode: string; taxableValue: number; gstRate: number; cgst: number; sgst: number; igst: number }[] }
+interface Gstr1B2b { gstin: string; clientName: string; invoices: Gstr1B2bItem[] }
+interface Gstr1B2cs { stateCode: string; gstRate: number; taxableValue: number; cgst: number; sgst: number; igst: number }
+interface Gstr1Hsn { hsnCode: string; description: string; gstRate: number; qty: number; taxableValue: number; cgst: number; sgst: number; igst: number; total: number }
+interface Gstr1Totals { invoiceCount: number; taxableValue: number; cgst: number; sgst: number; igst: number; grandTotal: number }
+interface Gstr1Data { period: { from: string; to: string }; totals: Gstr1Totals; b2b: Gstr1B2b[]; b2cs: Gstr1B2cs[]; hsnSummary: Gstr1Hsn[] }
+
+function Gstr1Tab({ filters }: { filters: Filters }) {
+  const q = qs(filters);
+  const { data, isLoading } = useQuery<Gstr1Data>({
+    queryKey: ["gstr1", filters.from, filters.to],
+    queryFn: () => api(`/v1/reports/gstr1${q}`),
+  });
+  const [activeSection, setActiveSection] = useState<"b2b" | "b2cs" | "hsn">("b2b");
+
+  const downloadJson = () => {
+    if (!data) return;
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `GSTR1_${data.period.from}_${data.period.to}.json`; a.click();
+  };
+
+  const downloadCsv = () => {
+    if (!data) return;
+    const rows: string[][] = [];
+    if (activeSection === "b2b") {
+      rows.push(["GSTIN", "Client", "Invoice No", "Date", "Invoice Value", "Place of Supply", "HSN", "Taxable", "GST%", "CGST", "SGST", "IGST"]);
+      for (const r of data.b2b) {
+        for (const inv of r.invoices) {
+          for (const item of inv.items) {
+            rows.push([r.gstin, r.clientName, inv.invoiceNumber, inv.invoiceDate, String(inv.invoiceValue), inv.placeOfSupply, item.hsnCode, String(item.taxableValue), String(item.gstRate), String(item.cgst), String(item.sgst), String(item.igst)]);
+          }
+        }
+      }
+    } else if (activeSection === "b2cs") {
+      rows.push(["State Code", "GST Rate", "Taxable Value", "CGST", "SGST", "IGST"]);
+      for (const r of data.b2cs) rows.push([r.stateCode, String(r.gstRate), String(r.taxableValue), String(r.cgst), String(r.sgst), String(r.igst)]);
+    } else {
+      rows.push(["HSN Code", "Description", "GST Rate", "Taxable Value", "CGST", "SGST", "IGST", "Total"]);
+      for (const r of data.hsnSummary) rows.push([r.hsnCode, r.description, String(r.gstRate), String(r.taxableValue), String(r.cgst), String(r.sgst), String(r.igst), String(r.total)]);
+    }
+    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `GSTR1_${activeSection}_${data.period.from}_${data.period.to}.csv`; a.click();
+  };
+
+  if (isLoading) return <Skeleton className="h-96 w-full" />;
+  const t = data?.totals;
+
+  return (
+    <div className="space-y-6">
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { label: "Invoices", value: t?.invoiceCount ?? 0 },
+          { label: "Taxable Value", value: INR(t?.taxableValue ?? 0) },
+          { label: "CGST", value: INR(t?.cgst ?? 0) },
+          { label: "SGST", value: INR(t?.sgst ?? 0) },
+          { label: "IGST", value: INR(t?.igst ?? 0) },
+          { label: "Grand Total", value: INR(t?.grandTotal ?? 0) },
+        ].map((k) => (
+          <Card key={k.label} className="elev-1">
+            <CardContent className="p-3">
+              <div className="text-lg font-bold leading-none">{k.value}</div>
+              <div className="text-xs text-muted-foreground mt-1">{k.label}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Section + actions */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          {(["b2b", "b2cs", "hsn"] as const).map((s) => (
+            <Button key={s} size="sm" variant={activeSection === s ? "default" : "outline"} className="text-xs uppercase" onClick={() => setActiveSection(s)}>
+              {s === "b2b" ? "B2B" : s === "b2cs" ? "B2CS" : "HSN Summary"}
+            </Button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={downloadCsv}><Download className="w-3.5 h-3.5 mr-1.5" />CSV</Button>
+          <Button size="sm" variant="outline" onClick={downloadJson}><Download className="w-3.5 h-3.5 mr-1.5" />JSON</Button>
+        </div>
+      </div>
+
+      {/* B2B section */}
+      {activeSection === "b2b" && (
+        <Card className="elev-1">
+          <CardHeader className="pb-2"><CardTitle className="text-base">B2B — Supplies to Registered Dealers</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>GSTIN</TableHead><TableHead>Client</TableHead>
+                  <TableHead className="text-right">Invoices</TableHead>
+                  <TableHead className="text-right">Taxable</TableHead>
+                  <TableHead className="text-right">CGST</TableHead>
+                  <TableHead className="text-right">SGST</TableHead>
+                  <TableHead className="text-right">IGST</TableHead>
+                  <TableHead className="text-right">Invoice Value</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(data?.b2b ?? []).map((r) => {
+                  const taxable = r.invoices.reduce((s, inv) => s + inv.items.reduce((a, it) => a + it.taxableValue, 0), 0);
+                  const cgst = r.invoices.reduce((s, inv) => s + inv.items.reduce((a, it) => a + it.cgst, 0), 0);
+                  const sgst = r.invoices.reduce((s, inv) => s + inv.items.reduce((a, it) => a + it.sgst, 0), 0);
+                  const igst = r.invoices.reduce((s, inv) => s + inv.items.reduce((a, it) => a + it.igst, 0), 0);
+                  const total = r.invoices.reduce((s, inv) => s + inv.invoiceValue, 0);
+                  return (
+                    <TableRow key={r.gstin}>
+                      <TableCell className="font-mono text-xs">{r.gstin}</TableCell>
+                      <TableCell className="font-medium">{r.clientName}</TableCell>
+                      <TableCell className="text-right">{r.invoices.length}</TableCell>
+                      <TableCell className="text-right">{INR(taxable)}</TableCell>
+                      <TableCell className="text-right">{INR(cgst)}</TableCell>
+                      <TableCell className="text-right">{INR(sgst)}</TableCell>
+                      <TableCell className="text-right">{INR(igst)}</TableCell>
+                      <TableCell className="text-right font-semibold">{INR(total)}</TableCell>
+                    </TableRow>
+                  );
+                })}
+                {!(data?.b2b.length) && <EmptyRow cols={8} label="No B2B invoices in this period" />}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* B2CS section */}
+      {activeSection === "b2cs" && (
+        <Card className="elev-1">
+          <CardHeader className="pb-2"><CardTitle className="text-base">B2CS — Supplies to Unregistered Buyers</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>State Code</TableHead>
+                  <TableHead className="text-right">GST Rate</TableHead>
+                  <TableHead className="text-right">Taxable Value</TableHead>
+                  <TableHead className="text-right">CGST</TableHead>
+                  <TableHead className="text-right">SGST</TableHead>
+                  <TableHead className="text-right">IGST</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(data?.b2cs ?? []).map((r, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-mono">{r.stateCode}</TableCell>
+                    <TableCell className="text-right">{r.gstRate}%</TableCell>
+                    <TableCell className="text-right">{INR(r.taxableValue)}</TableCell>
+                    <TableCell className="text-right">{INR(r.cgst)}</TableCell>
+                    <TableCell className="text-right">{INR(r.sgst)}</TableCell>
+                    <TableCell className="text-right">{INR(r.igst)}</TableCell>
+                  </TableRow>
+                ))}
+                {!(data?.b2cs.length) && <EmptyRow cols={6} label="No B2CS invoices in this period" />}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* HSN Summary */}
+      {activeSection === "hsn" && (
+        <Card className="elev-1">
+          <CardHeader className="pb-2"><CardTitle className="text-base">HSN-wise Summary</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>HSN Code</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">GST%</TableHead>
+                  <TableHead className="text-right">Taxable</TableHead>
+                  <TableHead className="text-right">CGST</TableHead>
+                  <TableHead className="text-right">SGST</TableHead>
+                  <TableHead className="text-right">IGST</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(data?.hsnSummary ?? []).map((r, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-mono text-sm">{r.hsnCode || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm max-w-[220px] truncate">{r.description}</TableCell>
+                    <TableCell className="text-right">{r.gstRate}%</TableCell>
+                    <TableCell className="text-right">{INR(r.taxableValue)}</TableCell>
+                    <TableCell className="text-right">{INR(r.cgst)}</TableCell>
+                    <TableCell className="text-right">{INR(r.sgst)}</TableCell>
+                    <TableCell className="text-right">{INR(r.igst)}</TableCell>
+                    <TableCell className="text-right font-semibold">{INR(r.total)}</TableCell>
+                  </TableRow>
+                ))}
+                {!(data?.hsnSummary.length) && <EmptyRow cols={8} label="No line items found for this period" />}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Reports Page ──────────────────────────────────────────────────────────
 export function Reports() {
   const user = getStoredUser();
@@ -819,6 +1026,7 @@ export function Reports() {
     { id: "purchasing",   label: "Purchasing",    icon: Truck },
     { id: "assets", label: "Fixed Assets", icon: Landmark },
     ...(user?.productionEnabled ? [{ id: "production", label: "Production", icon: Factory }] : []),
+    { id: "gstr1", label: "GSTR-1", icon: Receipt },
   ];
 
   return (
@@ -903,6 +1111,7 @@ export function Reports() {
         <TabsContent value="purchasing"   className="mt-4"><PurchasingTab filters={filters} cid={activeCid} /></TabsContent>
         <TabsContent value="assets"     className="mt-4"><AssetsTab     filters={filters} cid={activeCid} /></TabsContent>
         {user?.productionEnabled && <TabsContent value="production" className="mt-4"><ProductionTab filters={filters} cid={activeCid} /></TabsContent>}
+        <TabsContent value="gstr1" className="mt-4"><Gstr1Tab filters={filters} /></TabsContent>
       </Tabs>
     </div>
   );

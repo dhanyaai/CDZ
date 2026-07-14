@@ -28,6 +28,9 @@ import fixedAssetsRouter from "./fixedAssets";
 import productionOrdersRouter from "./productionOrders";
 import orderProcessingFormsRouter from "./orderProcessingForms";
 import uploadsRouter from "./uploads";
+import creditNotesRouter from "./creditNotes";
+import auditLogsRouter from "./auditLogs";
+import reportsRouter from "./reports";
 
 const router: IRouter = Router();
 
@@ -60,5 +63,8 @@ router.use(fixedAssetsRouter);
 router.use(productionOrdersRouter);
 router.use(orderProcessingFormsRouter);
 router.use(uploadsRouter);
+router.use(creditNotesRouter);
+router.use(auditLogsRouter);
+router.use(reportsRouter);
 
 export default router;
