@@ -33,6 +33,11 @@ interface SalesOrderDetail {
   items: SalesOrderItem[];
 }
 
+interface Company {
+  id: number;
+  name: string;
+}
+
 interface ChecklistItem {
   productName: string;
   inhouseQty: string;
@@ -96,6 +101,7 @@ interface OrderFormData {
   dispatchInchargeTime: string;
   dispatchInchargeSignedBy: string;
   checklistItems: ChecklistItem[];
+  itemProductionSource: Record<number, string>;
 }
 
 interface ProcessingFormResponse {
@@ -128,6 +134,7 @@ const EMPTY: OrderFormData = {
   dispatchPaymentStatus: "", dispatchDate: "", dispatchTime: "", dispatchSignedBy: "",
   dispatchIncharge: "", dispatchInchargeDate: "", dispatchInchargeTime: "", dispatchInchargeSignedBy: "",
   checklistItems: [{ productName: "", inhouseQty: "", procureQty: "", totalReceiveNote: "" }],
+  itemProductionSource: {},
 };
 
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
@@ -391,6 +398,11 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
     enabled: !!salesOrderId,
   });
 
+  const { data: companies = [] } = useQuery<Company[]>({
+    queryKey: ["companies"],
+    queryFn: () => api<Company[]>("/v1/companies"),
+  });
+
   useEffect(() => {
     if (existingForm) {
       setFormId(existingForm.id);
@@ -626,6 +638,7 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8">#</th>
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Product</th>
                         <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Qty</th>
+                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Production Source</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -641,6 +654,26 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                             </div>
                           </td>
                           <td className="px-4 py-2.5 text-right tabular-nums">{item.quantity}</td>
+                          <td className="px-4 py-2.5">
+                            <select
+                              value={formData.itemProductionSource[item.id] ?? ""}
+                              onChange={(e) => set("itemProductionSource", { ...formData.itemProductionSource, [item.id]: e.target.value })}
+                              className="w-full min-w-[160px] rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            >
+                              <option value="">— Select —</option>
+                              <optgroup label="Production">
+                                <option value="In-House">In-House</option>
+                                <option value="Out-Source">Out-Source</option>
+                              </optgroup>
+                              {companies.length > 0 && (
+                                <optgroup label="Company">
+                                  {companies.map((c) => (
+                                    <option key={c.id} value={c.name}>{c.name}</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </select>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
