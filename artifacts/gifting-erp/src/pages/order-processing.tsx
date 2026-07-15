@@ -897,15 +897,8 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                               className="w-full min-w-[160px] rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             >
                               <option value="">— Select —</option>
-                              <option value="In-House Stock">In-House Stock</option>
-                              <option value="Local Market">Local Market</option>
-                              {vendors.length > 0 && (
-                                <optgroup label="Vendors">
-                                  {vendors.map((v) => (
-                                    <option key={v.id} value={v.name}>{v.name}</option>
-                                  ))}
-                                </optgroup>
-                              )}
+                              <option value="Out-Source">Out-Source</option>
+                              <option value="CARVE-ELITE">CARVE-ELITE</option>
                             </select>
                           </td>
                         </tr>
