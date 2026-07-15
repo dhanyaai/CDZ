@@ -1478,11 +1478,13 @@ components:
 
     BundleSuggestInput:
       type: object
-      required: [budget, occasion]
       properties:
+        targetSellingPrice: { type: number }
         budget: { type: number }
         occasion: { type: string }
         industry: { type: string }
+        recipients: { type: number }
+        minMarginPct: { type: number }
 
     BundleSuggestion:
       type: object
@@ -1492,6 +1494,10 @@ components:
         totalCost: { type: number }
         totalPrice: { type: number }
         margin: { type: number }
+        priceUtilization: { type: number }
+        targetSellingPrice: { type: number }
+        recipients: { type: number }
+        perRecipientPrice: { type: number }
 
     # ── Vendors ──
     Vendor:

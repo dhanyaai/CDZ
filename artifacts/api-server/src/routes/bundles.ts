@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db, bundlesTable, bundleItemsTable, productsTable } from "@workspace/db";
 
 const router = Router();
@@ -124,53 +124,93 @@ router.delete("/v1/bundles/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
-  const { budget, occasion } = req.body ?? {};
-  if (!budget || !occasion) {
-    res.status(400).json({ error: "budget and occasion are required" });
+  const {
+    targetSellingPrice,
+    budget,
+    occasion,
+    minMarginPct = 0,
+    recipients = 1,
+  } = req.body ?? {};
+
+  const target = Number(targetSellingPrice ?? budget ?? 0);
+  if (!target || target <= 0) {
+    res.status(400).json({ error: "targetSellingPrice is required and must be > 0" });
     return;
   }
 
-  const products = await db
+  const perRecipient = target / Math.max(1, Number(recipients));
+
+  const allProducts = await db
     .select()
     .from(productsTable)
-    .where(eq(productsTable.companyId, req.companyId));
+    .where(and(eq(productsTable.companyId, req.companyId), isNull(productsTable.deletedAt)));
 
-  const sorted = products
-    .filter((p) => p.stockLevel > 0)
-    .map((p) => ({
-      ...p,
-      margin: Number(p.sellingPrice) - Number(p.costPrice),
-      sellingPrice: Number(p.sellingPrice),
-      costPrice: Number(p.costPrice),
-    }))
-    .sort((a, b) => b.margin - a.margin);
+  const candidates = allProducts
+    .filter((p) => p.stockLevel > 0 && Number(p.sellingPrice) > 0 && Number(p.sellingPrice) <= perRecipient)
+    .map((p) => {
+      const sp = Number(p.sellingPrice);
+      const cp = Number(p.costPrice);
+      const marginPct = sp > 0 ? ((sp - cp) / sp) * 100 : 0;
+      return { ...p, sellingPrice: sp, costPrice: cp, marginPct };
+    })
+    .filter((p) => p.marginPct >= Number(minMarginPct))
+    .sort((a, b) => {
+      if (Math.abs(b.marginPct - a.marginPct) > 2) return b.marginPct - a.marginPct;
+      return a.sellingPrice - b.sellingPrice;
+    });
 
-  const selected: typeof sorted = [];
-  let remaining = Number(budget);
+  const selected: Array<{ id: number; name: string; sellingPrice: number; costPrice: number; qty: number }> = [];
+  let remaining = perRecipient;
 
-  for (const product of sorted) {
-    if (product.sellingPrice <= remaining) {
-      selected.push(product);
+  for (const product of candidates) {
+    if (product.sellingPrice <= remaining + 0.01) {
+      selected.push({ id: product.id, name: product.name, sellingPrice: product.sellingPrice, costPrice: product.costPrice, qty: 1 });
       remaining -= product.sellingPrice;
     }
-    if (remaining <= 0) break;
+    if (remaining < 1) break;
   }
 
+  if (remaining > 0 && selected.length > 0) {
+    const bestFit = candidates
+      .filter((p) => p.sellingPrice <= remaining + 0.01 && !selected.find((s) => s.id === p.id))
+      .sort((a, b) => b.sellingPrice - a.sellingPrice)[0];
+    if (bestFit) {
+      selected.push({ id: bestFit.id, name: bestFit.name, sellingPrice: bestFit.sellingPrice, costPrice: bestFit.costPrice, qty: 1 });
+      remaining -= bestFit.sellingPrice;
+    }
+  }
+
+  if (remaining > 1 && selected.length > 0) {
+    const cheapest = [...selected].sort((a, b) => a.sellingPrice - b.sellingPrice)[0];
+    const extraQty = Math.floor(remaining / cheapest.sellingPrice);
+    if (extraQty >= 1) {
+      const entry = selected.find((s) => s.id === cheapest.id)!;
+      entry.qty += extraQty;
+      remaining -= cheapest.sellingPrice * extraQty;
+    }
+  }
+
+  const recipientCount = Math.max(1, Number(recipients));
   const items = selected.map((p) => ({
     productId: p.id,
     productName: p.name,
-    quantity: 1,
+    quantity: p.qty * recipientCount,
     unitPrice: p.sellingPrice,
   }));
 
-  const totalPrice = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-  const totalCost = selected.reduce((s, p) => s + p.costPrice, 0);
+  const totalPrice = selected.reduce((s, p) => s + p.sellingPrice * p.qty, 0) * recipientCount;
+  const totalCost = selected.reduce((s, p) => s + p.costPrice * p.qty, 0) * recipientCount;
+  const priceUtilization = target > 0 ? Math.min(100, (totalPrice / target) * 100) : 0;
 
   res.json({
     items,
     totalCost,
     totalPrice,
     margin: totalPrice > 0 ? ((totalPrice - totalCost) / totalPrice) * 100 : 0,
+    priceUtilization,
+    targetSellingPrice: target,
+    recipients: recipientCount,
+    perRecipientPrice: selected.reduce((s, p) => s + p.sellingPrice * p.qty, 0),
   });
 });
 

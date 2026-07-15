@@ -12,4 +12,8 @@ export interface BundleSuggestion {
   totalCost: number;
   totalPrice: number;
   margin: number;
+  priceUtilization?: number;
+  targetSellingPrice?: number;
+  recipients?: number;
+  perRecipientPrice?: number;
 }

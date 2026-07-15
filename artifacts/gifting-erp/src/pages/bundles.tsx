@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search, Plus, Edit, Trash2, Wand2, Upload, X, Package } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Wand2, Upload, X, Package, Users, TrendingUp, IndianRupee, CheckCircle2, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const itemSchema = z.object({
@@ -45,6 +45,17 @@ export function Bundles() {
   
   const [budget, setBudget] = useState("");
   const [suggestOccasion, setSuggestOccasion] = useState("");
+  const [recipients, setRecipients] = useState("1");
+  const [minMarginPct, setMinMarginPct] = useState("0");
+  const [suggestResult, setSuggestResult] = useState<null | {
+    items: Array<{ productId: number; productName: string; quantity: number; unitPrice: number }>;
+    totalPrice: number;
+    totalCost: number;
+    margin: number;
+    priceUtilization: number;
+    perRecipientPrice: number;
+    recipients: number;
+  }>(null);
 
   const { data: bundles, isLoading } = useListBundles();
   const { data: products } = useListProducts();
@@ -152,13 +163,27 @@ export function Bundles() {
 
   const handleSuggest = () => {
     if (!budget) return;
-    const suggestData = suggestOccasion ? { budget: Number(budget), occasion: suggestOccasion } : { budget: Number(budget), occasion: "General" };
-    suggestBundle.mutate({ data: suggestData }, {
-      onSuccess: (res) => {
-        openNew();
-        form.setValue("items", res.items.map((i: any) => ({ productId: i.productId, quantity: i.quantity })));
+    setSuggestResult(null);
+    suggestBundle.mutate({
+      data: {
+        targetSellingPrice: Number(budget),
+        occasion: suggestOccasion || "General",
+        recipients: Number(recipients) || 1,
+        minMarginPct: Number(minMarginPct) || 0,
+      }
+    }, {
+      onSuccess: (res: any) => {
+        setSuggestResult(res);
       }
     });
+  };
+
+  const applysuggestion = () => {
+    if (!suggestResult) return;
+    openNew();
+    if (suggestOccasion) form.setValue("occasion", suggestOccasion);
+    form.setValue("items", suggestResult.items.map((i) => ({ productId: i.productId, quantity: i.quantity })));
+    setSuggestResult(null);
   };
 
   return (
@@ -226,28 +251,135 @@ export function Bundles() {
           </div>
         </div>
 
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-3">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wand2 className="w-5 h-5 text-primary" />
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Wand2 className="w-4 h-4 text-primary" />
                 Smart Suggest
               </CardTitle>
+              <p className="text-xs text-muted-foreground">Fill to a target selling price, maximising margin</p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Target Budget (₹)</label>
-                <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="e.g. 5000" />
+            <CardContent className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                  <IndianRupee className="w-3 h-3" />Target Selling Price
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={budget}
+                  onChange={(e) => { setBudget(e.target.value); setSuggestResult(null); }}
+                  placeholder="e.g. 2000"
+                  className="h-9"
+                />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Occasion</label>
-                <Input value={suggestOccasion} onChange={(e) => setSuggestOccasion(e.target.value)} placeholder="e.g. Diwali, Onboarding" />
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                    <Users className="w-3 h-3" />Recipients
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={recipients}
+                    onChange={(e) => { setRecipients(e.target.value); setSuggestResult(null); }}
+                    placeholder="1"
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" />Min Margin %
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="90"
+                    value={minMarginPct}
+                    onChange={(e) => { setMinMarginPct(e.target.value); setSuggestResult(null); }}
+                    placeholder="0"
+                    className="h-9"
+                  />
+                </div>
               </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Occasion</label>
+                <Select value={suggestOccasion || "__none__"} onValueChange={(v) => { setSuggestOccasion(v === "__none__" ? "" : v); setSuggestResult(null); }}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Any occasion" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Any occasion</SelectItem>
+                    <SelectItem value="Diwali">Diwali</SelectItem>
+                    <SelectItem value="New Year">New Year</SelectItem>
+                    <SelectItem value="Onboarding">Onboarding</SelectItem>
+                    <SelectItem value="Work Anniversary">Work Anniversary</SelectItem>
+                    <SelectItem value="Birthday">Birthday</SelectItem>
+                    <SelectItem value="Conference">Conference</SelectItem>
+                    <SelectItem value="Corporate Event">Corporate Event</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <Button className="w-full" onClick={handleSuggest} disabled={!budget || suggestBundle.isPending}>
-                {suggestBundle.isPending ? "Generating..." : "Suggest Bundle"}
+                {suggestBundle.isPending ? (
+                  <span className="flex items-center gap-2"><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />Analysing...</span>
+                ) : (
+                  <span className="flex items-center gap-2"><Wand2 className="w-3.5 h-3.5" />Suggest Bundle</span>
+                )}
               </Button>
             </CardContent>
           </Card>
+
+          {suggestResult && (
+            <Card className="border-primary/40 bg-primary/5">
+              <CardContent className="pt-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <span className="text-sm font-semibold">Suggested Bundle</span>
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5" />
+                </div>
+
+                <div className="space-y-1.5">
+                  {suggestResult.items.map((item, i) => (
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="text-muted-foreground truncate max-w-[140px]">{item.productName}</span>
+                      <span className="font-medium ml-1 shrink-0">×{item.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t pt-2 space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Sell price</span>
+                    <span className="font-semibold">₹{suggestResult.totalPrice.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">vs target</span>
+                    <span className={`font-medium ${suggestResult.priceUtilization >= 85 ? "text-green-600" : suggestResult.priceUtilization >= 60 ? "text-amber-600" : "text-red-600"}`}>
+                      {Math.round(suggestResult.priceUtilization)}% utilised
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Margin</span>
+                    <span className={`font-semibold ${suggestResult.margin >= 30 ? "text-green-600" : "text-amber-600"}`}>
+                      {Math.round(suggestResult.margin)}%
+                    </span>
+                  </div>
+                  {suggestResult.recipients > 1 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Per recipient</span>
+                      <span className="font-medium">₹{suggestResult.perRecipientPrice.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                    </div>
+                  )}
+                </div>
+
+                <Button size="sm" className="w-full" onClick={applysuggestion}>
+                  <span className="flex items-center gap-1.5">Use This Bundle<ChevronRight className="w-3.5 h-3.5" /></span>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 
