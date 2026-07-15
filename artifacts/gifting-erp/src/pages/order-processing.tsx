@@ -395,6 +395,7 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
   const [formData, setFormData] = useState<OrderFormData>(EMPTY);
   const [formId, setFormId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("order-info");
+  const [lightboxItem, setLightboxItem] = useState<SalesOrderItem | null>(null);
 
   const { data: existingForm, isLoading } = useQuery<ProcessingFormResponse | null>({
     queryKey: ["order-processing", salesOrderId],
@@ -855,7 +856,12 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                           <td className="px-4 py-2.5">
                             <div className="flex items-center gap-2.5">
                               {item.productImage && (
-                                <img src={item.productImage} alt={item.productName} className="w-9 h-9 rounded-md object-cover border flex-shrink-0" />
+                                <img
+                                  src={item.productImage}
+                                  alt={item.productName}
+                                  className="w-9 h-9 rounded-md object-cover border flex-shrink-0 cursor-zoom-in hover:ring-2 hover:ring-primary transition-all"
+                                  onClick={() => setLightboxItem(item)}
+                                />
                               )}
                               <span className="font-medium">{item.productName}</span>
                             </div>
@@ -1283,6 +1289,50 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
           {saveMutation.isPending ? "Saving…" : formId ? "Update Form" : "Save Form"}
         </Button>
       </div>
+
+      {/* Image lightbox */}
+      {lightboxItem && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setLightboxItem(null)}
+        >
+          <div
+            className="bg-background rounded-2xl shadow-2xl overflow-hidden max-w-sm w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {lightboxItem.productImage && (
+              <img
+                src={lightboxItem.productImage}
+                alt={lightboxItem.productName}
+                className="w-full aspect-square object-contain bg-muted"
+              />
+            )}
+            <div className="p-5 space-y-3">
+              <h3 className="font-semibold text-lg leading-snug">{lightboxItem.productName}</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <div className="text-muted-foreground text-xs mb-1">Quantity</div>
+                  <div className="font-semibold">{lightboxItem.quantity}</div>
+                </div>
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <div className="text-muted-foreground text-xs mb-1">Unit Price</div>
+                  <div className="font-semibold">₹{Number(lightboxItem.unitPrice).toLocaleString("en-IN")}</div>
+                </div>
+                <div className="bg-muted/50 rounded-lg p-3 col-span-2">
+                  <div className="text-muted-foreground text-xs mb-1">Total</div>
+                  <div className="font-semibold text-primary">₹{Number(lightboxItem.totalPrice).toLocaleString("en-IN")}</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setLightboxItem(null)}
+                className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
