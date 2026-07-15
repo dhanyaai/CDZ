@@ -280,10 +280,10 @@ export function printPurchaseOrder(order: {
       <thead>
         <tr>
           <th>Product / Description</th>
-          <th class="text-right">Unit Price</th>
-          <th class="text-center">Qty Ordered</th>
-          <th class="text-center">Qty Received</th>
-          <th class="text-right">Line Total</th>
+          <th class="text-right" style="width:95px;">Unit Price</th>
+          <th class="text-center" style="width:85px;">Qty Ordered</th>
+          <th class="text-center" style="width:95px;">Qty Received</th>
+          <th class="text-right" style="width:95px;">Line Total</th>
         </tr>
       </thead>
       <tbody>
@@ -452,9 +452,9 @@ export function printGrn(g: {
       <thead>
         <tr>
           <th>Product</th>
-          <th class="text-center">Qty Received</th>
-          <th class="text-center">Qty Rejected</th>
-          <th>Remarks</th>
+          <th class="text-center" style="width:100px;">Qty Received</th>
+          <th class="text-center" style="width:100px;">Qty Rejected</th>
+          <th style="width:130px;">Remarks</th>
         </tr>
       </thead>
       <tbody>
@@ -522,8 +522,8 @@ export function printDeliveryChallan(shipment: {
 
   const deliveryRows = items.map(it => `<tr>
     <td class="font-bold">${it.deliveryName}</td>
-    <td>${it.address}</td>
-    <td style="font-family:monospace;font-size:11px;">${it.awbNumber || "—"}</td>
+    <td style="word-break:break-word;">${it.address}</td>
+    <td style="font-family:monospace;font-size:11px;word-break:break-all;">${it.awbNumber || "—"}</td>
     <td>${it.status}</td>
   </tr>`).join("");
 
@@ -556,7 +556,12 @@ export function printDeliveryChallan(shipment: {
     ${items.length > 0 ? `
       <div class="section-title">Delivery Addresses</div>
       <table>
-        <thead><tr><th>Name</th><th>Address</th><th>AWB #</th><th>Status</th></tr></thead>
+        <thead><tr>
+          <th style="width:22%;">Name</th>
+          <th style="width:44%;">Address</th>
+          <th style="width:20%;">AWB #</th>
+          <th style="width:14%;">Status</th>
+        </tr></thead>
         <tbody>${deliveryRows}</tbody>
       </table>
     ` : ""}
@@ -615,8 +620,8 @@ export function printTaxInvoice(inv: {
   </tr>`).join("");
 
   const gstHeaders = isIntra
-    ? `<th class="text-right">CGST</th><th class="text-right">SGST</th>`
-    : `<th class="text-right">IGST</th>`;
+    ? `<th class="text-right" style="width:9%;">CGST</th><th class="text-right" style="width:9%;">SGST</th>`
+    : `<th class="text-right" style="width:18%;">IGST</th>`;
 
   const html = `
     <div class="doc-header">
@@ -643,13 +648,17 @@ export function printTaxInvoice(inv: {
     </div>
     ${lines.length > 0 ? `
       <div class="section-title">Line Items</div>
-      <table>
+      <table style="font-size:11px;">
         <thead>
           <tr>
-            <th>Description</th><th>HSN</th>
-            <th class="text-right">Qty</th><th class="text-right">Rate</th>
-            <th class="text-right">Taxable</th><th class="text-center">GST%</th>
-            ${gstHeaders}<th class="text-right">Total</th>
+            <th style="width:27%;">Description</th>
+            <th style="width:9%;">HSN</th>
+            <th class="text-right" style="width:7%;">Qty</th>
+            <th class="text-right" style="width:10%;">Rate</th>
+            <th class="text-right" style="width:10%;">Taxable</th>
+            <th class="text-center" style="width:7%;">GST%</th>
+            ${gstHeaders}
+            <th class="text-right" style="width:11%;">Total</th>
           </tr>
         </thead>
         <tbody>${lineRows}</tbody>
