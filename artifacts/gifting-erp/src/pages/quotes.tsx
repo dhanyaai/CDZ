@@ -83,12 +83,14 @@ export function Quotes() {
     setItems([{ description: "", quantity: 1, unitPrice: 0 }]);
   };
 
+  const filledItems = items.filter(i => i.description.trim());
+
   const create = useMutation({
     mutationFn: () => api("/v1/quotes", { method: "POST", body: JSON.stringify({
       clientId: Number(clientId), subject: subject || null, discountPct: Number(discountPct),
       validUntil: validUntil || null, paymentTerms: paymentTerms || null,
       notes: notes || null, termsAndConditions: termsAndConditions || null,
-      items: items.filter(i => i.description).map(i => ({
+      items: filledItems.map(i => ({
         productId: i.productId, description: i.description,
         quantity: i.quantity, unitPrice: i.unitPrice, imageUrl: i.imageUrl,
       })),
@@ -97,6 +99,9 @@ export function Quotes() {
       qc.invalidateQueries({ queryKey: ["quotes"] });
       setDialog(false); resetForm();
       toast({ title: "Quote created" });
+    },
+    onError: (err: unknown) => {
+      toast({ title: "Failed to create quote", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
     },
   });
 
@@ -324,7 +329,11 @@ export function Quotes() {
             <Textarea placeholder="Internal notes (optional)" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
             <Textarea placeholder="Terms & Conditions (optional)" value={termsAndConditions} onChange={e => setTermsAndConditions(e.target.value)} rows={2} />
 
-            <Button onClick={() => create.mutate()} disabled={!clientId || create.isPending} className="w-full">Create Quote</Button>
+            {!clientId && <p className="text-xs text-destructive text-center">Please select a client</p>}
+            {clientId && filledItems.length === 0 && <p className="text-xs text-destructive text-center">Add at least one line item with a description</p>}
+            <Button onClick={() => create.mutate()} disabled={!clientId || filledItems.length === 0 || create.isPending} className="w-full">
+              {create.isPending ? "Creating…" : "Create Quote"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
