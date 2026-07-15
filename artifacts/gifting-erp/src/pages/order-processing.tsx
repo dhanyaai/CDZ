@@ -174,11 +174,9 @@ function SignatureRow({ dateLabel, timeLabel, signLabel, dateVal, timeVal, signV
   );
 }
 
-function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: string; clientName: string; deliveryDate?: string; items?: SalesOrderItem[]; gstAmount?: number | null; grandTotal?: number | null }) {
+function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: string; clientName: string; deliveryDate?: string; items?: SalesOrderItem[] }) {
   const fmt = (v: string | undefined) => v || "—";
   const yesNo = (v: boolean | undefined) => v ? "Yes ☑" : "No ☑";
-  const fmtAmt = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
-
   const checklist = (data.checklistItems ?? []).map((item, i) => `
     <tr>
       <td>${i + 1}. ${item.productName || ""}</td>
@@ -194,10 +192,6 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
       <td style="text-align:right">${item.quantity}</td>
       <td>${data.itemProductionSource?.[item.id] || "—"}</td>
     </tr>`).join("");
-
-  const itemsSubtotal = (meta.items ?? []).reduce((sum, item) => sum + Number(item.totalPrice), 0);
-  const gstAmount = Number(meta.gstAmount) || 0;
-  const grandTotal = Number(meta.grandTotal) || (itemsSubtotal + gstAmount);
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Order Processing Form — ${meta.orderNumber}</title>
   <style>
@@ -266,13 +260,6 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
       <thead><tr><th style="width:28px;">#</th><th>Product</th><th style="text-align:right;width:55px;">Qty</th><th>Production Source</th></tr></thead>
       <tbody>${itemsRows || "<tr><td colspan='4' style='text-align:center;color:#888;'>No items</td></tr>"}</tbody>
     </table>
-    <div style="display:flex;justify-content:flex-end;margin-top:8px;">
-      <table style="border-collapse:collapse;font-size:12px;">
-        <tr style="background:#f9fafb;"><td style="padding:4px 16px;border:1px solid #d1d5db;color:#6b7280;">Subtotal</td><td style="padding:4px 16px;border:1px solid #d1d5db;color:#6b7280;text-align:right;min-width:130px;">${fmtAmt(itemsSubtotal)}</td></tr>
-        <tr style="background:#f9fafb;"><td style="padding:4px 16px;border:1px solid #d1d5db;color:#6b7280;">GST 18%</td><td style="padding:4px 16px;border:1px solid #d1d5db;color:#6b7280;text-align:right;">${fmtAmt(gstAmount)}</td></tr>
-        <tr style="background:#ede9fe;font-weight:700;"><td style="padding:5px 16px;border:1px solid #d1d5db;">Grand Total</td><td style="padding:5px 16px;border:1px solid #d1d5db;text-align:right;">${fmtAmt(grandTotal)}</td></tr>
-      </table>
-    </div>
   </div>` : ""}
 
   <div class="section">
@@ -593,7 +580,7 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => printOrderProcessingForm(formData, { ...meta, items: salesOrder?.items, gstAmount: salesOrder?.gstAmount as number | undefined, grandTotal: salesOrder?.grandTotal as number | undefined })}
+            onClick={() => printOrderProcessingForm(formData, { ...meta, items: salesOrder?.items })}
           >
             <Printer className="w-4 h-4 mr-2" /> Print
           </Button>
