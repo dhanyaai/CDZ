@@ -31,26 +31,57 @@ interface ExtractedSheet {
 type Format = "png" | "jpg";
 type Mode = "images" | "excel";
 
-function groupTextByRows(items: pdfjsLib.TextItem[], tolerance = 4): string[][] {
+function groupTextByRows(items: pdfjsLib.TextItem[], yTolerance = 5, xGap = 12): string[][] {
   if (!items.length) return [];
+
+  // Sort top-to-bottom (Y descending in PDF coords), left-to-right within a row
   const sorted = [...items].sort((a, b) => {
     const ay = a.transform[5];
     const by = b.transform[5];
-    if (Math.abs(ay - by) > tolerance) return by - ay;
+    if (Math.abs(ay - by) > yTolerance) return by - ay;
     return a.transform[4] - b.transform[4];
   });
 
-  const rows: { y: number; cells: string[] }[] = [];
+  // Step 1: group into rows by Y proximity
+  const rows: { y: number; items: pdfjsLib.TextItem[] }[] = [];
   for (const item of sorted) {
     const y = item.transform[5];
-    const existing = rows.find((r) => Math.abs(r.y - y) <= tolerance);
+    const existing = rows.find((r) => Math.abs(r.y - y) <= yTolerance);
     if (existing) {
-      existing.cells.push(item.str);
+      existing.items.push(item);
     } else {
-      rows.push({ y, cells: [item.str] });
+      rows.push({ y, items: [item] });
     }
   }
-  return rows.map((r) => r.cells);
+
+  // Step 2: within each row, merge nearby items into cells, split on large X gaps
+  return rows.map((row) => {
+    const lineItems = [...row.items].sort((a, b) => a.transform[4] - b.transform[4]);
+    const cells: string[] = [];
+    let currentCell = "";
+    let prevRight = -Infinity;
+
+    for (const item of lineItems) {
+      const x = item.transform[4];
+      const width = item.width ?? 0;
+      const gap = x - prevRight;
+
+      if (currentCell === "") {
+        currentCell = item.str;
+      } else if (gap > xGap) {
+        // Large gap → new cell
+        cells.push(currentCell.trim());
+        currentCell = item.str;
+      } else {
+        // Small gap → same cell; add space if needed
+        const spacer = gap > 1 ? " " : "";
+        currentCell += spacer + item.str;
+      }
+      prevRight = x + width;
+    }
+    if (currentCell.trim()) cells.push(currentCell.trim());
+    return cells;
+  }).filter((row) => row.length > 0 && row.some((c) => c.trim() !== ""));
 }
 
 export function PdfExtractor() {
@@ -130,7 +161,7 @@ export function PdfExtractor() {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
         const textItems = content.items.filter(
-          (item): item is pdfjsLib.TextItem => "str" in item && item.str.trim() !== "",
+          (item): item is pdfjsLib.TextItem => "str" in item && item.str !== "",
         );
         const rowArrays = groupTextByRows(textItems);
         const maxCols = Math.max(0, ...rowArrays.map((r) => r.length));
