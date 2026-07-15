@@ -196,65 +196,7 @@ export function Bundles() {
         <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" /> New Bundle</Button>
       </div>
 
-      {/* Bundle list — full width */}
-      <div className="space-y-4">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search bundles..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-
-        <div className="border rounded-md bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Bundle</TableHead>
-                <TableHead>Occasion</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead className="text-right">Total Price</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={5}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
-              ) : filteredBundles.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No bundles found</TableCell></TableRow>
-              ) : (
-                filteredBundles.map(bundle => (
-                  <TableRow key={bundle.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        {(bundle as any).imageUrl ? (
-                          <img src={(bundle as any).imageUrl} alt={bundle.name} className="w-9 h-9 rounded-lg object-cover border border-border shrink-0" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                            <Package className="w-4 h-4 text-muted-foreground" />
-                          </div>
-                        )}
-                        <span>{bundle.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{bundle.occasion || "-"}</TableCell>
-                    <TableCell>{bundle.items?.length || 0} items</TableCell>
-                    <TableCell className="text-right">₹{Number(bundle.totalPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(bundle)}><Edit className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleteId(bundle.id)}><Trash2 className="w-4 h-4" /></Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {/* Smart Suggest — full-width landscape card */}
+      {/* Smart Suggest — full-width landscape card (top) */}
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
@@ -400,6 +342,64 @@ export function Bundles() {
           )}
         </CardContent>
       </Card>
+
+      {/* Bundle list — below Smart Suggest */}
+      <div className="space-y-4">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search bundles..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
+        <div className="border rounded-md bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Bundle</TableHead>
+                <TableHead>Occasion</TableHead>
+                <TableHead>Items</TableHead>
+                <TableHead className="text-right">Total Price</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow><TableCell colSpan={5}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+              ) : filteredBundles.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No bundles found</TableCell></TableRow>
+              ) : (
+                filteredBundles.map(bundle => (
+                  <TableRow key={bundle.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        {(bundle as any).imageUrl ? (
+                          <img src={(bundle as any).imageUrl} alt={bundle.name} className="w-9 h-9 rounded-lg object-cover border border-border shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                            <Package className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                        )}
+                        <span>{bundle.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{bundle.occasion || "-"}</TableCell>
+                    <TableCell>{bundle.items?.length || 0} items</TableCell>
+                    <TableCell className="text-right">₹{Number(bundle.totalPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(bundle)}><Edit className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleteId(bundle.id)}><Trash2 className="w-4 h-4" /></Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
