@@ -14,6 +14,7 @@ import { Clients } from "@/pages/clients";
 import { ClientDetail } from "@/pages/client-detail";
 import { Products } from "@/pages/products";
 import { Bundles } from "@/pages/bundles";
+import { BundleCosting } from "@/pages/bundle-costing";
 import { Vendors } from "@/pages/vendors";
 import { SalesOrders } from "@/pages/sales-orders";
 import { SalesOrderDetail } from "@/pages/sales-order-detail";
@@ -96,6 +97,7 @@ function Router() {
         <Route path="/quotes" component={Quotes} />
         <Route path="/products" component={Products} />
         <Route path="/bundles" component={Bundles} />
+        <Route path="/bundle-costing" component={BundleCosting} />
         <Route path="/categories" component={Categories} />
         <Route path="/services" component={Services} />
         <Route path="/vendors" component={Vendors} />

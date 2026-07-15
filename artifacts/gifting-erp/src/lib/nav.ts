@@ -31,6 +31,7 @@ import {
   FileImage,
   ClipboardCheck,
   Wrench,
+  Calculator,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -64,6 +65,7 @@ export function getNavItems(opts: { production?: boolean } = {}): NavGroup[] {
       items: [
         { label: "Products", href: "/products", icon: Package },
         { label: "Bundles", href: "/bundles", icon: Gift },
+        { label: "Bundle Costing", href: "/bundle-costing", icon: Calculator },
         { label: "Services", href: "/services", icon: Wrench },
         { label: "Categories", href: "/categories", icon: FolderTree },
       ],
