@@ -887,7 +887,7 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                             >
                               <option value="">— Select —</option>
                               <option value="Out-Source">Out-Source</option>
-                              <option value="CARVELITE">CARVELITE</option>
+                              <option value="CARVE-ELITE">CARVE-ELITE</option>
                             </select>
                           </td>
                           <td className="px-4 py-2.5">
