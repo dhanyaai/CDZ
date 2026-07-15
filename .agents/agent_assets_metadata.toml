@@ -77,3 +77,9 @@ id = "RZ94Pj4YlcIYgrKHWUTpk"
 uri = "file://attached_assets/Pasted-Build-a-full-stack-Corporate-Gifting-ERP-web-applicatio_1779724248008.txt"
 type = "text"
 title = "Corporate Gifting ERP — Original Build Prompt"
+
+[[outputs]]
+id = "MrThv1eACNW_O1vWYHoRn"
+uri = "file://CUSTOMIZE_DUNIYA_ERP.md"
+type = "text"
+title = "Customize Duniya ERP — Complete Documentation"
