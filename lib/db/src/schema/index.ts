@@ -33,3 +33,4 @@ export * from "./auditLogs";
 export * from "./warehouses";
 export * from "./vendorProducts";
 export * from "./permissions";
+export * from "./services";

@@ -31,6 +31,7 @@ import uploadsRouter from "./uploads";
 import creditNotesRouter from "./creditNotes";
 import auditLogsRouter from "./auditLogs";
 import reportsRouter from "./reports";
+import servicesRouter from "./services";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use(uploadsRouter);
 router.use(creditNotesRouter);
 router.use(auditLogsRouter);
 router.use(reportsRouter);
+router.use(servicesRouter);
 
 export default router;

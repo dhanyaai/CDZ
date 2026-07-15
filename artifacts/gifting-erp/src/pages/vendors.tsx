@@ -7,9 +7,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Plus, Edit, Package, Mail, Phone, MapPin, CreditCard, Landmark, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -218,10 +219,12 @@ export function Vendors() {
                 </div>
                 <div className="space-y-1 col-span-1">
                   <label className="text-sm font-medium">State</label>
-                  <select {...form.register("state")} className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm">
-                    <option value="">— State —</option>
-                    {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <Controller control={form.control} name="state" render={({ field }) => (
+                    <Select value={field.value || ""} onValueChange={field.onChange}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="— State —" /></SelectTrigger>
+                      <SelectContent>{INDIAN_STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    </Select>
+                  )} />
                 </div>
                 <div className="space-y-1 col-span-1">
                   <label className="text-sm font-medium">Pincode</label>
@@ -238,10 +241,12 @@ export function Vendors() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label className="text-sm font-medium">Payment Terms</label>
-                  <select {...form.register("paymentTerms")} className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm">
-                    <option value="">— Select —</option>
-                    {PAYMENT_TERMS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+                  <Controller control={form.control} name="paymentTerms" render={({ field }) => (
+                    <Select value={field.value || ""} onValueChange={field.onChange}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="— Select —" /></SelectTrigger>
+                      <SelectContent>{PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    </Select>
+                  )} />
                 </div>
                 <div className="space-y-1 flex items-end">
                   <div className="w-full">

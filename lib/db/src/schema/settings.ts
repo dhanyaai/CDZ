@@ -27,6 +27,7 @@ export const companySettingsTable = pgTable("company_settings", {
   fyStartMonth: integer("fy_start_month").notNull().default(4),
   defaultGstPct: text("default_gst_pct").notNull().default("18"),
   currency: text("currency").notNull().default("INR"),
+  assemblyCapacityPerDay: integer("assembly_capacity_per_day").notNull().default(500),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

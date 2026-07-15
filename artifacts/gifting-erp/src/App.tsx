@@ -47,6 +47,7 @@ import { Reports } from "@/pages/reports";
 import { PdfExtractor } from "@/pages/pdf-extractor";
 import { OrderProcessingList } from "@/pages/order-processing-list";
 import { OrderProcessing } from "@/pages/order-processing";
+import { Services } from "@/pages/services";
 
 initAuth();
 initTheme();
@@ -96,6 +97,7 @@ function Router() {
         <Route path="/products" component={Products} />
         <Route path="/bundles" component={Bundles} />
         <Route path="/categories" component={Categories} />
+        <Route path="/services" component={Services} />
         <Route path="/vendors" component={Vendors} />
         <Route path="/sample-orders" component={SampleOrders} />
         <Route path="/sales-orders" component={SalesOrders} />

@@ -16,6 +16,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Search, Plus, Edit, Trash2, Settings2, Package, AlertTriangle, IndianRupee, TrendingUp, Upload, X } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { ProductManager } from "@/components/product-manager";
 
@@ -71,6 +72,7 @@ export function Products() {
   const [managerProductId, setManagerProductId] = useState<number | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
   const [imageUploading, setImageUploading] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: products, isLoading } = useListProducts({
@@ -340,7 +342,7 @@ export function Products() {
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => { if (confirm("Delete this product?")) deleteProduct.mutate({ id: product.id }); }}>
+                        onClick={() => setDeleteId(product.id)}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </TableCell>
@@ -517,6 +519,22 @@ export function Products() {
       {managerProductId && (
         <ProductManager productId={managerProductId} open={!!managerProductId} onOpenChange={v => !v && setManagerProductId(null)} />
       )}
+
+      <AlertDialog open={deleteId !== null} onOpenChange={open => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete product?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently remove the product and cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (deleteId) { deleteProduct.mutate({ id: deleteId }); setDeleteId(null); } }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

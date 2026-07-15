@@ -12,8 +12,12 @@ export const inventoryMovementsTable = pgTable("inventory_movements", {
   locationId: integer("location_id").references(() => warehouseLocationsTable.id, { onDelete: "set null" }),
   type: text("type").notNull(),
   quantity: integer("quantity").notNull(),
+  ownership: text("ownership").notNull().default("COMPANY"),
+  clientId: integer("client_id"),
   batch: text("batch"),
   reference: text("reference"),
+  userId: integer("user_id"),
+  notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

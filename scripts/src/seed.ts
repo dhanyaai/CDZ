@@ -18,6 +18,7 @@ import {
   fixedAssetsTable,
   warehousesTable, companySettingsTable,
   permissionsTable, rolePermissionsTable,
+  servicesTable,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { randomBytes, scryptSync } from "node:crypto";
@@ -52,6 +53,7 @@ async function truncate() {
     delivery_addresses, sales_order_items, sales_orders,
     bundle_items, bundles, products, categories, vendors,
     client_interactions, contacts, clients,
+    services,
     warehouse_locations, company_settings, users, companies
     RESTART IDENTITY CASCADE`);
 }
@@ -581,6 +583,39 @@ async function seed() {
     }
   }
   await db.insert(rolePermissionsTable).values(rolePerms);
+
+  // ── Services ──────────────────────────────────────────────────────────────────
+  console.log("Services...");
+  await db.insert(servicesTable).values([
+    { companyId: co.id, name: "Screen Printing",           type: "BRANDING",       sacCode: "998363", gstRate: "18", unit: "PCS", unitPrice: "25",   costEstimate: "12",  description: "Single-colour screen print on fabric or hard goods" },
+    { companyId: co.id, name: "Digital Printing",          type: "BRANDING",       sacCode: "998363", gstRate: "18", unit: "PCS", unitPrice: "35",   costEstimate: "18",  description: "Full-colour digital / sublimation print" },
+    { companyId: co.id, name: "Laser Engraving",           type: "BRANDING",       sacCode: "998363", gstRate: "18", unit: "PCS", unitPrice: "50",   costEstimate: "22",  description: "Permanent laser engraving on metal, wood or glass" },
+    { companyId: co.id, name: "Embroidery",                type: "BRANDING",       sacCode: "998363", gstRate: "18", unit: "PCS", unitPrice: "80",   costEstimate: "40",  description: "Thread embroidery on bags, caps and apparel" },
+    { companyId: co.id, name: "UV Spot Printing",          type: "BRANDING",       sacCode: "998363", gstRate: "18", unit: "PCS", unitPrice: "45",   costEstimate: "20",  description: "High-gloss spot UV on packaging and paper items" },
+    { companyId: co.id, name: "Kitting & Assembly",        type: "KITTING_JOBWORK",sacCode: "998519", gstRate: "18", unit: "PCS", unitPrice: "60",   costEstimate: "30",  description: "Pick-and-pack kit assembly per unit" },
+    { companyId: co.id, name: "Gift Box Assembly",         type: "KITTING_JOBWORK",sacCode: "998519", gstRate: "18", unit: "PCS", unitPrice: "40",   costEstimate: "20",  description: "Assembly into gift box with tissue and ribbon" },
+    { companyId: co.id, name: "Hamper Wrapping",           type: "KITTING_JOBWORK",sacCode: "998519", gstRate: "18", unit: "PCS", unitPrice: "55",   costEstimate: "25",  description: "Cello wrapping + bow for hampers" },
+    { companyId: co.id, name: "Graphic Design",            type: "DESIGN",         sacCode: "998312", gstRate: "18", unit: "HR",  unitPrice: "1500", costEstimate: "600", description: "Creative design for branding artwork and mock-ups" },
+    { companyId: co.id, name: "3D Mockup Visualisation",   type: "DESIGN",         sacCode: "998312", gstRate: "18", unit: "JOB", unitPrice: "2500", costEstimate: "800", description: "Photo-realistic 3D product mockup per SKU" },
+    { companyId: co.id, name: "Event Gifting Management",  type: "EVENT",          sacCode: "998555", gstRate: "18", unit: "DAY", unitPrice: "8000", costEstimate: "3500",description: "On-site gifting coordination for corporate events" },
+    { companyId: co.id, name: "Delivery Coordination",     type: "OTHER",          sacCode: "996819", gstRate: "18", unit: "JOB", unitPrice: "500",  costEstimate: "200", description: "Multi-city delivery coordination for bulk orders" },
+  ]);
+
+  // ── Number Sequences ──────────────────────────────────────────────────────────
+  console.log("Number Sequences...");
+  const FY = "2026-27";
+  await db.execute(sql`
+    INSERT INTO number_sequences (company_id, doc_type, fy_label, last_number) VALUES
+    (${co.id}, 'SO',  ${FY}, 12),
+    (${co.id}, 'PO',  ${FY}, 8),
+    (${co.id}, 'INV', ${FY}, 6),
+    (${co.id}, 'GRN', ${FY}, 3),
+    (${co.id}, 'QT',  ${FY}, 8),
+    (${co.id}, 'SHP', ${FY}, 3),
+    (${co.id}, 'DC',  ${FY}, 0),
+    (${co.id}, 'SMP', ${FY}, 0)
+    ON CONFLICT (company_id, doc_type, fy_label) DO NOTHING
+  `);
 
   console.log("\n✅ Seed complete!");
   console.log("   Company  : Customize Duniya (stateCode: 27 / Maharashtra)");

@@ -30,6 +30,7 @@ import {
   BarChart3,
   FileImage,
   ClipboardCheck,
+  Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -63,6 +64,7 @@ export function getNavItems(opts: { production?: boolean } = {}): NavGroup[] {
       items: [
         { label: "Products", href: "/products", icon: Package },
         { label: "Bundles", href: "/bundles", icon: Gift },
+        { label: "Services", href: "/services", icon: Wrench },
         { label: "Categories", href: "/categories", icon: FolderTree },
       ],
     },

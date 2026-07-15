@@ -16,6 +16,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Search, Plus, Edit, Trash2, Users, Building2, Mail, Phone, Eye } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
@@ -53,6 +54,7 @@ export function Clients() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const [deleteId, setDeleteId] = useState<number | null>(null);
   const [, setLocation] = useLocation();
 
   const { data: clients, isLoading } = useListClients({ search: search || undefined });
@@ -235,7 +237,7 @@ export function Clients() {
                           <Edit className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => { if (confirm(`Delete ${client.companyName}?`)) deleteClient.mutate({ id: client.id }); }}>
+                          onClick={() => setDeleteId(client.id)}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -296,6 +298,22 @@ export function Clients() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteId !== null} onOpenChange={open => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete client?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently remove the client and cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (deleteId) { deleteClient.mutate({ id: deleteId }); setDeleteId(null); } }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

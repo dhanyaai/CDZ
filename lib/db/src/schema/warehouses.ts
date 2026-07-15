@@ -23,6 +23,8 @@ export const inventoryTable = pgTable("inventory", {
   onHandQty: integer("on_hand_qty").notNull().default(0),
   reservedQty: integer("reserved_qty").notNull().default(0),
   avgCost: numeric("avg_cost", { precision: 12, scale: 2 }).notNull().default("0"),
+  ownership: text("ownership").notNull().default("COMPANY"),
+  clientId: integer("client_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

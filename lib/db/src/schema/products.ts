@@ -24,6 +24,8 @@ export const productsTable = pgTable("products", {
   isPerishable: boolean("is_perishable").notNull().default(false),
   shelfLifeDays: integer("shelf_life_days"),
   brandable: boolean("brandable").notNull().default(false),
+  isPackaging: boolean("is_packaging").notNull().default(false),
+  barcode: text("barcode"),
   vendorId: integer("vendor_id").references(() => vendorsTable.id, { onDelete: "set null" }),
   imageUrl: text("image_url"),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
