@@ -43,6 +43,7 @@ interface Company {
 
 interface Product { id: number; name: string; sku?: string; stockLevel: number; }
 interface User { id: number; name: string; role: string; }
+interface Vendor { id: number; name: string; }
 
 interface ChecklistItem {
   productName: string;
@@ -420,6 +421,11 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["users"],
     queryFn: () => api<User[]>("/v1/users"),
+  });
+
+  const { data: vendors = [] } = useQuery<Vendor[]>({
+    queryKey: ["vendors"],
+    queryFn: () => api<Vendor[]>("/v1/vendors"),
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -894,13 +900,22 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                             </select>
                           </td>
                           <td className="px-4 py-2.5">
-                            <input
-                              type="text"
+                            <select
                               value={(formData.itemProductSource ?? {})[item.id] ?? ""}
                               onChange={(e) => set("itemProductSource", { ...(formData.itemProductSource ?? {}), [item.id]: e.target.value })}
-                              placeholder="e.g. vendor / market"
                               className="w-full min-w-[160px] rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                            />
+                            >
+                              <option value="">— Select —</option>
+                              <option value="In-House Stock">In-House Stock</option>
+                              <option value="Local Market">Local Market</option>
+                              {vendors.length > 0 && (
+                                <optgroup label="Vendors">
+                                  {vendors.map((v) => (
+                                    <option key={v.id} value={v.name}>{v.name}</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </select>
                           </td>
                         </tr>
                       ))}
