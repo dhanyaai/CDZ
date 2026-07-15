@@ -31,6 +31,7 @@ interface SalesOrderDetail {
   id: number;
   orderNumber: string;
   clientName: string;
+  createdAt: string;
   items: SalesOrderItem[];
   gstAmount?: number | null;
   grandTotal?: number | null;
@@ -517,6 +518,13 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
     }
   }, [existingForm]);
 
+  useEffect(() => {
+    if (salesOrder?.createdAt) {
+      const dateStr = salesOrder.createdAt.slice(0, 10);
+      setFormData((prev) => ({ ...prev, confirmedOrderDate: dateStr }));
+    }
+  }, [salesOrder?.createdAt]);
+
   const saveMutation = useMutation({
     mutationFn: async (data: OrderFormData) => {
       return api<ProcessingFormResponse>("/v1/order-processing", {
@@ -640,7 +648,11 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Confirmed Order Date">
-                  <Input type="date" value={formData.confirmedOrderDate} onChange={(e) => set("confirmedOrderDate", e.target.value)} />
+                  <div className="flex h-9 w-full rounded-md border border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground select-none">
+                    {formData.confirmedOrderDate
+                      ? new Date(formData.confirmedOrderDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                      : "—"}
+                  </div>
                 </Field>
                 <Field label="Order By (Sales Person)">
                   <Select
