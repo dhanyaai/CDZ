@@ -102,6 +102,87 @@ router.post("/v1/products", async (req, res): Promise<void> => {
   res.status(201).json(serializeProduct(product, vendorName));
 });
 
+router.post("/v1/products/import", async (req, res): Promise<void> => {
+  const { rows } = req.body ?? {};
+  if (!Array.isArray(rows) || rows.length === 0) {
+    res.status(400).json({ error: "rows must be a non-empty array" });
+    return;
+  }
+
+  let imported = 0;
+  let updated = 0;
+  const errors: { row: number; message: string }[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] as Record<string, unknown>;
+    try {
+      const { name, sku, brand, productType, category, hsnCode, gstRate, uom, costPrice, sellingPrice, stockLevel, lowStockThreshold, reorderQty, brandable, barcode } = row;
+
+      if (!name || !category || costPrice == null || sellingPrice == null) {
+        errors.push({ row: i + 1, message: "name, category, costPrice, sellingPrice are required" });
+        continue;
+      }
+
+      if (sku) {
+        const existing = await db
+          .select()
+          .from(productsTable)
+          .where(and(eq(productsTable.companyId, req.companyId), eq(productsTable.sku, String(sku)), isNull(productsTable.deletedAt)))
+          .limit(1);
+
+        if (existing.length > 0) {
+          await db
+            .update(productsTable)
+            .set({
+              name: String(name),
+              brand: brand ? String(brand) : null,
+              productType: productType ? String(productType) : null,
+              category: String(category),
+              hsnCode: hsnCode ? String(hsnCode) : null,
+              gstRate: String(gstRate ?? 18),
+              uom: uom ? String(uom) : "PCS",
+              costPrice: String(costPrice),
+              sellingPrice: String(sellingPrice),
+              stockLevel: Number(stockLevel ?? 0),
+              lowStockThreshold: Number(lowStockThreshold ?? 10),
+              reorderQty: Number(reorderQty ?? 0),
+              brandable: String(brandable).toLowerCase() === "true",
+              barcode: barcode ? String(barcode) : null,
+              updatedAt: new Date(),
+            })
+            .where(eq(productsTable.id, existing[0].id));
+          updated++;
+          continue;
+        }
+      }
+
+      await db.insert(productsTable).values({
+        companyId: req.companyId,
+        name: String(name),
+        sku: sku ? String(sku) : null,
+        brand: brand ? String(brand) : null,
+        productType: productType ? String(productType) : null,
+        category: String(category),
+        hsnCode: hsnCode ? String(hsnCode) : null,
+        gstRate: String(gstRate ?? 18),
+        uom: uom ? String(uom) : "PCS",
+        costPrice: String(costPrice),
+        sellingPrice: String(sellingPrice),
+        stockLevel: Number(stockLevel ?? 0),
+        lowStockThreshold: Number(lowStockThreshold ?? 10),
+        reorderQty: Number(reorderQty ?? 0),
+        brandable: String(brandable).toLowerCase() === "true",
+        barcode: barcode ? String(barcode) : null,
+      });
+      imported++;
+    } catch (err) {
+      errors.push({ row: i + 1, message: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  res.json({ imported, updated, errors });
+});
+
 router.get("/v1/products/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const [row] = await db

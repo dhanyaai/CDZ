@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search, Plus, Edit, Trash2, Settings2, Package, AlertTriangle, IndianRupee, TrendingUp, Upload, X } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Settings2, Package, AlertTriangle, IndianRupee, TrendingUp, Upload, X, Download, FileUp } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { ProductManager } from "@/components/product-manager";
@@ -73,7 +73,9 @@ export function Products() {
   const [imagePreview, setImagePreview] = useState<string>("");
   const [imageUploading, setImageUploading] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const csvImportRef = useRef<HTMLInputElement>(null);
 
   const { data: products, isLoading } = useListProducts({
     search: search || undefined,
@@ -187,6 +189,94 @@ export function Products() {
     else createProduct.mutate({ data: submitData });
   };
 
+  const CSV_COLUMNS = ["name","sku","brand","productType","category","hsnCode","gstRate","uom","costPrice","sellingPrice","stockLevel","lowStockThreshold","reorderQty","brandable","barcode"] as const;
+
+  const exportCSV = () => {
+    const list = allProducts ?? [];
+    const escape = (v: unknown) => {
+      const s = v == null ? "" : String(v);
+      return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = CSV_COLUMNS.join(",");
+    const rows = list.map(p => CSV_COLUMNS.map(col => escape((p as Record<string, unknown>)[col])).join(","));
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "products.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const parseCSV = (text: string): Record<string, string>[] => {
+    const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").filter(l => l.trim());
+    if (lines.length < 2) return [];
+    const parseRow = (line: string): string[] => {
+      const result: string[] = [];
+      let cur = "";
+      let inQuote = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuote) {
+          if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+          else if (ch === '"') { inQuote = false; }
+          else { cur += ch; }
+        } else {
+          if (ch === '"') { inQuote = true; }
+          else if (ch === ",") { result.push(cur); cur = ""; }
+          else { cur += ch; }
+        }
+      }
+      result.push(cur);
+      return result;
+    };
+    const headers = parseRow(lines[0]);
+    return lines.slice(1).map(line => {
+      const vals = parseRow(line);
+      return Object.fromEntries(headers.map((h, i) => [h.trim(), (vals[i] ?? "").trim()]));
+    });
+  };
+
+  const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (csvImportRef.current) csvImportRef.current.value = "";
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const rows = parseCSV(text);
+      if (rows.length === 0) {
+        toast({ title: "Empty or invalid CSV", variant: "destructive" });
+        return;
+      }
+      const res = await fetch("/api/v1/products/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows }),
+      });
+      const data = await res.json() as { imported: number; updated: number; errors: { row: number; message: string }[] };
+      if (!res.ok) {
+        toast({ title: "Import failed", description: (data as { error?: string }).error, variant: "destructive" });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+      const parts: string[] = [];
+      if (data.imported) parts.push(`${data.imported} added`);
+      if (data.updated) parts.push(`${data.updated} updated`);
+      if (data.errors.length) parts.push(`${data.errors.length} error(s)`);
+      toast({
+        title: "Import complete",
+        description: parts.join(", ") + (data.errors.length ? ` — row ${data.errors[0].row}: ${data.errors[0].message}` : ""),
+        variant: data.errors.length && !data.imported && !data.updated ? "destructive" : "default",
+      });
+    } catch {
+      toast({ title: "Import failed", description: "Could not read file", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const totalSKUs = (allProducts ?? []).length;
   const totalStockValue = (allProducts ?? []).reduce((s, p) => s + p.stockLevel * Number(p.costPrice ?? 0), 0);
   const lowStockCount = (allProducts ?? []).filter(p => p.stockLevel <= (p.lowStockThreshold ?? 10) && p.stockLevel > 0).length;
@@ -208,7 +298,16 @@ export function Products() {
           <h1 className="text-3xl font-bold">Products</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Product catalog with variants, pricing tiers and customizations</p>
         </div>
-        <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" />New Product</Button>
+        <div className="flex items-center gap-2">
+          <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={handleCsvImport} />
+          <Button variant="outline" size="sm" onClick={exportCSV} disabled={!allProducts?.length}>
+            <Download className="w-4 h-4 mr-2" />Export CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => csvImportRef.current?.click()} disabled={importing}>
+            <FileUp className="w-4 h-4 mr-2" />{importing ? "Importing…" : "Import CSV"}
+          </Button>
+          <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" />New Product</Button>
+        </div>
       </div>
 
       {/* Stats */}
