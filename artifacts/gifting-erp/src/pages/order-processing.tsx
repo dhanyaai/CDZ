@@ -235,20 +235,6 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
 
   <h1>Order Processing Form</h1>
 
-  ${itemsRows ? `
-  <div class="section">
-    <div class="section-title">Sales Order Items</div>
-    <table class="checklist">
-      <thead><tr><th>#</th><th>Product</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Total</th></tr></thead>
-      <tbody>${itemsRows || "<tr><td colspan='5' style='text-align:center;color:#888;'>No items</td></tr>"}</tbody>
-      <tfoot>
-        <tr style="background:#f9fafb;"><td colspan="4" style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">Subtotal</td><td style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">${fmtAmt(itemsSubtotal)}</td></tr>
-        <tr style="background:#f9fafb;"><td colspan="4" style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">GST 18%</td><td style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">${fmtAmt(gstAmount)}</td></tr>
-        <tr style="background:#ede9fe;font-weight:700;"><td colspan="4" style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Grand Total</td><td style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">${fmtAmt(grandTotal)}</td></tr>
-      </tfoot>
-    </table>
-  </div>` : ""}
-
   <table class="info">
     <tr><td class="lbl">Order By (Sales Person)</td><td>${fmt(data.orderBy)}</td><td class="lbl">Delivery Date</td><td>${fmt(meta.deliveryDate)}</td></tr>
     <tr><td class="lbl">Firm / Company Name</td><td colspan="3">${fmt(data.firmName || meta.clientName)}</td></tr>
@@ -273,6 +259,20 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
     <tr><td class="lbl">Balance Amount</td><td>₹ ${fmt(data.balanceAmount)}</td><td></td><td></td></tr>
     <tr><td class="lbl">More Information</td><td colspan="3">${fmt(data.moreInfo)}</td></tr>
   </table>
+
+  ${itemsRows ? `
+  <div class="section">
+    <div class="section-title">Sales Order Items</div>
+    <table class="checklist">
+      <thead><tr><th>#</th><th>Product</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Total</th></tr></thead>
+      <tbody>${itemsRows || "<tr><td colspan='5' style='text-align:center;color:#888;'>No items</td></tr>"}</tbody>
+      <tfoot>
+        <tr style="background:#f9fafb;"><td colspan="4" style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">Subtotal</td><td style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">${fmtAmt(itemsSubtotal)}</td></tr>
+        <tr style="background:#f9fafb;"><td colspan="4" style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">GST 18%</td><td style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">${fmtAmt(gstAmount)}</td></tr>
+        <tr style="background:#ede9fe;font-weight:700;"><td colspan="4" style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Grand Total</td><td style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">${fmtAmt(grandTotal)}</td></tr>
+      </tfoot>
+    </table>
+  </div>` : ""}
 
   <div class="section">
     <div class="section-title">Procurement</div>
