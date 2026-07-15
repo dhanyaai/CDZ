@@ -196,204 +196,210 @@ export function Bundles() {
         <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" /> New Bundle</Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-3 space-y-4">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search bundles..." 
-              value={search} 
-              onChange={(e) => setSearch(e.target.value)} 
-              className="pl-9"
-            />
-          </div>
-
-          <div className="border rounded-md bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Bundle</TableHead>
-                  <TableHead>Occasion</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead className="text-right">Total Price</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow><TableCell colSpan={5}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
-                ) : filteredBundles.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No bundles found</TableCell></TableRow>
-                ) : (
-                  filteredBundles.map(bundle => (
-                    <TableRow key={bundle.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-3">
-                          {(bundle as any).imageUrl ? (
-                            <img src={(bundle as any).imageUrl} alt={bundle.name} className="w-9 h-9 rounded-lg object-cover border border-border shrink-0" />
-                          ) : (
-                            <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                              <Package className="w-4 h-4 text-muted-foreground" />
-                            </div>
-                          )}
-                          <span>{bundle.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{bundle.occasion || "-"}</TableCell>
-                      <TableCell>{bundle.items?.length || 0} items</TableCell>
-                      <TableCell className="text-right">₹{Number(bundle.totalPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(bundle)}><Edit className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleteId(bundle.id)}><Trash2 className="w-4 h-4" /></Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+      {/* Bundle list — full width */}
+      <div className="space-y-4">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search bundles..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
 
-        <div className="lg:col-span-1 space-y-3">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Wand2 className="w-4 h-4 text-primary" />
-                Smart Suggest
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">Pick a budget range and categories to get product suggestions</p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Budget Range (₹)</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground mb-1">Min</p>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={minBudget}
-                      onChange={(e) => { setMinBudget(e.target.value); setSuggestResult(null); }}
-                      placeholder="e.g. 500"
-                      className="h-9"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground mb-1">Max *</p>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={maxBudget}
-                      onChange={(e) => { setMaxBudget(e.target.value); setSuggestResult(null); }}
-                      placeholder="e.g. 2000"
-                      className="h-9"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-foreground">Item Categories</label>
-                  {selectedCategories.length > 0 && (
-                    <button className="text-[10px] text-muted-foreground hover:text-foreground underline" onClick={() => { setSelectedCategories([]); setSuggestResult(null); }}>
-                      Clear all
-                    </button>
-                  )}
-                </div>
-                {categoryOptions.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic">No categories found</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {categoryOptions.map((cat) => {
-                      const active = selectedCategories.includes(cat);
-                      return (
-                        <button
-                          key={cat}
-                          onClick={() => toggleCategory(cat)}
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"}`}
-                        >
-                          {cat}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                <p className="text-[10px] text-muted-foreground">{selectedCategories.length === 0 ? "All categories" : `${selectedCategories.length} selected`}</p>
-              </div>
-
-              <Button className="w-full" onClick={handleSuggest} disabled={!maxBudget || suggestBundle.isPending}>
-                {suggestBundle.isPending ? (
-                  <span className="flex items-center gap-2"><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />Analysing...</span>
-                ) : (
-                  <span className="flex items-center gap-2"><Wand2 className="w-3.5 h-3.5" />Suggest Bundle</span>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {suggestResult && (
-            <Card className={`border-2 ${suggestResult.withinRange ? "border-green-500/40 bg-green-50/30 dark:bg-green-950/10" : "border-amber-400/40 bg-amber-50/30 dark:bg-amber-950/10"}`}>
-              <CardContent className="pt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold">Suggested Products</span>
-                  <CheckCircle2 className={`w-4 h-4 ${suggestResult.withinRange ? "text-green-600" : "text-amber-500"}`} />
-                </div>
-
-                {suggestResult.items.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-2">No matching products found for this budget and category selection.</p>
-                ) : (
-                  <>
-                    <div className="rounded-md border overflow-hidden">
-                      <table className="w-full text-xs">
-                        <thead className="bg-muted/60">
-                          <tr>
-                            <th className="text-left px-2 py-1.5 font-medium">Product</th>
-                            <th className="text-center px-2 py-1.5 font-medium w-8">Qty</th>
-                            <th className="text-right px-2 py-1.5 font-medium">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {suggestResult.items.map((item, i) => (
-                            <tr key={i} className="bg-card">
-                              <td className="px-2 py-1.5">
-                                <span className="truncate block max-w-[110px]" title={item.productName}>{item.productName}</span>
-                                <span className="text-muted-foreground">₹{item.unitPrice.toLocaleString("en-IN", { maximumFractionDigits: 0 })} ea.</span>
-                              </td>
-                              <td className="px-2 py-1.5 text-center font-semibold">{item.quantity}</td>
-                              <td className="px-2 py-1.5 text-right font-medium">₹{(item.unitPrice * item.quantity).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="bg-muted/60 border-t">
-                          <tr>
-                            <td colSpan={2} className="px-2 py-1.5 font-semibold text-xs">Total Sell Price</td>
-                            <td className="px-2 py-1.5 text-right font-bold">₹{suggestResult.totalPrice.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Margin</span>
-                      <span className={`font-semibold ${suggestResult.margin >= 30 ? "text-green-600" : "text-amber-600"}`}>{Math.round(suggestResult.margin)}%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Budget used</span>
-                      <span className={`font-medium ${suggestResult.priceUtilization >= 80 ? "text-green-600" : "text-amber-600"}`}>{Math.round(suggestResult.priceUtilization)}% of max</span>
-                    </div>
-
-                    <Button size="sm" className="w-full" onClick={applysuggestion}>
-                      <span className="flex items-center gap-1.5">Use This Bundle<ChevronRight className="w-3.5 h-3.5" /></span>
-                    </Button>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
+        <div className="border rounded-md bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Bundle</TableHead>
+                <TableHead>Occasion</TableHead>
+                <TableHead>Items</TableHead>
+                <TableHead className="text-right">Total Price</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow><TableCell colSpan={5}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+              ) : filteredBundles.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No bundles found</TableCell></TableRow>
+              ) : (
+                filteredBundles.map(bundle => (
+                  <TableRow key={bundle.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        {(bundle as any).imageUrl ? (
+                          <img src={(bundle as any).imageUrl} alt={bundle.name} className="w-9 h-9 rounded-lg object-cover border border-border shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                            <Package className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                        )}
+                        <span>{bundle.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{bundle.occasion || "-"}</TableCell>
+                    <TableCell>{bundle.items?.length || 0} items</TableCell>
+                    <TableCell className="text-right">₹{Number(bundle.totalPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(bundle)}><Edit className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleteId(bundle.id)}><Trash2 className="w-4 h-4" /></Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       </div>
+
+      {/* Smart Suggest — full-width landscape card */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Wand2 className="w-5 h-5 text-primary" />
+                Smart Suggest
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-0.5">Set a budget range, pick categories, then click Suggest Bundle to see matching products</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+
+          {/* Controls row — landscape horizontal layout */}
+          <div className="flex flex-wrap items-end gap-4">
+
+            {/* Budget range */}
+            <div className="space-y-1.5 shrink-0">
+              <label className="text-xs font-semibold text-foreground">Budget Range (₹)</label>
+              <div className="flex items-center gap-2">
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">Min</p>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={minBudget}
+                    onChange={(e) => { setMinBudget(e.target.value); setSuggestResult(null); }}
+                    placeholder="e.g. 500"
+                    className="h-9 w-32"
+                  />
+                </div>
+                <span className="text-muted-foreground mt-5">—</span>
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">Max *</p>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={maxBudget}
+                    onChange={(e) => { setMaxBudget(e.target.value); setSuggestResult(null); }}
+                    placeholder="e.g. 2000"
+                    className="h-9 w-32"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Vertical divider */}
+            <div className="hidden lg:block w-px h-16 bg-border shrink-0" />
+
+            {/* Category pills */}
+            <div className="space-y-1.5 flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-foreground">Item Categories</label>
+                {selectedCategories.length > 0 && (
+                  <button className="text-[10px] text-muted-foreground hover:text-foreground underline" onClick={() => { setSelectedCategories([]); setSuggestResult(null); }}>
+                    Clear
+                  </button>
+                )}
+                <span className="text-[10px] text-muted-foreground">{selectedCategories.length === 0 ? "— all" : `${selectedCategories.length} selected`}</span>
+              </div>
+              {categoryOptions.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No categories found in catalog</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {categoryOptions.map((cat) => {
+                    const active = selectedCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => toggleCategory(cat)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"}`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Suggest button */}
+            <Button onClick={handleSuggest} disabled={!maxBudget || suggestBundle.isPending} className="shrink-0 h-9 px-6">
+              {suggestBundle.isPending ? (
+                <span className="flex items-center gap-2"><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />Analysing…</span>
+              ) : (
+                <span className="flex items-center gap-2"><Wand2 className="w-3.5 h-3.5" />Suggest Bundle</span>
+              )}
+            </Button>
+          </div>
+
+          {/* Results — full width below the controls */}
+          {suggestResult && (
+            <div className={`rounded-lg border-2 p-4 space-y-3 ${suggestResult.withinRange ? "border-green-500/40 bg-green-50/30 dark:bg-green-950/10" : "border-amber-400/40 bg-amber-50/30 dark:bg-amber-950/10"}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className={`w-4 h-4 ${suggestResult.withinRange ? "text-green-600" : "text-amber-500"}`} />
+                  <span className="font-semibold text-sm">Suggested Products</span>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span>Total: <strong className="text-foreground">₹{suggestResult.totalPrice.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</strong></span>
+                  <span>Margin: <strong className={suggestResult.margin >= 30 ? "text-green-600" : "text-amber-600"}>{Math.round(suggestResult.margin)}%</strong></span>
+                  <span>Budget used: <strong className={suggestResult.priceUtilization >= 80 ? "text-green-600" : "text-amber-600"}>{Math.round(suggestResult.priceUtilization)}%</strong></span>
+                  <Button size="sm" onClick={applysuggestion}>
+                    <span className="flex items-center gap-1.5">Use This Bundle<ChevronRight className="w-3.5 h-3.5" /></span>
+                  </Button>
+                </div>
+              </div>
+
+              {suggestResult.items.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No matching products found for this budget and category selection.</p>
+              ) : (
+                <div className="rounded-md border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="w-24 text-center">Unit Price</TableHead>
+                        <TableHead className="w-16 text-center">Qty</TableHead>
+                        <TableHead className="w-28 text-right">Line Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {suggestResult.items.map((item, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">{item.productName}</TableCell>
+                          <TableCell className="text-center">₹{item.unitPrice.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</TableCell>
+                          <TableCell className="text-center font-semibold">{item.quantity}</TableCell>
+                          <TableCell className="text-right font-medium">₹{(item.unitPrice * item.quantity).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead colSpan={3} className="text-xs">Total Selling Price</TableHead>
+                        <TableHead className="text-right font-bold text-foreground">₹{suggestResult.totalPrice.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                  </Table>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
