@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search, Plus, Edit, Trash2, Wand2, Upload, X, Package, Users, TrendingUp, IndianRupee, CheckCircle2, ChevronRight } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Wand2, Upload, X, Package, IndianRupee, CheckCircle2, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const itemSchema = z.object({
@@ -44,17 +44,13 @@ export function Bundles() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [budget, setBudget] = useState("");
-  const [suggestOccasion, setSuggestOccasion] = useState("");
-  const [recipients, setRecipients] = useState("1");
-  const [minMarginPct, setMinMarginPct] = useState("0");
+  const [suggestCategory, setSuggestCategory] = useState("");
   const [suggestResult, setSuggestResult] = useState<null | {
     items: Array<{ productId: number; productName: string; quantity: number; unitPrice: number }>;
     totalPrice: number;
     totalCost: number;
     margin: number;
     priceUtilization: number;
-    perRecipientPrice: number;
-    recipients: number;
   }>(null);
 
   const { data: bundles, isLoading } = useListBundles();
@@ -161,15 +157,15 @@ export function Bundles() {
     }
   };
 
+  const categoryOptions = Array.from(new Set((products ?? []).map((p: any) => p.category).filter(Boolean))).sort() as string[];
+
   const handleSuggest = () => {
     if (!budget) return;
     setSuggestResult(null);
     suggestBundle.mutate({
       data: {
         targetSellingPrice: Number(budget),
-        occasion: suggestOccasion || "General",
-        recipients: Number(recipients) || 1,
-        minMarginPct: Number(minMarginPct) || 0,
+        ...(suggestCategory ? { category: suggestCategory } : {}),
       }
     }, {
       onSuccess: (res: any) => {
@@ -181,7 +177,6 @@ export function Bundles() {
   const applysuggestion = () => {
     if (!suggestResult) return;
     openNew();
-    if (suggestOccasion) form.setValue("occasion", suggestOccasion);
     form.setValue("items", suggestResult.items.map((i) => ({ productId: i.productId, quantity: i.quantity })));
     setSuggestResult(null);
   };
@@ -275,49 +270,15 @@ export function Bundles() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                    <Users className="w-3 h-3" />Recipients
-                  </label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={recipients}
-                    onChange={(e) => { setRecipients(e.target.value); setSuggestResult(null); }}
-                    placeholder="1"
-                    className="h-9"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" />Min Margin %
-                  </label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="90"
-                    value={minMarginPct}
-                    onChange={(e) => { setMinMarginPct(e.target.value); setSuggestResult(null); }}
-                    placeholder="0"
-                    className="h-9"
-                  />
-                </div>
-              </div>
-
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Occasion</label>
-                <Select value={suggestOccasion || "__none__"} onValueChange={(v) => { setSuggestOccasion(v === "__none__" ? "" : v); setSuggestResult(null); }}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Any occasion" /></SelectTrigger>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Item Category</label>
+                <Select value={suggestCategory || "__none__"} onValueChange={(v) => { setSuggestCategory(v === "__none__" ? "" : v); setSuggestResult(null); }}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="All categories" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">Any occasion</SelectItem>
-                    <SelectItem value="Diwali">Diwali</SelectItem>
-                    <SelectItem value="New Year">New Year</SelectItem>
-                    <SelectItem value="Onboarding">Onboarding</SelectItem>
-                    <SelectItem value="Work Anniversary">Work Anniversary</SelectItem>
-                    <SelectItem value="Birthday">Birthday</SelectItem>
-                    <SelectItem value="Conference">Conference</SelectItem>
-                    <SelectItem value="Corporate Event">Corporate Event</SelectItem>
+                    <SelectItem value="__none__">All categories</SelectItem>
+                    {categoryOptions.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -366,12 +327,6 @@ export function Bundles() {
                       {Math.round(suggestResult.margin)}%
                     </span>
                   </div>
-                  {suggestResult.recipients > 1 && (
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Per recipient</span>
-                      <span className="font-medium">₹{suggestResult.perRecipientPrice.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
-                    </div>
-                  )}
                 </div>
 
                 <Button size="sm" className="w-full" onClick={applysuggestion}>

@@ -1481,10 +1481,7 @@ components:
       properties:
         targetSellingPrice: { type: number }
         budget: { type: number }
-        occasion: { type: string }
-        industry: { type: string }
-        recipients: { type: number }
-        minMarginPct: { type: number }
+        category: { type: string }
 
     BundleSuggestion:
       type: object
@@ -1496,8 +1493,6 @@ components:
         margin: { type: number }
         priceUtilization: { type: number }
         targetSellingPrice: { type: number }
-        recipients: { type: number }
-        perRecipientPrice: { type: number }
 
     # ── Vendors ──
     Vendor:

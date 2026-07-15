@@ -124,13 +124,7 @@ router.delete("/v1/bundles/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
-  const {
-    targetSellingPrice,
-    budget,
-    occasion,
-    minMarginPct = 0,
-    recipients = 1,
-  } = req.body ?? {};
+  const { targetSellingPrice, budget, category } = req.body ?? {};
 
   const target = Number(targetSellingPrice ?? budget ?? 0);
   if (!target || target <= 0) {
@@ -138,29 +132,28 @@ router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
     return;
   }
 
-  const perRecipient = target / Math.max(1, Number(recipients));
+  const conditions = [eq(productsTable.companyId, req.companyId), isNull(productsTable.deletedAt)];
+  if (category && typeof category === "string") {
+    conditions.push(eq(productsTable.category, category));
+  }
 
-  const allProducts = await db
-    .select()
-    .from(productsTable)
-    .where(and(eq(productsTable.companyId, req.companyId), isNull(productsTable.deletedAt)));
+  const allProducts = await db.select().from(productsTable).where(and(...conditions));
 
   const candidates = allProducts
-    .filter((p) => p.stockLevel > 0 && Number(p.sellingPrice) > 0 && Number(p.sellingPrice) <= perRecipient)
+    .filter((p) => p.stockLevel > 0 && Number(p.sellingPrice) > 0 && Number(p.sellingPrice) <= target)
     .map((p) => {
       const sp = Number(p.sellingPrice);
       const cp = Number(p.costPrice);
       const marginPct = sp > 0 ? ((sp - cp) / sp) * 100 : 0;
       return { ...p, sellingPrice: sp, costPrice: cp, marginPct };
     })
-    .filter((p) => p.marginPct >= Number(minMarginPct))
     .sort((a, b) => {
       if (Math.abs(b.marginPct - a.marginPct) > 2) return b.marginPct - a.marginPct;
       return a.sellingPrice - b.sellingPrice;
     });
 
   const selected: Array<{ id: number; name: string; sellingPrice: number; costPrice: number; qty: number }> = [];
-  let remaining = perRecipient;
+  let remaining = target;
 
   for (const product of candidates) {
     if (product.sellingPrice <= remaining + 0.01) {
@@ -190,16 +183,15 @@ router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
     }
   }
 
-  const recipientCount = Math.max(1, Number(recipients));
   const items = selected.map((p) => ({
     productId: p.id,
     productName: p.name,
-    quantity: p.qty * recipientCount,
+    quantity: p.qty,
     unitPrice: p.sellingPrice,
   }));
 
-  const totalPrice = selected.reduce((s, p) => s + p.sellingPrice * p.qty, 0) * recipientCount;
-  const totalCost = selected.reduce((s, p) => s + p.costPrice * p.qty, 0) * recipientCount;
+  const totalPrice = selected.reduce((s, p) => s + p.sellingPrice * p.qty, 0);
+  const totalCost = selected.reduce((s, p) => s + p.costPrice * p.qty, 0);
   const priceUtilization = target > 0 ? Math.min(100, (totalPrice / target) * 100) : 0;
 
   res.json({
@@ -209,8 +201,6 @@ router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
     margin: totalPrice > 0 ? ((totalPrice - totalCost) / totalPrice) * 100 : 0,
     priceUtilization,
     targetSellingPrice: target,
-    recipients: recipientCount,
-    perRecipientPrice: selected.reduce((s, p) => s + p.sellingPrice * p.qty, 0),
   });
 });
 

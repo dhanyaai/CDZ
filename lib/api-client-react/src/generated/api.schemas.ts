@@ -222,10 +222,7 @@ export interface BundleUpdate {
 export interface BundleSuggestInput {
   targetSellingPrice?: number;
   budget?: number;
-  occasion?: string;
-  industry?: string;
-  recipients?: number;
-  minMarginPct?: number;
+  category?: string;
 }
 
 export interface BundleSuggestion {
@@ -235,8 +232,6 @@ export interface BundleSuggestion {
   margin: number;
   priceUtilization?: number;
   targetSellingPrice?: number;
-  recipients?: number;
-  perRecipientPrice?: number;
 }
 
 export interface Vendor {

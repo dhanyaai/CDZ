@@ -9,8 +9,5 @@
 export interface BundleSuggestInput {
   targetSellingPrice?: number;
   budget?: number;
-  occasion?: string;
-  industry?: string;
-  recipients?: number;
-  minMarginPct?: number;
+  category?: string;
 }
