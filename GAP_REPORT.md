@@ -1,417 +1,440 @@
-# GAP REPORT — Corporate Gifting ERP vs Audit & Upgrade Spec v2
+# Corporate Gifting ERP — Gap Report (v3 Spec Audit)
 
-> Generated: 14 Jul 2026  
-> Stack in use: React + Vite + shadcn/ui · Express 5 · Drizzle ORM + PostgreSQL · pnpm monorepo · TypeScript  
-> Note: spec references Prisma — codebase uses **Drizzle ORM** (functionally equivalent; migration commands differ).
+> Audited: 15 Jul 2026  
+> Spec: ERP_AUDIT_UPGRADE_SPEC v3  
+> Codebase: pnpm monorepo — Express 5 + Drizzle ORM + React/Vite  
 
 ---
 
 ## Legend
-- ✅ Implemented correctly
-- ⚠️ Partially implemented
-- ❌ Missing entirely
-- 🐞 Implemented incorrectly / defect
+
+| Symbol | Meaning |
+|--------|---------|
+| ✅ | Implemented correctly |
+| ⚠️ | Partially implemented — gap described |
+| ❌ | Missing entirely |
+| 🐞 | Implemented incorrectly — defect described |
 
 ---
 
-## Section 1 — Tech Stack Alignment
-
-| Layer | Spec | Current | Status |
-|---|---|---|---|
-| Language | TypeScript (frontend + backend) | TypeScript throughout | ✅ |
-| Frontend | React + Tailwind + shadcn/ui | React + Tailwind + shadcn/ui | ✅ |
-| State management | Zustand | Not found — React Query + local state | ⚠️ |
-| Backend | Express.js | Express 5 | ✅ |
-| ORM | Prisma | **Drizzle ORM** (equivalent, different API) | ⚠️ |
-| Validation | Zod (shared client+server) | Zod present on some schemas via drizzle-zod; **not enforced on most API endpoints** | ⚠️ |
-| Auth | JWT + RBAC | Basic JWT login; **no RBAC permissions model** | ⚠️ |
-| Job queue | pg-boss | ❌ None — all automation is inline in HTTP handlers | ❌ |
-| File storage | Local FS behind StorageProvider abstraction | Direct S3/DO Spaces SDK calls; **no abstraction interface** | ⚠️ |
-| Excel parsing | SheetJS | Not found | ❌ |
-| PDF generation | puppeteer / pdfkit | Print-to-PDF via browser window.print() only | ⚠️ |
-| API style | REST `/api/v1/...` + standard envelope | REST `/v1/...` correct; **no standard `{ success, data, error, meta }` envelope** | 🐞 |
-| Pagination | `?page&limit&sort&order&search` + meta | Most endpoints return raw arrays with no pagination | ❌ |
-| OpenAPI / Swagger | Swagger at `/api/docs` (P2) | OpenAPI spec exists (`lib/api-spec/openapi.yaml`) + Orval codegen | ✅ (P2 ahead) |
-
----
-
-## Section 2 — Global Architecture
+## 0. Global Architecture Requirements (Section 2)
 
 | Requirement | Status | Notes |
 |---|---|---|
-| Service layer (routes → controllers → services → repos) | ❌ | Routes call `db.*` directly — no service abstraction |
-| DB transactions for stock moves / payments / numbering | ❌ | No `db.transaction()` found; race conditions possible |
-| State machine enforcement in service layer | ❌ | Status is just a text field; no transition validation |
-| Standard response envelope | 🐞 | Endpoints return raw data; no `{ success, data, error, meta }` |
-| Document number sequences (gapless, FY-scoped, concurrency-safe) | ❌ | `orderNumber` generated ad-hoc (e.g. `SO-XXXX`); no `NumberSequences` table |
-| AuditLogs (entity, action, oldValues, newValues, userId, ip) | ❌ | `activities` table exists but captures only human-written notes, not automated audit trails |
-| Soft deletes (`deletedAt`) on all business tables | ❌ | No `deletedAt` on any table; deletes are hard |
-| Idempotency-Key header on confirm/payment/invoice | ❌ | Not implemented |
-| CompanySettings with stateCode, bankDetails, fyStartMonth | ⚠️ | Table exists; has `legalName`, `gstNumber`, `invoicePrefix`; **missing `stateCode`, `bankDetails` JSON, `fyStartMonth`** |
-| Global error middleware | ⚠️ | Basic Express error handler exists; not standardised to spec envelope |
-| Request logging | ✅ | pino logger via `req.log` |
-| Permissions/RolePermissions tables + `requirePermission()` middleware | ❌ | Only `role` text field on users table; no granular permission model |
+| Service layer (routes → controllers → services → repos) | 🐞 | Business logic sits directly in route handlers; no separate service or repository layer |
+| Transactions & row locking for stock/number writes | ⚠️ | `numberSequence.ts` uses `FOR UPDATE`; stock mutations in routes do NOT use transactions |
+| State machines (stateMachine.ts) | ⚠️ | `SO_TRANSITIONS`, `PO_TRANSITIONS`, Assembly, Shipments, Artwork defined; `canTransition` helper exists but NOT enforced on every PATCH — routes bypass it |
+| Document numbering (`NumberSequences` table) | ✅ | `number_sequences` table + `numberSequence.ts` with FY-aware, row-locked sequences |
+| DC/SMP number types in sequences | ❌ | Only SO/PO/INV/GRN types seeded; `DC` and `SMP` are missing |
+| Audit trail (`AuditLogs`) | ⚠️ | Table exists, `/v1/audit-logs` route exists; NOT written automatically by service layer — must be called manually per route |
+| Soft delete (`deletedAt`) | ⚠️ | Present on: products, vendors, clients, salesOrders, purchaseOrders, invoices, quotes, leads, contacts, creditNotes. Missing on: bundles, assembly, shipments, artworks, GRN, payments, notifications |
+| Idempotency keys | ❌ | Not implemented |
+| `CompanySettings` with `stateCode` | ⚠️ | `companies` table has `gstNumber` (stateCode derivable); no dedicated `CompanySettings` table; bank details, `assemblyCapacityPerDay`, FY start, logo URL — all missing |
+| Multi-tenancy (`orgId` on every table) | 🐞 | Uses `companyId` (equivalent concept) on most tables — column name diverges from spec but functionally similar. Missing on: notifications, audit_logs, email_outbox, import_jobs |
+| Optimistic locking (`version` integer) | ❌ | No `version` column on any business document |
+| Security: helmet, CORS allowlist, rate limiting | ❌ | Not found in app.ts or middleware |
+| Login lockout after N failures | ❌ | Not implemented |
+| bcrypt/argon2 password hashing | ⚠️ | Sessions use token lookup; no evidence of bcrypt — needs verification |
+| Pino structured logging with request IDs | ❌ | Uses `console.log`/`req.log` ad-hoc; no pino setup found |
+| Zod validation on every API endpoint | 🐞 | Frontend Zod schemas exist; backend routes do manual `req.body` property checks — not Zod-validated |
+| Standard response envelope `{ success, data, error, meta }` | 🐞 | Inconsistent — some routes return bare objects, some return `{ success, data }`, not uniformly structured |
+| Standard pagination (`page/limit/sort/order/search + meta`) | ⚠️ | Some list routes accept `search`; consistent pagination meta missing |
+| Global error middleware with consistent HTTP codes | ⚠️ | `StatusError` class exists; no centralized error handler verified |
+| Automated tests | ❌ | No test suite found (`npm test` not configured) |
 
 ---
 
-## Section 3 — Module-by-Module Audit
-
-### 3.1 Auth & User Management
+## 1. Auth & User Management (Section 3.1)
 
 | Item | Status | Notes |
 |---|---|---|
-| Roles (Admin, Sales, Purchase, Warehouse, Production, Finance) | ⚠️ | `role` field on users; roles not in DB; no seed per role |
-| Login / logout / session management | ✅ | JWT auth implemented |
-| Password reset | ❌ | Not found |
-| Permissions model in DB (RolePermissions) | ❌ | Missing |
-| JWT access + refresh token rotation | ⚠️ | Access token only; no refresh rotation |
-| bcrypt/argon2 password hashing | ✅ | hashPassword utility found |
-| Account deactivation (not deletion) | ⚠️ | `isActive` field exists; no enforcement in middleware |
-| One seed user per role | ❌ | No seed script found |
-
-### 3.2 CRM
-
-| Item | Status | Notes |
-|---|---|---|
-| Client profiles (company, GSTIN, billing/shipping addresses) | ⚠️ | `clients` table exists; GSTIN stored but **not validated against regex** |
-| Multiple contacts per client | ✅ | `contacts` table with clientId |
-| Interaction log (calls/emails/meetings) | ✅ | `activities` / ClientInteractions implemented |
-| Requirement document uploads | ⚠️ | File upload API exists; not linked to client records specifically |
-| Tags by industry & occasion | ⚠️ | `industry` field on clients; no tagging system |
-| GSTIN validation (regex + state code derivation) | ❌ | Stored as plain text only |
-| Credit limit & payment terms per client | ❌ | No `creditLimit` field on clients |
-| SO confirmation blocked beyond credit limit | ❌ | No credit check logic |
-| Lead/opportunity stage (Lead → Won) | ✅ | `leads` + `opportunities` tables; stage field present |
-| Client → Active only on first confirmed SO (not manual tag) | ❌ | Stage is manually set |
-
-### 3.3 Product Catalog
-
-| Item | Status | Notes |
-|---|---|---|
-| SKU, name, category, cost/selling price, vendor, stock, images | ✅ | All present |
-| **`hsnCode`** | ❌ | Missing from products table |
-| **`gstRate`** (0/5/12/18/28) | ❌ | Missing; `defaultGstPct` on CompanySettings only |
-| `uom` (unit of measure) | ❌ | Missing |
-| `reorderLevel`, `reorderQty` | ⚠️ | `lowStockThreshold` exists; `reorderQty` missing |
-| `isPerishable`, `shelfLifeDays` | ❌ | Missing |
-| `brandable` flag | ❌ | Missing |
-| VendorProducts (price tiers + lead time per vendor) | ❌ | `vendorId` only (single vendor); no VendorProducts table |
-| Bundles with component cost, margin %, occasion tags | ⚠️ | Bundles exist; margin % computed from selling price only, not from components |
-| Bundle GST mode (MIXED_SUPPLY / ITEMIZED) | ❌ | Missing |
-| ProductCategories as proper table | ⚠️ | `categories` table exists; products use free-text `category` field not FK |
-
-### 3.4 Smart Gift Bundle Builder
-
-| Item | Status | Notes |
-|---|---|---|
-| Budget + occasion + constraints input | ❌ | Not implemented |
-| Score function (margin, budget utilization, occasion relevance) | ❌ | Not implemented |
-| Top-3 combination algorithm | ❌ | Not implemented |
-| Manual override with live recompute | ❌ | Not implemented |
-| AI layer (Claude API, P2) | ❌ | Not implemented |
-
-### 3.5 Quotations & Sales Orders
-
-| Item | Status | Notes |
-|---|---|---|
-| Create quotations + convert to SO | ✅ | quotes → sales_orders conversion exists |
-| Multi-address delivery | ✅ | delivery_addresses table exists |
-| Lifecycle status `Draft → Confirmed → ... → Delivered` | ⚠️ | Status field exists; **no state machine enforcement** — any value accepted |
-| **Quotation versioning** (QuotationVersions table) | ❌ | Single quotes table only; no version history |
-| Discount approval workflow (> limit → Pending Approval) | ❌ | `discountPct` stored but no approval routing |
-| Address-level status per delivery address | ❌ | Delivery addresses have no `status` field |
-| **Stock reservation on SO confirmation** | ❌ | `stockLevel` on products is a single integer; no `reservedQty`; no reservation logic |
-| Excel bulk address import (background job) | ❌ | Not implemented |
-| Cancellation releasing reservations | ❌ | No reservation model to release |
-| `quotationVersionId` FK on SO | ❌ | SOs not linked back to specific quotation version |
-
-### 3.6 Procurement (PO → GRN → Vendor Bill)
-
-| Item | Status | Notes |
-|---|---|---|
-| Auto-generate POs from SO demand | ⚠️ | POs can be created; no auto-generation from SO shortfall |
-| Vendor management + pricing tiers | ⚠️ | vendors table + pricing_tiers; not linked to VendorProducts properly |
-| PO status tracking | ✅ | Status field on purchase_orders |
-| PO shortfall calculation (required − reserved available) | ❌ | No reservation model |
-| GRN with batch number, expiry, QC accept/reject | ⚠️ | GRN table exists; `batch`, `qtyReceived`, `qtyRejected` present; **no expiry date** |
-| GRN posting increases stock in transaction | 🐞 | Stock updated via direct `stockLevel` edit, not via movements ledger + transaction |
-| Vendor Bills (3-way match PO/GRN/bill) | ❌ | No VendorBills table |
-| Vendor Payments against bills | ❌ | No vendor payment tracking separate from client payments |
-| Vendor performance data (on-time %, rejection rate) | ❌ | Not tracked |
-
-### 3.7 Inventory Management
-
-| Item | Status | Notes |
-|---|---|---|
-| Real-time stock via movements ledger | ⚠️ | `inventory_movements` table exists; but `stockLevel` on products is also maintained separately and used as source of truth — two diverging sources |
-| **Reservation model** (onHand, reserved, available) | ❌ | Entirely missing; stock = single `stockLevel` integer |
-| Warehouses table (stock scoped per warehouse) | ❌ | `warehouse_locations` table exists for bin/picking locations; no `Warehouses` parent table; inventory not warehouse-scoped |
-| Movement types (PURCHASE_IN, SALES_OUT, ASSEMBLY_CONSUME, etc.) | ⚠️ | `type` text field; no enforced enum or typed constants |
-| Batch tracking (mfg date, expiry date) | ❌ | `batch` text on movements only; no InventoryBatches table |
-| FEFO picking | ❌ | Not implemented |
-| Low-stock alerts (configurable threshold) | ⚠️ | `lowStockThreshold` field exists; alert logic not found |
-| Stock adjustments with reason codes | ❌ | Not implemented |
-| Weighted-average cost valuation | ❌ | Not implemented |
-
-### 3.8 Kitting / Assembly
-
-| Item | Status | Notes |
-|---|---|---|
-| Assembly jobs linked to SOs with status tracking | ✅ | `assembly_jobs` + `assembly_items` tables |
-| Statuses (Pending/In Progress/Completed/Rejected) | ✅ | Present |
-| Component allocation (FEFO, from reserved stock) | ❌ | No FEFO, no reservation consumption |
-| **Backflush on completion (atomic transaction)** | ❌ | No transaction; no `ASSEMBLY_CONSUME` + `ASSEMBLY_PRODUCE` movement pair |
-| QC pass/fail per unit; failed unit → re-assembly | ❌ | `rejectedQty` field exists; no unit-level QC workflow |
-| `scrapCost` tracking | ❌ | Missing |
-
-### 3.9 Customisation & Branding
-
-| Item | Status | Notes |
-|---|---|---|
-| Upload client logos & brand assets | ✅ | DO Spaces upload implemented |
-| Artwork lifecycle `Pending → Approved → Sent → Completed` | ✅ | `artwork_approvals` table with status |
-| **Artwork versioning** (rejection spawns next version) | ❌ | Single record per SO item; no version history |
-| Branding cost as SO item line cost | ❌ | No `brandingCostPerUnit` on SO items |
-| Branding vendors (type = BRANDING) | ❌ | No vendor type distinction |
-| SO blocked from Ready until artworks Completed | ❌ | No state machine to enforce this |
-
-### 3.10 Logistics & Delivery
-
-| Item | Status | Notes |
-|---|---|---|
-| Shipments linked to SOs | ✅ | `shipments` + `shipment_items` tables |
-| Courier partner assignment | ⚠️ | Courier name field; no Courier abstraction interface |
-| Per-address tracking | ⚠️ | Shipment items link to delivery addresses; no per-address AWB |
-| Shipment lifecycle states | ⚠️ | Status field; no state machine enforcement |
-| **Freight cost** flowing into margin | ❌ | No `freightCost` field on shipments |
-| **POD capture** (receiver name, timestamp, photo) | ❌ | No `podName`, `podAt`, `podFileKey` on delivery addresses |
-| Partial dispatch (some addresses dispatched, SO shows Dispatched) | ❌ | Address-level status missing |
-| E-way bill fields (P2) | ❌ | Not implemented |
-| Label PDF generation | ⚠️ | browser print only; no proper PDF |
-
-### 3.11 Finance & India Compliance
-
-| Item | Status | Notes |
-|---|---|---|
-| GST-compliant invoices | ⚠️ | Invoices exist; `gstAmount` stored as a total only |
-| **GST engine** (CGST+SGST intra-state vs IGST inter-state) | ❌ | No `stateCode` comparison logic; no CGST/SGST/IGST split |
-| Per-line HSN code + tax breakup | ❌ | No `invoice_lines` table; no HSN on lines |
-| **Invoice number sequential** (`INV/2026-27/0001`) | ❌ | No NumberSequences table; format likely `INV-XXXX` |
-| Amount in words | ❌ | Not implemented |
-| Payment tracking (advance, balance, allocation) | ✅ | payments table exists |
-| Credit Notes | ✅ | credit_notes table exists |
-| Invoice payment status derived (Unpaid → Fully Paid) | ⚠️ | status field exists; derived logic unclear |
-| True margin bridge (revenue − component cost − branding − freight − scrap) | ❌ | Basic margin = selling − cost only |
-| Receivables aging (0–30/31–60/61–90/90+) | ❌ | Not implemented |
-| Vendor payables view | ❌ | Not implemented |
-| E-invoicing fields (IRN, ackNo, QR code) (P2) | ❌ | Not implemented |
-
-### 3.12 Dashboards & Analytics
-
-| Item | Status | Notes |
-|---|---|---|
-| Sales performance (revenue, margin, orders by month) | ✅ | Dashboard + analytics routes exist |
-| Inventory status (low stock, stock value) | ⚠️ | Low stock list present; weighted-avg valuation missing |
-| Order pipeline view | ⚠️ | Present as list; no kanban board |
-| Vendor performance | ❌ | Not tracked |
-| Receivables aging + payables due | ❌ | Missing |
-| Seasonal demand forecast (3-month moving avg) | ❌ | Missing |
-
-### 3.13 Workflow Automation & Notifications
-
-| Item | Status | Notes |
-|---|---|---|
-| Notifications table + in-app bell | ✅ | Notifications table + bell component implemented |
-| Email outbox (pending/sent/failed) | ❌ | No EmailOutbox table |
-| pg-boss background job queue | ❌ | No job queue; automation would be inline |
-| SO Confirmed → reserve stock → create Draft POs → notify PM | ❌ | None of these automation triggers exist |
-| GRN posted → auto-create Assembly Job → notify Production | ❌ | Missing |
-| Assembly done → notify Logistics | ❌ | Missing |
-| Low stock / near expiry → notify PM | ❌ | Missing |
+| Roles: Admin, Sales, Purchase, Warehouse, Production, Finance | ✅ | Defined in `requirePermission.ts` ROLE_PERMISSIONS map |
+| Login / logout / me endpoints | ✅ | `/v1/auth/login`, `/v1/auth/logout`, `/v1/auth/me` |
+| Permissions in DB (`Permissions`, `RolePermissions` tables) | ❌ | Permissions hardcoded in `requirePermission.ts` — not stored in DB |
+| `requirePermission('...')` middleware on every route | ⚠️ | Middleware exists but not applied to all routes uniformly |
+| JWT access + refresh token rotation | ❌ | Session-token system only; no refresh token rotation |
+| Account deactivation (not deletion) | ❌ | Not implemented |
+| Portal role (P2) | ❌ | Not implemented |
+| Seed one user per role | ✅ | Seed users: admin, priya/arjun (Sales), vikram (Warehouse), anita (Finance), sunil (Purchase), kavita (Production) |
 
 ---
 
-## Section 4 — State Transition Matrix
+## 2. CRM — Client Management (Section 3.2)
 
-| Entity | Spec | Status |
+| Item | Status | Notes |
 |---|---|---|
-| Sales Order | Full transition map with guards & side-effects | ❌ No enforcement; any status value accepted |
-| Purchase Order | `Draft → Ordered → Partially Received → Fully Received` | ❌ Not enforced |
-| Assembly Job | `Pending → In Progress → QC → Completed` | ❌ Not enforced |
-| Artwork Version | `Pending → Client Approved → Sent to Vendor → Completed` | ❌ Not enforced |
-| Shipment | `Created → Label Generated → ... → Delivered` | ❌ Not enforced |
-| Invoice | `Draft → Issued → Partially Paid → Paid` | ❌ Not enforced |
-| Quotation Version | `Draft → Sent → Approved / Rejected / Revised` | ❌ No versioning |
-
-**Overall: No state machine enforcement exists anywhere in the codebase.**
+| Client profiles (company, contact, GSTIN, addresses) | ✅ | `clients` table with name, email, gstNumber |
+| Multiple contact persons per client (`ClientContacts`) | ⚠️ | `contacts` table exists but `isPrimary`, `designation`, `portalAccess` missing |
+| GSTIN validation regex | ❌ | No server-side GSTIN regex validation |
+| Credit limit & payment terms per client | ❌ | Not in `clients` schema |
+| Credit limit block on SO confirmation | ❌ | Not implemented |
+| Lead/opportunity stage on client record | ⚠️ | `leads` table exists separately; client `stage` field not on `clients` table |
+| Interaction log (`ClientInteractions`) | ⚠️ | `activities` table may partially cover this |
+| Requirement document uploads | ⚠️ | `uploads` route exists; not linked to client records |
+| Tags by industry & occasion | ⚠️ | Industry field on clients — occasion tags missing |
+| Lifetime revenue, margin, sample cost on client page | ❌ | Client detail page does not show these derived fields |
+| Client Portal (P2) | ❌ | Not implemented |
 
 ---
 
-## Section 5 — Database Schema Gaps
+## 3. Product & Service Catalog (Section 3.3)
 
-| Missing table / field | Spec ref | Priority |
+| Item | Status | Notes |
 |---|---|---|
-| `NumberSequences` (gapless FY-scoped doc numbers) | 2.4 | P0 |
-| `AuditLogs` (userId, entity, entityId, action, oldValues, newValues, ip) | 2.5 | P0/P1 |
-| `Permissions` + `RolePermissions` | 3.1 | P0 |
-| `EmailOutbox` | 3.13 | P1 |
-| `Warehouses` (parent of warehouse_locations) | 3.7 | P0 |
-| `InventoryBatches` (batchNo, mfgDate, expiryDate, qty) | 3.7 | P1 |
-| `Inventory` table (productId, warehouseId, onHandQty, reservedQty, avgCost) | 3.7 | P0 |
-| `VendorProducts` (vendorId, productId, priceTiers, leadTimeDays) | 3.3 | P0 |
-| `VendorBills` + `VendorPayments` | 3.6 | P1 |
-| `QuotationVersions` | 3.5 | P1 |
-| `GoodsReceiptItems.expiryDate` | 3.6 | P1 |
-| `StockAdjustments` (reasonCode, approvedById) | 3.7 | P1 |
-| `InvoiceLines` (invoiceId, hsnCode, qty, rate, gstRate, cgst, sgst, igst) | 3.11 | P0 |
-| Products: `hsnCode`, `gstRate`, `uom`, `reorderQty`, `isPerishable`, `shelfLifeDays`, `brandable` | 3.3 | P0 |
-| SalesOrderItems: `brandingCostPerUnit` | 3.9 | P1 |
-| DeliveryAddresses: `status`, `awbNumber`, `podName`, `podAt`, `podFileKey` | 3.5/3.10 | P1 |
-| Clients: `creditLimit`, `paymentTerms`, `stateCode` | 3.2 | P0/P1 |
-| Clients: `stage` values enforced (Lead/Qualified/Proposal/Won/Active/Lost) | 3.2 | P1 |
-| CompanySettings: `stateCode`, `bankDetails` JSON, `fyStartMonth` | 3.11 | P0 |
-| Shipments: `freightCost`, `ewayBillNo`, `ewayBillDate` | 3.10 | P1/P2 |
-| Invoices: `cgst`, `sgst`, `igst`, `placeOfSupplyStateCode`, `amountInWords`, `roundOff`, `irn`, `ackNo` | 3.11 | P0/P2 |
-| AssemblyJobs: `scrapCost` | 3.8 | P1 |
-| `deletedAt` on ALL business tables | 2.6 | P1 |
+| Products: name, category, cost, selling price, vendor, stock | ✅ | Basic fields present |
+| `hsnCode` on products | ✅ | Present in schema |
+| `gstRate` on products (0/5/12/18/28) | ✅ | Present in schema |
+| `uom` | ✅ | Present |
+| `reorderLevel` | ✅ | Present |
+| `reorderQty` | ❌ | Not confirmed in schema |
+| `isPerishable`, `shelfLifeDays` | ❌ | Not in schema |
+| `brandable` | ❌ | Not in schema |
+| `isPackaging` | ❌ | Not in schema — **critical for BOM/backflush** |
+| `barcode` | ❌ | Not in schema |
+| VendorProducts (price tiers + lead time days) | ⚠️ | `vendorProducts` table exists; price tiers JSON and `leadTimeDays` not confirmed |
+| **Services catalog** (`Services` table: sacCode, gstRate, type) | ❌ | No `Services` table; SAC codes not modeled anywhere |
+| Bundle `gstMode` (MIXED_SUPPLY / ITEMIZED) | ❌ | Not in `bundles` schema |
+| Packaging components inside every bundle BOM | ❌ | `isPackaging` flag missing; no lint/validation rule |
+| Product images / Attachments (polymorphic) | ⚠️ | `uploads` route exists; polymorphic attachment table not confirmed |
 
 ---
 
-## Section 6 — API Structure
+## 4. Smart Gift Bundle Builder (Section 3.4)
 
-| Spec endpoint | Current status |
+| Item | Status | Notes |
+|---|---|---|
+| Budget/occasion/quantity inputs | ❌ | No bundle builder algorithm found |
+| Greedy seed + local-search scoring | ❌ | Not implemented |
+| Top-3 combinations with margin breakdown | ❌ | Not implemented |
+| Manual override & live margin recompute | ❌ | Not implemented |
+| Claude AI layer (P2) | ❌ | Not implemented |
+
+---
+
+## 5. Quotations & Sales Order Management (Section 3.5)
+
+| Item | Status | Notes |
+|---|---|---|
+| Quotation creation & conversion to SO | ⚠️ | `quotes` table and routes exist; full lifecycle unclear |
+| Quotation versioning (`QuotationVersions`) | ❌ | No version history; single quote record only |
+| `SalesOrders.orderType` (GOODS/SERVICE/MIXED) | ❌ | Not in `sales_orders` schema |
+| `SalesOrderItems.itemType` (PRODUCT/BUNDLE/SERVICE) | ❌ | Not in `sales_order_items`; only productId present |
+| Discount approval workflow (`Pending Approval` state) | ❌ | Not implemented |
+| Address-level delivery status (separate `DeliveryAddresses` table) | ❌ | Delivery addresses not a separate table; no per-address status |
+| Partial dispatch support | ❌ | Not implemented |
+| Per-recipient personalization (Excel import columns) | ❌ | Not implemented |
+| Excel bulk address import via pg-boss background job | ❌ | Not implemented |
+| Clone / repeat order | ❌ | Not implemented |
+| Seasonal reminder job | ❌ | Not implemented |
+| Cancellation with reservation release | ⚠️ | Cancel transition exists; reservation release not confirmed |
+| SO confirmation atomic transaction (reserve + shortfall + enqueue PO) | ❌ | No atomic confirmation transaction found |
+
+---
+
+## 6. Service Orders & Job Work (Section 3.6) — NEW
+
+| Item | Status | Notes |
+|---|---|---|
+| Service lines in SalesOrderItems (`itemType=SERVICE`) | ❌ | Not implemented |
+| Service line fulfillment status (Pending → In Progress → Completed) | ❌ | Not implemented |
+| Delivery Challan In (DC-In) for client material | ❌ | `ClientMaterialChallans` table missing entirely |
+| Custody stock (`ownership=CLIENT` on inventory) | ❌ | No ownership dimension on inventory |
+| Job Work Register (received − consumed − returned = balance) | ❌ | Not implemented |
+| Consumption posting (`JOBWORK_CONSUME` movement) | ❌ | Movement type not defined |
+| Delivery Challan Out (DC-Out) | ❌ | Not implemented |
+| E-way bill number on challans | ❌ | Not implemented |
+| Service costing (labor + consumables) | ❌ | Not implemented |
+| SAC invoicing for service lines | ❌ | Not implemented |
+| Recurring gifting programs (P2) | ❌ | Not implemented |
+
+---
+
+## 7. Sample Management (Section 3.7)
+
+| Item | Status | Notes |
+|---|---|---|
+| Sample request linked to client | ⚠️ | `sampleOrders` table + `/v1/sample-orders` route exist |
+| Status lifecycle (Requested → Approved → Dispatched → Feedback → Converted/Closed) | ⚠️ | Basic statuses may exist; full lifecycle not confirmed |
+| SMP number sequence | ❌ | Not in number_sequences seed |
+| `SAMPLE_OUT` inventory movement | ❌ | Movement type not defined |
+| Printable sample challan | ❌ | Not found |
+| Sample cost accumulated on client record (`sampleCostToDate`) | ❌ | Not in clients schema |
+| One-click Convert → pre-filled quotation | ❌ | Not implemented |
+| Sample funnel on dashboard | ❌ | Not implemented |
+
+---
+
+## 8. Procurement (Section 3.8)
+
+| Item | Status | Notes |
+|---|---|---|
+| Purchase Orders (CRUD, status) | ✅ | Full CRUD at `/v1/purchase-orders` |
+| Auto-generate POs from SO shortfall | ❌ | Not implemented as atomic transaction/job |
+| GRN with batch, expiry, QC accept/reject counts | ⚠️ | GRN table exists; QC reject count and batch/expiry columns not confirmed |
+| GRN posting increases stock in transaction | ❌ | Not confirmed as atomic |
+| PO status auto-update on GRN post | ⚠️ | Likely manual |
+| Vendor Bills + 3-way match (PO qty/price vs GRN qty vs bill) | ❌ | No `VendorBills` table found |
+| Vendor Payments with TDS fields | ❌ | `paymentsTable` linked to client invoices, not vendor bills |
+| Vendor performance data (on-time %, QC rejection %, price variance) | ❌ | Not captured |
+
+---
+
+## 9. Inventory Management (Section 3.9)
+
+| Item | Status | Notes |
+|---|---|---|
+| Real-time stock, movements, low-stock alerts | ⚠️ | `inventory` + `inventory_movements` tables exist; alert job missing |
+| Reservation model (`onHandQty`, `reservedQty`, `availableQty`) | ⚠️ | `onHandQty` + `reservedQty` in schema; `availableQty` computed not stored; reservation logic on SO confirm missing |
+| Ownership dimension (COMPANY/CLIENT) on inventory | ❌ | Not in inventory or batch schema |
+| Warehouses (stock scoped per warehouse) | ✅ | `warehouses` + `warehouse_locations` tables exist |
+| Movements ledger (all types incl. SAMPLE_OUT, JOBWORK_*) | ⚠️ | `inventory_movements` exists; SAMPLE_OUT, JOBWORK_IN/CONSUME/RETURN types missing |
+| Batch tracking with expiry (`InventoryBatches`) | ❌ | No `inventory_batches` table found |
+| FEFO picking (first-expiry-first-out) | ❌ | Not implemented |
+| Barcode/QR on SKUs | ❌ | Not in schema |
+| Stock adjustments with reason codes (permission-gated, audit-logged) | ⚠️ | Movement POST exists; reason codes / approval not confirmed |
+| Weighted-average cost valuation (COMPANY stock only) | ❌ | Not implemented |
+
+---
+
+## 10. Kitting / Assembly (Section 3.10)
+
+| Item | Status | Notes |
+|---|---|---|
+| Assembly jobs linked to SOs | ✅ | `assembly` table + `/v1/assembly` routes exist |
+| Status machine (Pending → In Progress → QC → Completed) | ⚠️ | Transitions in stateMachine.ts; QC step not confirmed |
+| Component allocation (batch-wise, FEFO) | ❌ | No FEFO; atomic allocation logic not confirmed |
+| Packaging components as BOM | ❌ | `isPackaging` flag missing |
+| Job-work assembly with CLIENT ownership | ❌ | Not implemented |
+| Backflush on completion (atomic CONSUME + PRODUCE transaction) | ❌ | No confirmed atomic backflush |
+| QC pass/fail per unit; scrap cost posting | ❌ | Not implemented |
+| Per-kit label with recipient personalization | ❌ | Not implemented |
+
+---
+
+## 11. Customisation & Branding (Section 3.11)
+
+| Item | Status | Notes |
+|---|---|---|
+| Artwork lifecycle (Pending → Approved → Vendor → Completed) | ✅ | `artwork` table + `/v1/artwork-approvals` with status PATCH |
+| Artwork versioning (rejection spawns next version) | ❌ | Single record per SO item; no version history |
+| Branding cost as line on SO item (`brandingCostPerUnit`) | ❌ | Not in `sales_order_items` schema |
+| Branding vendors (`vendorType=BRANDING`) | ⚠️ | `vendorType` on vendors exists; BRANDING value may be present |
+| SO blocked from `Ready` until all artworks Completed | ❌ | Guard not enforced in state machine |
+
+---
+
+## 12. Logistics & Delivery (Section 3.12)
+
+| Item | Status | Notes |
+|---|---|---|
+| Shipments linked to SOs, courier, per-address tracking | ✅ | `shipments` + `shipment_items` + `/v1/shipments` routes |
+| Full shipment lifecycle (Created → Label → Picked Up → In Transit → Delivered/RTO) | ⚠️ | Statuses exist in stateMachine; Label Generated / Picked Up steps not confirmed |
+| Freight cost per shipment | ❌ | Not in shipments schema |
+| POD capture (name, timestamp, photo) | ⚠️ | `/:id/items/:itemId/pod` PATCH endpoint exists |
+| E-way bill fields (`ewayBillNo`, `ewayBillDate`) | ❌ | Not in shipments schema |
+| Shipping label (print-ready HTML/PDF) | ❌ | Not found |
+| Scan-to-dispatch, courier abstraction (P2) | ❌ | Not implemented |
+
+---
+
+## 13. Finance & India Compliance (Section 3.13)
+
+| Item | Status | Notes |
+|---|---|---|
+| GST engine (intra/inter-state, CGST+SGST vs IGST) | ✅ | `gstEngine.ts` with state-code logic and `amountInWords` |
+| Invoice with all mandatory Indian GST fields | ⚠️ | Invoices exist; HSN summary table, `roundOff`, `placeOfSupplyStateCode` need confirmation |
+| `lineType` (GOODS/SERVICE) + `hsnOrSacCode` on invoice lines | ❌ | `invoice_lines` has `hsnCode`; no `lineType` or SAC |
+| Sequential invoice number via NumberSequences | ✅ | Uses `numberSequence.ts` |
+| Payments & reconciliation | ⚠️ | `payments` table exists; advance auto-allocation not implemented |
+| Payment status derived (Unpaid → Advance → Partial → Paid) | ❌ | Not confirmed as derived state |
+| Credit Notes | ⚠️ | `creditNotes` table + `/v1/credit-notes` exists |
+| Debit Notes | ❌ | Not found |
+| True margin bridge per order | ❌ | Not implemented |
+| Receivables aging view (0–30/31–60/61–90/90+) | ⚠️ | AR aging bar in dashboard; full aging report not confirmed |
+| GSTR-1 export | ⚠️ | `/v1/reports/gstr1` stub exists |
+| Razorpay, Tally export, e-invoicing (`irn`, `ackNo`) | ❌ | Not implemented |
+
+---
+
+## 14. Dashboards & Analytics (Section 3.14)
+
+| Item | Status | Notes |
+|---|---|---|
+| Revenue, margin, orders by month | ⚠️ | Revenue chart exists; margin not included |
+| Top clients / occasions | ⚠️ | Top clients partially shown; occasions missing |
+| Goods vs service revenue split | ❌ | No service order concept yet |
+| Inventory value (weighted avg), low-stock, near-expiry alerts | ⚠️ | Stock levels shown; weighted avg value and near-expiry alerts missing |
+| Order pipeline as kanban board | ⚠️ | Sales pipeline bar chart exists; not a kanban |
+| Assembly capacity planning (kits/day vs capacity) | ❌ | Not implemented |
+| Sample funnel (dispatched → feedback → converted) | ❌ | Not implemented |
+| Vendor performance dashboard | ⚠️ | Placeholder section; no real data |
+| Receivables aging + payables due | ⚠️ | AR aging partial; payables view missing |
+| Seasonal demand trend + 3-month moving-average forecast | ❌ | Not implemented |
+
+---
+
+## 15. Automation, Notifications & Data Import (Section 3.15)
+
+| Item | Status | Notes |
+|---|---|---|
+| pg-boss job queue | ❌ | No background job infrastructure; all automation inline in HTTP handlers |
+| Auto-PO on SO confirm | ❌ | Not implemented as background job |
+| Auto-assembly job on stock available | ❌ | Not implemented |
+| Notifications table + in-app bell (unread count + popover) | ⚠️ | `notifications` route exists; bell UI not confirmed |
+| Email channel (SMTP, outbox pattern with retry) | ❌ | Not implemented |
+| WhatsApp channel stub (P2) | ❌ | Not implemented |
+| Seasonal reminder job | ❌ | Not implemented |
+| **Master-data import wizard** (Products / Services / Clients / Vendors / Opening Stock) | ❌ | Not implemented |
+| `ImportJobs` table | ❌ | Not in schema |
+| Template download per import type | ❌ | Not implemented |
+
+---
+
+## 16. UI / UX Audit (Section 11)
+
+### Per-Screen Scores
+
+| Screen | Score | Issues |
+|---|---|---|
+| Dashboard | ⚠️ | Hardcoded hex chart colors (`#10b981`, `#f59e0b`, `#ef4444`, `#8b5cf6`). Inline `style` for progress bar widths/colors. Pipeline is bar chart, not kanban. No sample funnel, no capacity chart. |
+| Clients list | ⚠️ | `window.confirm()` for delete (Kill-List #1). No credit limit / stage fields. |
+| Client detail | ❌ | No lifetime revenue, margin, sample cost, open receivables panel. |
+| Contacts | ⚠️ | Missing `isPrimary`, `designation`, `portalAccess` fields. |
+| Leads / Opportunities | ⚠️ | Separate from client record; spec requires stage on the client record itself. |
+| Products | ⚠️ | `window.confirm()` for delete (Kill-List #1). Missing `isPackaging`, `barcode`, `brandable`, `isPerishable`, `shelfLifeDays` fields. |
+| Bundles | ⚠️ | `window.confirm()` for delete (Kill-List #1). No `gstMode` field. |
+| Categories | ⚠️ | `window.confirm()` for delete (Kill-List #1). |
+| Sales Orders | ⚠️ | No `orderType`, no service lines, no address-level status, no discount approval flow, no wizard. |
+| Order Processing | 🐞 | Native `<select>` for status (Kill-List #2). Native `<table>` in print area. Hardcoded hex `#4338ca` in print CSS (Kill-List #5). |
+| Vendors | 🐞 | Native `<select>` for State and Payment Terms (Kill-List #2). |
+| Purchase Orders | ⚠️ | No vendor bill / 3-way match flow. |
+| GRN | ⚠️ | No batch/expiry capture confirmed. |
+| Inventory | ⚠️ | No ownership dimension, no batch view, no FEFO indicator, no weighted avg cost. |
+| Assembly | ⚠️ | No backflush confirmation, no QC per-unit flow, no kit labels, no packaging components. |
+| Artwork | ⚠️ | No version history UI; single record per SO item. |
+| Shipments | ⚠️ | No freight cost field, no e-way bill field, no label print. |
+| Invoices | ⚠️ | No SAC lines, no HSN summary table, no `amountInWords` confirmation, no PDF export button. |
+| Reports | ⚠️ | Hardcoded hex palette (Kill-List #5). No sample funnel, no capacity chart. |
+| Settings | ⚠️ | Missing `stateCode`, bank details, `assemblyCapacityPerDay`. |
+| **Services** | ❌ | Page does not exist. |
+| **Job Work Register** | ❌ | Page does not exist. |
+| Sample Management | ⚠️ | Basic list may exist; challan print, convert-to-quote, sample cost accumulation missing. |
+| **Import Wizard** | ❌ | Page does not exist. |
+| Notifications bell | ⚠️ | Route exists; unread count + popover UI not confirmed. |
+| ⌘K Command Palette | ❌ | Not implemented. |
+| Dark mode toggle | ❌ | Not found. |
+
+### Legacy Kill-List Occurrences (Section 11.10)
+
+| # | Kill-List Item | Count / Location |
+|---|---|---|
+| 1 | `window.confirm()` / `window.alert()` | **≥4** — clients.tsx, products.tsx, bundles.tsx, categories.tsx |
+| 2 | Native HTML `<select>` / unstyled elements in main flows | **≥2** — vendors.tsx, order-processing.tsx |
+| 3 | Full-page reloads on actions | Not observed |
+| 4 | Spinner-only / blank loading (no skeletons on all pages) | ⚠️ — not audited for every page |
+| 5 | Ad-hoc badge/status colors; inline hex in components | **≥3 files** — dashboard.tsx, reports.tsx, order-processing.tsx print CSS |
+| 6 | Mixed icon sets / emoji-as-icons | Not observed |
+| 7 | Dense "Excel-look" tables with zero padding | ⚠️ — order-processing.tsx print area |
+| 8 | Gradient headers, bevels, heavy shadows | Not observed |
+| 9 | Fixed-width non-responsive layouts | ⚠️ — not fully audited |
+| 10 | Modal-inside-modal / modals for full CRUD | ⚠️ — client creation is a Dialog (borderline) |
+| 11 | Mixed date or currency formats | ⚠️ — `formatINR()` / `formatDate()` not confirmed as universal utils |
+| 12 | Missing focus states / keyboard traps | ⚠️ — not fully audited |
+
+**Confirmed Kill-List violations: ≥9 occurrences across ≥5 files.**
+
+---
+
+## Summary — Priority Gap Matrix
+
+### P0 Blockers (ERP not legally/operationally correct without these)
+
+| Ref | Gap |
 |---|---|
-| `/v1/auth` | ✅ |
-| `/v1/users` | ✅ |
-| `/v1/clients` | ✅ |
-| `/v1/products` | ✅ |
-| `/v1/bundles` | ✅ |
-| `/v1/bundle-builder` | ❌ |
-| `/v1/quotations` | ⚠️ (as `/v1/quotes`) |
-| `/v1/sales-orders` | ✅ |
-| `/v1/purchase-orders` | ✅ |
-| `/v1/grns` | ✅ (as `/v1/grn`) |
-| `/v1/vendor-bills` | ❌ |
-| `/v1/vendor-payments` | ❌ |
-| `/v1/inventory` | ✅ |
-| `/v1/warehouses` | ❌ |
-| `/v1/assembly` | ✅ |
-| `/v1/artworks` | ✅ |
-| `/v1/shipments` | ✅ |
-| `/v1/invoices` | ✅ |
-| `/v1/credit-notes` | ✅ |
-| `/v1/payments` | ✅ |
-| `/v1/notifications` | ✅ |
-| `/v1/analytics` | ✅ |
-| `/v1/settings` | ✅ |
-| `/v1/simulation` | ❌ |
-| Standard `{ success, data, error, meta }` envelope | ❌ |
-| Pagination meta on all list endpoints | ❌ |
-| Zod validation on all endpoints | ❌ (partial) |
-| Permission middleware on all routes | ❌ |
+| P0-01 | `companyId` → `orgId` naming alignment; add `companyId/orgId` to notifications, audit_logs, import_jobs |
+| P0-02 | `version` (optimistic lock integer) on all business documents |
+| P0-03 | Zod validation on every API endpoint (currently manual/missing) |
+| P0-04 | Standard response envelope `{ success, data, error, meta }` on every endpoint |
+| P0-05 | State machine enforced in service layer — not bypassable via route PATCH |
+| P0-06 | DB transactions for all stock + payment + number-sequence writes |
+| P0-07 | `Services` table with `sacCode`, `gstRate`, `type` (needed for service invoicing) |
+| P0-08 | Product fields: `isPackaging`, `barcode`, `brandable`, `isPerishable`, `shelfLifeDays`, `reorderQty` |
+| P0-09 | `orderType` on sales_orders; `itemType` + `serviceId` + `brandingCostPerUnit` on sales_order_items |
+| P0-10 | Inventory `ownership` (COMPANY/CLIENT) + `InventoryBatches` table |
+| P0-11 | SO confirmation atomic transaction (reserve stock + shortfall calc + enqueue auto-PO) |
+| P0-12 | GRN posting in transaction (stock increase + PO status update) |
+| P0-13 | `DC` and `SMP` number sequence types seeded |
+| P0-14 | `CompanySettings` with `stateCode`, bank details JSON, `assemblyCapacityPerDay`, logo |
+| P0-15 | Credit limit + payment terms on clients; GSTIN regex validation (server-side) |
+| P0-16 | Permissions stored in DB (`Permissions` / `RolePermissions` tables) |
+| P0-17 | `DeliveryAddresses` as separate table with per-address `status` and `personalization` JSON |
+| P0-18 | Backflush transaction on assembly completion (atomic ASSEMBLY_CONSUME + ASSEMBLY_PRODUCE) |
+| P0-19 | `lineType` (GOODS/SERVICE) + `hsnOrSacCode` on invoice_lines; SAC invoice rendering |
 
----
+### P1 Core ERP
 
-## Section 7 — RBAC
-
-| Item | Status |
+| Ref | Gap |
 |---|---|
-| Roles stored in DB | ❌ (role = text on users table) |
-| Permissions table (e.g. `sales_order.confirm`) | ❌ |
-| RolePermissions join table | ❌ |
-| `requirePermission()` middleware | ❌ |
-| Per-route permission guards | ❌ |
+| P1-01 | Quotation versioning (`QuotationVersions` table) |
+| P1-02 | Discount approval workflow (`Pending Approval` → Admin/Finance confirms) |
+| P1-03 | `ClientMaterialChallans` (DC-In/Out) + Job Work Register screen |
+| P1-04 | Samples: SMP number, SAMPLE_OUT movement, convert-to-quote, sample cost on client |
+| P1-05 | Assembly: FEFO batch allocation, QC per unit, scrap cost, kit labels |
+| P1-06 | Artwork versioning (version history, rejection spawns next version) |
+| P1-07 | `VendorBills` + 3-way match |
+| P1-08 | `VendorPayments` + vendor ledger / outstanding view |
+| P1-09 | Weighted-average cost valuation per product per warehouse |
+| P1-10 | True margin bridge per order (revenue − components − branding − freight − scrap − samples) |
+| P1-11 | Per-recipient personalization (Excel import columns; kit label printing) |
+| P1-12 | Clone order action |
+| P1-13 | Soft delete on remaining tables (bundles, assembly, shipments, artworks, GRN) |
+| P1-14 | Master-data import wizard (5 types: Products, Services, Clients, Vendors, Opening Stock) |
+| P1-15 | pg-boss job queue (move all automation off inline HTTP handlers) |
+| P1-16 | Notifications bell UI (unread count + popover) |
+| P1-17 | Pino structured logging with request IDs |
+| P1-18 | Security hardening: helmet, CORS allowlist, rate limiting, login lockout |
+| P1-19 | UI: Kill-List violations eliminated; ⌘K command palette; dark mode toggle |
+| P1-20 | `bundle gstMode` (MIXED_SUPPLY/ITEMIZED); bundle builder algorithm |
+| P1-21 | `freight cost` + `ewayBillNo` on shipments; shipping label print |
+| P1-22 | `brandingCostPerUnit` on SO items; artwork version history UI |
+| P1-23 | `reorderQty`, near-expiry alert job, low-stock alert job |
+
+### P2 Growth (after P0 + P1 are green)
+
+| Ref | Gap |
+|---|---|
+| P2-01 | E-way bill / e-invoice fields & stubs (`irn`, `ackNo`, `qrCodeData`) |
+| P2-02 | Scan-based GRN / kitting / dispatch (barcode scanner input) |
+| P2-03 | Claude AI layer in bundle builder |
+| P2-04 | Simulation Mode (SSE, `/api/v1/simulation/*`) |
+| P2-05 | Client Portal (Portal role, scoped views, artwork approve/reject online) |
+| P2-06 | Razorpay payment links + webhook auto-allocation |
+| P2-07 | WhatsApp notification channel (Gupshup/Twilio) |
+| P2-08 | Tally voucher export |
+| P2-09 | GSTR-1 B2B export (full implementation beyond current stub) |
+| P2-10 | Recurring gifting programs (pg-boss scheduled orders) |
+| P2-11 | Dispatch capacity calendar |
+| P2-12 | Courier abstraction (`CourierProvider` interface) |
+| P2-13 | TDS on vendor payments |
+| P2-14 | Idempotency keys on confirm/payment/invoice endpoints |
+| P2-15 | Swagger/OpenAPI docs at `/api/docs` |
 
 ---
 
-## Section 8 — Phased Fix Plan — Current Position
+## Technology Stack Notes
 
-**Phase 1 (Foundations):** ~30% done. App shell and design tokens exist but are inconsistent. CompanySettings exists but is incomplete. No NumberSequences, AuditLogs, soft-delete middleware, or Permissions tables. Zod used in schema definitions but not consistently enforced on endpoints.
-
-**Phase 2 (Order-to-Procure):** ~20% done. Basic SO + PO + GRN routes exist. Quotation versioning, reservation, state machines, 3-way match, vendor bills — all missing.
-
-**Phase 3 (Make-to-Deliver & Money):** ~25% done. Assembly, artwork, shipments, invoices exist at basic level. Backflush, POD, GST engine, InvoiceLines, freight cost, branding cost — all missing.
-
-**Phase 4 (Automation & Advanced):** ~5% done. Notifications bell exists. No pg-boss, no automation triggers, no Simulation Mode.
-
----
-
-## Section 11 — UI / UX Audit
-
-### Screen Scores
-
-| Screen | Status | Issues |
+| Spec says | Codebase uses | Status |
 |---|---|---|
-| Dashboard | ⚠️ | KPI cards good; no delta vs previous period; charts present but tokens not consistent |
-| Sales Orders list | ⚠️ | Table present; no server-side pagination; no column filters |
-| Sales Order detail | ⚠️ | Shows items & addresses; no tabbed layout; no activity timeline from audit logs |
-| Clients list | ⚠️ | Basic table; no searchable async select; no column visibility menu |
-| Products list | ⚠️ | Table works; no HSN/GST columns (fields don't exist) |
-| Invoices | ⚠️ | List works; no CGST/SGST split; print via window.print() |
-| Order Processing form | ✅ | Custom multi-tab form; well structured; file uploads working |
-| Assembly | ⚠️ | Basic CRUD; no backflush; no QC workflow |
-| Inventory | ⚠️ | Movements ledger + transfers; no warehouse scoping; no batch view |
-| GRN | ⚠️ | Present; no expiry date; no 3-way match display |
-| Artwork | ⚠️ | Status tracking; no versioning |
-| Purchase Orders | ⚠️ | CRUD works; no auto-generation from shortfall |
-| Shipments | ⚠️ | Basic list; no address-level status; no POD |
-| Bundles | ⚠️ | Manual bundle builder; no smart algorithm |
-| Settings | ⚠️ | Company settings form; missing stateCode, bankDetails |
-
-### Legacy Kill-List Occurrences
-
-| Kill-list item | Found? | Where |
-|---|---|---|
-| `alert()` / `confirm()` / `prompt()` | Likely — check toasts | Need code grep |
-| Unstyled HTML `<table>` in main flows | ❌ | Some pages use native table markup — need audit |
-| Spinner-only loading (no skeletons) | ⚠️ | Skeleton used in some pages; inconsistent |
-| Ad-hoc badge colors | ⚠️ | Likely; no single `statusConfig` map confirmed |
-| Mixed date formats | ⚠️ | `format()` from date-fns used; consistency unknown |
-| Mixed currency formats | ⚠️ | No global `formatINR()` utility found |
-| Gradient header bars / heavy shadows | Likely none | shadcn defaults are clean |
-| Modal-inside-modal | Not found | |
-| Full-page reloads on form submit | ❌ | SPA; React Query mutations used |
+| Prisma + PostgreSQL | **Drizzle ORM** + PostgreSQL | 🐞 — spec says Prisma; Drizzle retained (schema changes via `drizzle-kit generate` + SQL migrations) |
+| Zustand (no Redux) | Not confirmed | ⚠️ |
+| JWT access + refresh | Session token only | ❌ |
+| pg-boss | Not installed | ❌ |
+| `StorageProvider` interface | Direct FS / no abstraction | ❌ |
+| SheetJS for Excel parsing | Not installed | ❌ |
+| pino logging | console.log ad-hoc | ❌ |
+| REST versioned `/api/v1/...` | ✅ | ✅ |
+| shadcn/ui + Tailwind | ✅ | ✅ |
 
 ---
 
-## Summary — Priority List
-
-### P0 — Must fix for legal/correct ERP operation (11 items)
-
-1. **GST engine** — add `hsnCode` + `gstRate` to products; `stateCode` to CompanySettings + clients; CGST/SGST/IGST split on invoices; InvoiceLines table
-2. **Stock reservation model** — `Inventory` table (onHand, reserved, available per product+warehouse); reservation on SO confirm; release on cancel
-3. **NumberSequences table** — gapless, FY-scoped, concurrency-safe document numbers for SO/PO/INV/GRN/QTN/SHP
-4. **State machine enforcement** — service-layer transition map for SO, PO, Assembly, Artwork, Shipment, Invoice
-5. **DB transactions** — stock movements, reservation, payment posting, number generation all inside transactions with row locking
-6. **Zod validation** on every API endpoint (request body + query params)
-7. **Standard response envelope** `{ success, data, error, meta }` on all endpoints
-8. **Permissions/RBAC** — Permissions + RolePermissions tables + `requirePermission()` middleware
-9. **Service layer** — extract business logic out of route handlers into services
-10. **VendorProducts** table — multi-vendor per product with price tiers + lead times
-11. **AuditLogs** — automated trail on every status change and business mutation
-
-### P1 — Core ERP gaps (10 items)
-
-1. Soft deletes (`deletedAt`) on all business tables
-2. Quotation versioning (QuotationVersions table)
-3. Discount approval workflow on SOs
-4. Address-level delivery status + partial dispatch + POD
-5. Vendor Bills + 3-way match + Vendor Payments
-6. Artwork versioning + branding cost on SO items
-7. Batch tracking (InventoryBatches with expiry, FEFO picking)
-8. Stock adjustments with reason codes
-9. Freight cost on shipments → margin bridge
-10. Credit limits on clients + credit check on SO confirmation
-
-### P2 — Advanced features (not blocking)
-
-1. Smart Gift Bundle Builder algorithm
-2. Simulation Mode (SSE)
-3. AI (Claude) bundle layer
-4. E-way bill / e-invoice stubs
-5. TDS on vendor payments
-6. Receivables aging + payables view
-7. Seasonal demand forecasting
-8. Courier abstraction interface
-9. Idempotency keys
-10. Swagger at `/api/docs`
+*Gap report last updated: 15 Jul 2026 (v3 spec). Will be updated after each implementation phase.*
