@@ -192,8 +192,7 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
       <td>${i + 1}</td>
       <td>${item.productName}</td>
       <td style="text-align:right">${item.quantity}</td>
-      <td style="text-align:right">₹${Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-      <td style="text-align:right">₹${Number(item.totalPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+      <td>${data.itemProductionSource?.[item.id] || "—"}</td>
     </tr>`).join("");
 
   const itemsSubtotal = (meta.items ?? []).reduce((sum, item) => sum + Number(item.totalPrice), 0);
@@ -264,14 +263,16 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
   <div class="section">
     <div class="section-title">Sales Order Items</div>
     <table class="checklist">
-      <thead><tr><th>#</th><th>Product</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Total</th></tr></thead>
-      <tbody>${itemsRows || "<tr><td colspan='5' style='text-align:center;color:#888;'>No items</td></tr>"}</tbody>
-      <tfoot>
-        <tr style="background:#f9fafb;"><td colspan="4" style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">Subtotal</td><td style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">${fmtAmt(itemsSubtotal)}</td></tr>
-        <tr style="background:#f9fafb;"><td colspan="4" style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">GST 18%</td><td style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">${fmtAmt(gstAmount)}</td></tr>
-        <tr style="background:#ede9fe;font-weight:700;"><td colspan="4" style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Grand Total</td><td style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">${fmtAmt(grandTotal)}</td></tr>
-      </tfoot>
+      <thead><tr><th style="width:28px;">#</th><th>Product</th><th style="text-align:right;width:55px;">Qty</th><th>Production Source</th></tr></thead>
+      <tbody>${itemsRows || "<tr><td colspan='4' style='text-align:center;color:#888;'>No items</td></tr>"}</tbody>
     </table>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+      <table style="border-collapse:collapse;font-size:12px;">
+        <tr style="background:#f9fafb;"><td style="padding:4px 16px;border:1px solid #d1d5db;color:#6b7280;">Subtotal</td><td style="padding:4px 16px;border:1px solid #d1d5db;color:#6b7280;text-align:right;min-width:130px;">${fmtAmt(itemsSubtotal)}</td></tr>
+        <tr style="background:#f9fafb;"><td style="padding:4px 16px;border:1px solid #d1d5db;color:#6b7280;">GST 18%</td><td style="padding:4px 16px;border:1px solid #d1d5db;color:#6b7280;text-align:right;">${fmtAmt(gstAmount)}</td></tr>
+        <tr style="background:#ede9fe;font-weight:700;"><td style="padding:5px 16px;border:1px solid #d1d5db;">Grand Total</td><td style="padding:5px 16px;border:1px solid #d1d5db;text-align:right;">${fmtAmt(grandTotal)}</td></tr>
+      </table>
+    </div>
   </div>` : ""}
 
   <div class="section">
