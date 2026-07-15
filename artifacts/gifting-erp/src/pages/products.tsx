@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useListProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useListVendors, getListProductsQueryKey } from "@workspace/api-client-react";
+import { api } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -263,16 +264,10 @@ export function Products() {
         toast({ title: "Empty or invalid CSV", variant: "destructive" });
         return;
       }
-      const res = await fetch("/api/v1/products/import", {
+      const data = await api<{ imported: number; updated: number; errors: { row: number; message: string }[] }>("/v1/products/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows }),
       });
-      const data = await res.json() as { imported: number; updated: number; errors: { row: number; message: string }[] };
-      if (!res.ok) {
-        toast({ title: "Import failed", description: (data as { error?: string }).error, variant: "destructive" });
-        return;
-      }
       queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
       const parts: string[] = [];
       if (data.imported) parts.push(`${data.imported} added`);
