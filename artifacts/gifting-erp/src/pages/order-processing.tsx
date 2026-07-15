@@ -108,6 +108,7 @@ interface OrderFormData {
   dispatchInchargeSignedBy: string;
   checklistItems: ChecklistItem[];
   itemProductionSource: Record<number, string>;
+  itemBranding: Record<number, string>;
   attachments: Array<{ name: string; url: string; type: string }>;
 }
 
@@ -142,6 +143,7 @@ const EMPTY: OrderFormData = {
   dispatchIncharge: "", dispatchInchargeDate: "", dispatchInchargeTime: "", dispatchInchargeSignedBy: "",
   checklistItems: [{ productName: "", inhouseQty: "", procureQty: "", totalReceiveNote: "" }],
   itemProductionSource: {},
+  itemBranding: {},
   attachments: [],
 };
 
@@ -190,6 +192,7 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
       <td>${i + 1}</td>
       <td>${item.productName}</td>
       <td style="text-align:right">${item.quantity}</td>
+      <td>${data.itemBranding?.[item.id] || "—"}</td>
       <td>${data.itemProductionSource?.[item.id] || "—"}</td>
     </tr>`).join("");
 
@@ -257,8 +260,8 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
   <div class="section">
     <div class="section-title">Sales Order Items</div>
     <table class="checklist">
-      <thead><tr><th style="width:28px;">#</th><th>Product</th><th style="text-align:right;width:55px;">Qty</th><th>Production Source</th></tr></thead>
-      <tbody>${itemsRows || "<tr><td colspan='4' style='text-align:center;color:#888;'>No items</td></tr>"}</tbody>
+      <thead><tr><th style="width:28px;">#</th><th>Product</th><th style="text-align:right;width:55px;">Qty</th><th>Branding</th><th>Production Source</th></tr></thead>
+      <tbody>${itemsRows || "<tr><td colspan='5' style='text-align:center;color:#888;'>No items</td></tr>"}</tbody>
     </table>
   </div>` : ""}
 
@@ -497,6 +500,8 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
         ...raw,
         designerAttachments: Array.isArray(raw.designerAttachments) ? raw.designerAttachments : [],
         attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
+        itemProductionSource: raw.itemProductionSource && typeof raw.itemProductionSource === "object" ? raw.itemProductionSource : {},
+        itemBranding: raw.itemBranding && typeof raw.itemBranding === "object" ? raw.itemBranding : {},
       });
     }
   }, [existingForm]);
@@ -828,6 +833,7 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8">#</th>
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Product</th>
                         <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Qty</th>
+                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Branding</th>
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Production Source</th>
                       </tr>
                     </thead>
@@ -844,6 +850,24 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                             </div>
                           </td>
                           <td className="px-4 py-2.5 text-right tabular-nums">{item.quantity}</td>
+                          <td className="px-4 py-2.5">
+                            <select
+                              value={formData.itemBranding[item.id] ?? ""}
+                              onChange={(e) => set("itemBranding", { ...formData.itemBranding, [item.id]: e.target.value })}
+                              className="w-full min-w-[160px] rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            >
+                              <option value="">— Select —</option>
+                              <option value="Logo Print">Logo Print</option>
+                              <option value="Screen Print">Screen Print</option>
+                              <option value="UV Print">UV Print</option>
+                              <option value="Digital Print">Digital Print</option>
+                              <option value="Embroidery">Embroidery</option>
+                              <option value="Laser Engraving">Laser Engraving</option>
+                              <option value="Debossing">Debossing</option>
+                              <option value="Foil Stamping">Foil Stamping</option>
+                              <option value="No Branding">No Branding</option>
+                            </select>
+                          </td>
                           <td className="px-4 py-2.5">
                             <select
                               value={formData.itemProductionSource[item.id] ?? ""}
