@@ -194,7 +194,7 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
   const itemsRows = (meta.items ?? []).map((item, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td>${item.productName}</td>
+      <td><div style="display:flex;align-items:center;gap:8px;">${item.productImage ? `<img src="${item.productImage}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #e5e7eb;flex-shrink:0;" />` : `<div style="width:36px;height:36px;border-radius:4px;border:1px solid #e5e7eb;background:#f3f4f6;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;">📦</div>`}<span>${item.productName}</span></div></td>
       <td style="text-align:right">${item.quantity}</td>
       <td>${data.itemBranding?.[item.id] || "—"}</td>
       <td>${data.itemProductSource?.[item.id] || "—"}</td>
@@ -265,7 +265,7 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
   <div class="section">
     <div class="section-title">Sales Order Items</div>
     <table class="checklist">
-      <thead><tr><th style="width:28px;">#</th><th>Product</th><th style="text-align:right;width:55px;">Qty</th><th>Branding</th><th>Production Source</th><th>Product Source</th></tr></thead>
+      <thead><tr><th style="width:28px;">#</th><th>Product</th><th style="text-align:right;width:55px;">Qty</th><th>Branding</th><th>Product Source</th><th>Production Source</th></tr></thead>
       <tbody>${itemsRows || "<tr><td colspan='5' style='text-align:center;color:#888;'>No items</td></tr>"}</tbody>
     </table>
   </div>` : ""}
@@ -867,13 +867,17 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                           <td className="px-4 py-2.5 text-muted-foreground">{i + 1}</td>
                           <td className="px-4 py-2.5">
                             <div className="flex items-center gap-2.5">
-                              {item.productImage && (
+                              {item.productImage ? (
                                 <img
                                   src={item.productImage}
                                   alt={item.productName}
                                   className="w-9 h-9 rounded-md object-cover border flex-shrink-0 cursor-zoom-in hover:ring-2 hover:ring-primary transition-all"
                                   onClick={() => setLightboxItem(item)}
                                 />
+                              ) : (
+                                <div className="w-9 h-9 rounded-md border bg-muted flex-shrink-0 flex items-center justify-center text-muted-foreground">
+                                  <Package className="w-4 h-4" />
+                                </div>
                               )}
                               <span className="font-medium">{item.productName}</span>
                             </div>
