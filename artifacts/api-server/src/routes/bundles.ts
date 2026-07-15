@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { db, bundlesTable, bundleItemsTable, productsTable } from "@workspace/db";
 
 const router = Router();
@@ -124,23 +124,24 @@ router.delete("/v1/bundles/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
-  const { targetSellingPrice, budget, category } = req.body ?? {};
+  const { maxBudget, minBudget = 0, categories } = req.body ?? {};
 
-  const target = Number(targetSellingPrice ?? budget ?? 0);
-  if (!target || target <= 0) {
-    res.status(400).json({ error: "targetSellingPrice is required and must be > 0" });
+  const ceiling = Number(maxBudget ?? 0);
+  const floor = Number(minBudget ?? 0);
+  if (!ceiling || ceiling <= 0) {
+    res.status(400).json({ error: "maxBudget is required and must be > 0" });
     return;
   }
 
   const conditions = [eq(productsTable.companyId, req.companyId), isNull(productsTable.deletedAt)];
-  if (category && typeof category === "string") {
-    conditions.push(eq(productsTable.category, category));
+  if (Array.isArray(categories) && categories.length > 0) {
+    conditions.push(inArray(productsTable.category, categories));
   }
 
   const allProducts = await db.select().from(productsTable).where(and(...conditions));
 
   const candidates = allProducts
-    .filter((p) => p.stockLevel > 0 && Number(p.sellingPrice) > 0 && Number(p.sellingPrice) <= target)
+    .filter((p) => p.stockLevel > 0 && Number(p.sellingPrice) > 0 && Number(p.sellingPrice) <= ceiling)
     .map((p) => {
       const sp = Number(p.sellingPrice);
       const cp = Number(p.costPrice);
@@ -153,7 +154,7 @@ router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
     });
 
   const selected: Array<{ id: number; name: string; sellingPrice: number; costPrice: number; qty: number }> = [];
-  let remaining = target;
+  let remaining = ceiling;
 
   for (const product of candidates) {
     if (product.sellingPrice <= remaining + 0.01) {
@@ -179,7 +180,6 @@ router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
     if (extraQty >= 1) {
       const entry = selected.find((s) => s.id === cheapest.id)!;
       entry.qty += extraQty;
-      remaining -= cheapest.sellingPrice * extraQty;
     }
   }
 
@@ -192,7 +192,7 @@ router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
 
   const totalPrice = selected.reduce((s, p) => s + p.sellingPrice * p.qty, 0);
   const totalCost = selected.reduce((s, p) => s + p.costPrice * p.qty, 0);
-  const priceUtilization = target > 0 ? Math.min(100, (totalPrice / target) * 100) : 0;
+  const priceUtilization = ceiling > 0 ? Math.min(100, (totalPrice / ceiling) * 100) : 0;
 
   res.json({
     items,
@@ -200,7 +200,7 @@ router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
     totalPrice,
     margin: totalPrice > 0 ? ((totalPrice - totalCost) / totalPrice) * 100 : 0,
     priceUtilization,
-    targetSellingPrice: target,
+    withinRange: totalPrice >= floor && totalPrice <= ceiling,
   });
 });
 

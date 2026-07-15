@@ -13,5 +13,5 @@ export interface BundleSuggestion {
   totalPrice: number;
   margin: number;
   priceUtilization?: number;
-  targetSellingPrice?: number;
+  withinRange?: boolean;
 }

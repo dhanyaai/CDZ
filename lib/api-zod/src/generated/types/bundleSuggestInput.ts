@@ -7,7 +7,7 @@
  */
 
 export interface BundleSuggestInput {
-  targetSellingPrice?: number;
-  budget?: number;
-  category?: string;
+  maxBudget?: number;
+  minBudget?: number;
+  categories?: string[];
 }

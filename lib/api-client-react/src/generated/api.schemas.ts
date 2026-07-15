@@ -220,9 +220,9 @@ export interface BundleUpdate {
 }
 
 export interface BundleSuggestInput {
-  targetSellingPrice?: number;
-  budget?: number;
-  category?: string;
+  maxBudget?: number;
+  minBudget?: number;
+  categories?: string[];
 }
 
 export interface BundleSuggestion {
@@ -231,7 +231,7 @@ export interface BundleSuggestion {
   totalPrice: number;
   margin: number;
   priceUtilization?: number;
-  targetSellingPrice?: number;
+  withinRange?: boolean;
 }
 
 export interface Vendor {

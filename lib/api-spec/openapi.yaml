@@ -1479,9 +1479,9 @@ components:
     BundleSuggestInput:
       type: object
       properties:
-        targetSellingPrice: { type: number }
-        budget: { type: number }
-        category: { type: string }
+        maxBudget: { type: number }
+        minBudget: { type: number }
+        categories: { type: array, items: { type: string } }
 
     BundleSuggestion:
       type: object
@@ -1492,7 +1492,7 @@ components:
         totalPrice: { type: number }
         margin: { type: number }
         priceUtilization: { type: number }
-        targetSellingPrice: { type: number }
+        withinRange: { type: boolean }
 
     # ── Vendors ──
     Vendor:

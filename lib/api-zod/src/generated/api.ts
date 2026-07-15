@@ -411,9 +411,9 @@ export const DeleteBundleParams = zod.object({
  * @summary AI bundle suggestion within budget
  */
 export const SuggestBundleBody = zod.object({
-  "targetSellingPrice": zod.number().optional(),
-  "budget": zod.number().optional(),
-  "category": zod.string().optional()
+  "maxBudget": zod.number().optional(),
+  "minBudget": zod.number().optional(),
+  "categories": zod.array(zod.string()).optional()
 })
 
 export const SuggestBundleResponse = zod.object({
@@ -427,7 +427,7 @@ export const SuggestBundleResponse = zod.object({
   "totalPrice": zod.number(),
   "margin": zod.number(),
   "priceUtilization": zod.number().optional(),
-  "targetSellingPrice": zod.number().optional()
+  "withinRange": zod.boolean().optional()
 })
 
 
