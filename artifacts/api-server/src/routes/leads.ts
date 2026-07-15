@@ -54,6 +54,32 @@ router.delete("/v1/leads/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+router.post("/v1/leads/:id/convert-to-client", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
+  if (!lead) { res.status(404).json({ error: "Not found" }); return; }
+
+  if (!lead.email) { res.status(400).json({ error: "Lead must have an email address to convert to a client" }); return; }
+
+  // If already linked to an existing client, return it
+  if (lead.clientId) {
+    const [existing] = await db.select().from(clientsTable).where(and(eq(clientsTable.id, lead.clientId), eq(clientsTable.companyId, req.companyId)));
+    if (existing) { res.json({ ...existing, createdAt: existing.createdAt.toISOString(), alreadyExisted: true }); return; }
+  }
+
+  const [client] = await db.insert(clientsTable).values({
+    companyId: req.companyId,
+    companyName: lead.companyName ?? lead.title,
+    contactPerson: lead.contactName ?? "—",
+    email: lead.email,
+    phone: lead.phone ?? null,
+  }).returning();
+
+  await db.update(leadsTable).set({ clientId: client.id }).where(eq(leadsTable.id, id));
+
+  res.status(201).json({ ...client, createdAt: client.createdAt.toISOString() });
+});
+
 router.post("/v1/leads/:id/convert", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));

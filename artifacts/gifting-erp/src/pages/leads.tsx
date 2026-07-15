@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, IndianRupee, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, LayoutList, Columns3 } from "lucide-react";
+import { useLocation } from "wouter";
+import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, IndianRupee, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, LayoutList, Columns3, UserPlus, FileSpreadsheet } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type Lead = {
@@ -64,6 +65,7 @@ export function Leads() {
   const [followUpForm, setFollowUpForm] = useState({ subject: "", dueDate: "", description: "" });
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
 
+  const [, navigate] = useLocation();
   const { data: leads, isLoading } = useQuery({ queryKey: ["leads"], queryFn: () => api<Lead[]>("/v1/leads") });
   const { data: clients } = useListClients();
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/v1/users") });
@@ -108,6 +110,18 @@ export function Leads() {
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["followups"] }); setFollowUpForm({ subject: "", dueDate: "", description: "" }); setShowFollowUpForm(false); toast({ title: "Follow-up scheduled" }); },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const convertToClient = useMutation({
+    mutationFn: (id: number) => api<{ id: number; companyName: string; alreadyExisted?: boolean }>(`/v1/leads/${id}/convert-to-client`, { method: "POST" }),
+    onSuccess: (client, id) => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      const msg = client.alreadyExisted ? `Already linked to client "${client.companyName}"` : `Client "${client.companyName}" created`;
+      toast({ title: msg, description: "You can now create a quote for this client." });
+      setSelected(prev => prev?.id === id ? { ...prev, clientId: client.id } : prev);
+    },
+    onError: (e: Error) => toast({ title: "Cannot convert to client", description: e.message, variant: "destructive" }),
   });
 
   const filtered = (leads ?? []).filter(l => {
@@ -416,6 +430,34 @@ export function Leads() {
                     </div>
                   )}
                 </div>
+                {/* Convert to Client */}
+                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Quote Readiness</div>
+                  {selected.clientId ? (
+                    <div className="flex gap-2">
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-500 flex-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        Linked to a client — ready to quote
+                      </div>
+                      <Button size="sm" variant="outline" className="shrink-0" onClick={() => { setSelected(null); navigate("/quotes"); }}>
+                        <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Create Quote
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">
+                        This lead is not yet a client. Convert it first, then create a quote.
+                        {!selected.email && <span className="text-amber-500 block mt-0.5">⚠ Add an email to this lead first.</span>}
+                      </p>
+                      <Button size="sm" variant="outline" className="w-full" onClick={() => convertToClient.mutate(selected.id)}
+                        disabled={convertToClient.isPending || !selected.email}>
+                        <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+                        {convertToClient.isPending ? "Converting…" : "Convert to Client"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex gap-2 pt-2">
                   <Button className="flex-1" onClick={() => convert.mutate(selected.id)} disabled={convert.isPending || selected.status === "converted"}>
                     <ArrowRight className="w-4 h-4 mr-2" />Convert to Opportunity
