@@ -243,4 +243,75 @@ router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
   });
 });
 
+router.post("/v1/bundles/suggest-costing", async (req, res): Promise<void> => {
+  const { maxBudget, minBudget = 0, categories } = req.body ?? {};
+
+  const ceiling = Number(maxBudget ?? 0);
+  const floor = Number(minBudget ?? 0);
+  if (!ceiling || ceiling <= 0) {
+    res.status(400).json({ error: "maxBudget is required and must be > 0" });
+    return;
+  }
+
+  const conditions = [eq(productsTable.companyId, req.companyId), isNull(productsTable.deletedAt)];
+  if (Array.isArray(categories) && categories.length > 0) {
+    conditions.push(inArray(productsTable.category, categories));
+  }
+
+  const allProducts = await db.select().from(productsTable).where(and(...conditions));
+
+  const candidates = allProducts
+    .filter((p) => p.stockLevel > 0 && Number(p.costPrice) > 0 && Number(p.costPrice) <= ceiling)
+    .map((p) => ({ ...p, costPrice: Number(p.costPrice), sellingPrice: Number(p.sellingPrice) }))
+    .sort((a, b) => a.costPrice - b.costPrice);
+
+  const selected: Array<{ id: number; name: string; costPrice: number; sellingPrice: number; qty: number }> = [];
+  let remaining = ceiling;
+
+  for (const product of candidates) {
+    if (product.costPrice <= remaining + 0.01) {
+      selected.push({ id: product.id, name: product.name, costPrice: product.costPrice, sellingPrice: product.sellingPrice, qty: 1 });
+      remaining -= product.costPrice;
+    }
+    if (remaining < 1) break;
+  }
+
+  if (remaining > 0 && selected.length > 0) {
+    const bestFit = candidates
+      .filter((p) => p.costPrice <= remaining + 0.01 && !selected.find((s) => s.id === p.id))
+      .sort((a, b) => b.costPrice - a.costPrice)[0];
+    if (bestFit) {
+      selected.push({ id: bestFit.id, name: bestFit.name, costPrice: bestFit.costPrice, sellingPrice: bestFit.sellingPrice, qty: 1 });
+      remaining -= bestFit.costPrice;
+    }
+  }
+
+  if (remaining > 1 && selected.length > 0) {
+    const cheapest = [...selected].sort((a, b) => a.costPrice - b.costPrice)[0];
+    const extraQty = Math.floor(remaining / cheapest.costPrice);
+    if (extraQty >= 1) {
+      const entry = selected.find((s) => s.id === cheapest.id)!;
+      entry.qty += extraQty;
+    }
+  }
+
+  const totalCost = selected.reduce((s, p) => s + p.costPrice * p.qty, 0);
+  const totalSelling = selected.reduce((s, p) => s + p.sellingPrice * p.qty, 0);
+  const budgetUtilization = ceiling > 0 ? Math.min(100, (totalCost / ceiling) * 100) : 0;
+
+  res.json({
+    items: selected.map((p) => ({
+      productId: p.id,
+      productName: p.name,
+      quantity: p.qty,
+      costPrice: p.costPrice,
+      sellingPrice: p.sellingPrice,
+    })),
+    totalCost,
+    totalSelling,
+    budgetUtilization,
+    withinRange: totalCost >= floor && totalCost <= ceiling,
+  });
+});
+
 export default router;

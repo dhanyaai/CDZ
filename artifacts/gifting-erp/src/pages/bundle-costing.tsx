@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useListProducts, useSuggestBundle } from "@workspace/api-client-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useListProducts } from "@workspace/api-client-react";
 import { api } from "@/lib/api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -60,16 +60,20 @@ export function BundleCosting() {
   const [maxBudget, setMaxBudget] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [suggestResult, setSuggestResult] = useState<null | {
-    items: Array<{ productId: number; productName: string; quantity: number; unitPrice: number }>;
-    totalPrice: number;
+    items: Array<{ productId: number; productName: string; quantity: number; costPrice: number; sellingPrice: number }>;
     totalCost: number;
-    margin: number;
-    priceUtilization: number;
+    totalSelling: number;
+    budgetUtilization: number;
     withinRange: boolean;
   }>(null);
 
   const { data: products } = useListProducts();
-  const suggestBundle = useSuggestBundle();
+
+  const suggestCosting = useMutation({
+    mutationFn: (body: { maxBudget: number; minBudget?: number; categories?: string[] }) =>
+      api<typeof suggestResult>("/v1/bundles/suggest-costing", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: (res) => setSuggestResult(res),
+  });
 
   const { data, isLoading } = useQuery<BundleCosting[]>({
     queryKey: ["bundles-costing"],
@@ -98,14 +102,10 @@ export function BundleCosting() {
   const handleSuggest = () => {
     if (!maxBudget) return;
     setSuggestResult(null);
-    suggestBundle.mutate({
-      data: {
-        maxBudget: Number(maxBudget),
-        ...(minBudget ? { minBudget: Number(minBudget) } : {}),
-        ...(selectedCategories.length > 0 ? { categories: selectedCategories } : {}),
-      },
-    }, {
-      onSuccess: (res: any) => setSuggestResult(res),
+    suggestCosting.mutate({
+      maxBudget: Number(maxBudget),
+      ...(minBudget ? { minBudget: Number(minBudget) } : {}),
+      ...(selectedCategories.length > 0 ? { categories: selectedCategories } : {}),
     });
   };
 
@@ -266,10 +266,10 @@ export function BundleCosting() {
             {/* Suggest button */}
             <Button
               onClick={handleSuggest}
-              disabled={!maxBudget || suggestBundle.isPending}
+              disabled={!maxBudget || suggestCosting.isPending}
               className="shrink-0 h-9 px-6"
             >
-              {suggestBundle.isPending ? (
+              {suggestCosting.isPending ? (
                 <span className="flex items-center gap-2">
                   <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                   Analysing…
@@ -291,9 +291,9 @@ export function BundleCosting() {
                   <span className="font-semibold text-sm">Suggested Products</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                  <span>Total: <strong className="text-foreground">{fmtShort(suggestResult.totalPrice)}</strong></span>
-                  <span>Margin: <strong className={suggestResult.margin >= 30 ? "text-green-600" : "text-amber-600"}>{Math.round(suggestResult.margin)}%</strong></span>
-                  <span>Budget used: <strong className={suggestResult.priceUtilization >= 80 ? "text-green-600" : "text-amber-600"}>{Math.round(suggestResult.priceUtilization)}%</strong></span>
+                  <span>Purchase Cost: <strong className="text-foreground">{fmtShort(suggestResult.totalCost)}</strong></span>
+                  <span>Selling Value: <strong className="text-foreground">{fmtShort(suggestResult.totalSelling)}</strong></span>
+                  <span>Budget used: <strong className={suggestResult.budgetUtilization >= 80 ? "text-green-600" : "text-amber-600"}>{Math.round(suggestResult.budgetUtilization)}%</strong></span>
                 </div>
               </div>
 
@@ -305,25 +305,25 @@ export function BundleCosting() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Product</TableHead>
-                        <TableHead className="w-28 text-center">Unit Price</TableHead>
+                        <TableHead className="w-28 text-center">Cost Price</TableHead>
                         <TableHead className="w-16 text-center">Qty</TableHead>
-                        <TableHead className="w-32 text-right">Line Total</TableHead>
+                        <TableHead className="w-32 text-right">Line Cost</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {suggestResult.items.map((item, i) => (
                         <TableRow key={i}>
                           <TableCell className="font-medium">{item.productName}</TableCell>
-                          <TableCell className="text-center">{fmtShort(item.unitPrice)}</TableCell>
+                          <TableCell className="text-center">{fmtShort(item.costPrice)}</TableCell>
                           <TableCell className="text-center font-semibold">{item.quantity}</TableCell>
-                          <TableCell className="text-right font-medium">{fmtShort(item.unitPrice * item.quantity)}</TableCell>
+                          <TableCell className="text-right font-medium">{fmtShort(item.costPrice * item.quantity)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                     <TableHeader>
                       <TableRow>
-                        <TableHead colSpan={3} className="text-xs">Total Selling Price</TableHead>
-                        <TableHead className="text-right font-bold text-foreground">{fmtShort(suggestResult.totalPrice)}</TableHead>
+                        <TableHead colSpan={3} className="text-xs">Total Purchase Cost</TableHead>
+                        <TableHead className="text-right font-bold text-foreground">{fmtShort(suggestResult.totalCost)}</TableHead>
                       </TableRow>
                     </TableHeader>
                   </Table>
