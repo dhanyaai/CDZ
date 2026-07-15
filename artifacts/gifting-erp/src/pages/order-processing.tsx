@@ -32,6 +32,8 @@ interface SalesOrderDetail {
   orderNumber: string;
   clientName: string;
   items: SalesOrderItem[];
+  gstAmount?: number | null;
+  grandTotal?: number | null;
 }
 
 interface Company {
@@ -172,9 +174,10 @@ function SignatureRow({ dateLabel, timeLabel, signLabel, dateVal, timeVal, signV
   );
 }
 
-function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: string; clientName: string; deliveryDate?: string; items?: SalesOrderItem[] }) {
+function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: string; clientName: string; deliveryDate?: string; items?: SalesOrderItem[]; gstAmount?: number | null; grandTotal?: number | null }) {
   const fmt = (v: string | undefined) => v || "—";
   const yesNo = (v: boolean | undefined) => v ? "Yes ☑" : "No ☑";
+  const fmtAmt = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 
   const checklist = (data.checklistItems ?? []).map((item, i) => `
     <tr>
@@ -193,7 +196,9 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
       <td style="text-align:right">₹${Number(item.totalPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
     </tr>`).join("");
 
-  const itemsTotal = (meta.items ?? []).reduce((sum, item) => sum + Number(item.totalPrice), 0);
+  const itemsSubtotal = (meta.items ?? []).reduce((sum, item) => sum + Number(item.totalPrice), 0);
+  const gstAmount = Number(meta.gstAmount) || 0;
+  const grandTotal = Number(meta.grandTotal) || (itemsSubtotal + gstAmount);
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Order Processing Form — ${meta.orderNumber}</title>
   <style>
@@ -236,7 +241,11 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
     <table class="checklist">
       <thead><tr><th>#</th><th>Product</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Total</th></tr></thead>
       <tbody>${itemsRows || "<tr><td colspan='5' style='text-align:center;color:#888;'>No items</td></tr>"}</tbody>
-      <tfoot><tr style="background:#ede9fe;font-weight:700;"><td colspan="4" style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Grand Total</td><td style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">₹${itemsTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td></tr></tfoot>
+      <tfoot>
+        <tr style="background:#f9fafb;"><td colspan="4" style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">Subtotal</td><td style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">${fmtAmt(itemsSubtotal)}</td></tr>
+        <tr style="background:#f9fafb;"><td colspan="4" style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">GST 18%</td><td style="text-align:right;padding:5px 8px;border:1px solid #d1d5db;color:#6b7280;">${fmtAmt(gstAmount)}</td></tr>
+        <tr style="background:#ede9fe;font-weight:700;"><td colspan="4" style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Grand Total</td><td style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">${fmtAmt(grandTotal)}</td></tr>
+      </tfoot>
     </table>
   </div>` : ""}
 
@@ -583,7 +592,7 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => printOrderProcessingForm(formData, { ...meta, items: salesOrder?.items })}
+            onClick={() => printOrderProcessingForm(formData, { ...meta, items: salesOrder?.items, gstAmount: salesOrder?.gstAmount as number | undefined, grandTotal: salesOrder?.grandTotal as number | undefined })}
           >
             <Printer className="w-4 h-4 mr-2" /> Print
           </Button>
