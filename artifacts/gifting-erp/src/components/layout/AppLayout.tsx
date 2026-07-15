@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ExternalLink } from "lucide-react";
+
 import {
   Gift,
   Menu,
@@ -44,7 +44,6 @@ import { api, setToken } from "@/lib/api";
 interface Company { id: number; name: string; createdAt: string; isCurrent: boolean }
 
 const COLLAPSE_KEY = "cd-sidebar-collapsed";
-const MIGRATION_KEY = "cd-migration-dismissed";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -53,9 +52,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     () => typeof localStorage !== "undefined" && localStorage.getItem(COLLAPSE_KEY) === "1",
   );
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [migrationBanner, setMigrationBanner] = useState<boolean>(
-    () => typeof localStorage !== "undefined" && localStorage.getItem(MIGRATION_KEY) !== "1",
-  );
   const { theme, toggle } = useTheme();
   const queryClient = useQueryClient();
 
@@ -436,65 +432,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      {/* Migration popup */}
-      {migrationBanner && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="relative bg-background border border-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            {/* Amber accent bar */}
-            <div className="h-1.5 w-full bg-gradient-to-r from-amber-400 to-amber-600" />
-
-            <div className="p-7">
-              {/* Close */}
-              <button
-                onClick={() => {
-                  localStorage.setItem(MIGRATION_KEY, "1");
-                  setMigrationBanner(false);
-                }}
-                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Dismiss"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              {/* Logo mark */}
-              <div className="flex items-center gap-3 mb-5">
-                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/30 ring-1 ring-amber-300/30 shrink-0">
-                  <Gift className="w-5 h-5 text-white" />
-                </span>
-                <span className="text-lg font-bold bg-gradient-to-r from-foreground to-amber-500 bg-clip-text text-transparent">
-                  Customize Duniya
-                </span>
-              </div>
-
-              <h2 className="text-xl font-semibold mb-2">We're moving!</h2>
-              <p className="text-muted-foreground text-sm leading-relaxed mb-6">
-                Our app is migrating to a new home. Please bookmark and use our
-                new domain going forward — this current URL will stop working soon.
-              </p>
-
-              <a
-                href="https://customizeduniya.in"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-white font-semibold py-3 px-4 transition-all shadow-lg shadow-amber-500/25 mb-3"
-              >
-                Go to customizeduniya.in
-                <ExternalLink className="w-4 h-4" />
-              </a>
-
-              <button
-                onClick={() => {
-                  localStorage.setItem(MIGRATION_KEY, "1");
-                  setMigrationBanner(false);
-                }}
-                className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
-              >
-                Dismiss — I'll switch later
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </TooltipProvider>
   );
 }
