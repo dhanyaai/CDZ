@@ -191,6 +191,19 @@ export function Products() {
 
   const CSV_COLUMNS = ["name","sku","brand","productType","category","hsnCode","gstRate","uom","costPrice","sellingPrice","stockLevel","lowStockThreshold","reorderQty","brandable","barcode"] as const;
 
+  const downloadTemplate = () => {
+    const header = CSV_COLUMNS.join(",");
+    const example = ["Sample Mug","SKU001","BrandX","finished_good","Drinkware","6911890000","18","PCS","250","450","100","20","50","false",""].join(",");
+    const csv = [header, example].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "products_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const exportCSV = () => {
     const list = allProducts ?? [];
     const escape = (v: unknown) => {
@@ -300,6 +313,9 @@ export function Products() {
         </div>
         <div className="flex items-center gap-2">
           <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={handleCsvImport} />
+          <Button variant="outline" size="sm" onClick={downloadTemplate}>
+            <Download className="w-4 h-4 mr-2" />Template
+          </Button>
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={!allProducts?.length}>
             <Download className="w-4 h-4 mr-2" />Export CSV
           </Button>
