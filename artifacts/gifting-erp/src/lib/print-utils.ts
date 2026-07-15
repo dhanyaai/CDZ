@@ -91,11 +91,14 @@ export function printSalesOrder(order: {
 }) {
   const items = order.items ?? [];
   const addresses = order.deliveryAddresses ?? [];
-  const subtotal = Number(order.totalAmount ?? 0);
+  const subtotal = Number(order.totalAmount ?? 0);           // stored as after-discount subtotal
   const discountPct = Number(order.discountPct ?? 0);
-  const gstAmount = Number(order.gstAmount ?? 0);
-  const grandTotal = Number(order.grandTotal ?? subtotal + gstAmount);
-  const discountAmt = discountPct > 0 ? subtotal * (discountPct / 100) : 0;
+  const gstAmount = Number(order.gstAmount) || 0;
+  const grandTotal = Number(order.grandTotal) || (subtotal + gstAmount);
+  // back-compute the original pre-discount line-items total so the discount row shows correctly
+  const discountAmt = discountPct > 0 && subtotal > 0
+    ? subtotal / (1 - discountPct / 100) * (discountPct / 100)
+    : 0;
 
   const html = `
     <div class="doc-header">
