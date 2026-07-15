@@ -196,8 +196,8 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
       <td>${item.productName}</td>
       <td style="text-align:right">${item.quantity}</td>
       <td>${data.itemBranding?.[item.id] || "—"}</td>
-      <td>${data.itemProductionSource?.[item.id] || "—"}</td>
       <td>${data.itemProductSource?.[item.id] || "—"}</td>
+      <td>${data.itemProductionSource?.[item.id] || "—"}</td>
     </tr>`).join("");
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Order Processing Form — ${meta.orderNumber}</title>
@@ -845,8 +845,8 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Product</th>
                         <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Qty</th>
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Branding</th>
-                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Production Source</th>
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Product Source</th>
+                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Production Source</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -887,8 +887,8 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                           </td>
                           <td className="px-4 py-2.5">
                             <select
-                              value={formData.itemProductionSource[item.id] ?? ""}
-                              onChange={(e) => set("itemProductionSource", { ...formData.itemProductionSource, [item.id]: e.target.value })}
+                              value={(formData.itemProductSource ?? {})[item.id] ?? ""}
+                              onChange={(e) => set("itemProductSource", { ...(formData.itemProductSource ?? {}), [item.id]: e.target.value })}
                               className="w-full min-w-[160px] rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             >
                               <option value="">— Select —</option>
@@ -898,8 +898,8 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                           </td>
                           <td className="px-4 py-2.5">
                             <select
-                              value={(formData.itemProductSource ?? {})[item.id] ?? ""}
-                              onChange={(e) => set("itemProductSource", { ...(formData.itemProductSource ?? {}), [item.id]: e.target.value })}
+                              value={formData.itemProductionSource[item.id] ?? ""}
+                              onChange={(e) => set("itemProductionSource", { ...formData.itemProductionSource, [item.id]: e.target.value })}
                               className="w-full min-w-[160px] rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             >
                               <option value="">— Select —</option>
