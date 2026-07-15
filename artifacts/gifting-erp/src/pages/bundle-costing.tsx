@@ -1,12 +1,17 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useListProducts, useSuggestBundle } from "@workspace/api-client-react";
 import { api } from "@/lib/api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Package, TrendingUp, DollarSign, BarChart2, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Package, TrendingUp, DollarSign, BarChart2,
+  ChevronDown, ChevronRight, Search, Wand2, CheckCircle2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CostingItem {
@@ -35,17 +40,36 @@ interface BundleCosting {
 const fmt = (n: number) =>
   "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const fmtShort = (n: number) =>
+  "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+
 const pct = (n: number) => n.toFixed(1) + "%";
 
-function marginBadge(pct: number) {
-  if (pct >= 30) return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0">{pct.toFixed(1)}%</Badge>;
-  if (pct >= 15) return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0">{pct.toFixed(1)}%</Badge>;
-  return <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-0">{pct.toFixed(1)}%</Badge>;
+function MarginBadge({ value }: { value: number }) {
+  if (value >= 30) return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0">{value.toFixed(1)}%</Badge>;
+  if (value >= 15) return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0">{value.toFixed(1)}%</Badge>;
+  return <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-0">{value.toFixed(1)}%</Badge>;
 }
 
 export function BundleCosting() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  // Smart Suggest state
+  const [minBudget, setMinBudget] = useState("");
+  const [maxBudget, setMaxBudget] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [suggestResult, setSuggestResult] = useState<null | {
+    items: Array<{ productId: number; productName: string; quantity: number; unitPrice: number }>;
+    totalPrice: number;
+    totalCost: number;
+    margin: number;
+    priceUtilization: number;
+    withinRange: boolean;
+  }>(null);
+
+  const { data: products } = useListProducts();
+  const suggestBundle = useSuggestBundle();
 
   const { data, isLoading } = useQuery<BundleCosting[]>({
     queryKey: ["bundles-costing"],
@@ -53,7 +77,6 @@ export function BundleCosting() {
   });
 
   const bundles = data ?? [];
-
   const filtered = bundles.filter(
     (b) => b.name.toLowerCase().includes(search.toLowerCase()) || (b.occasion ?? "").toLowerCase().includes(search.toLowerCase()),
   );
@@ -62,6 +85,29 @@ export function BundleCosting() {
   const totalSelling = bundles.reduce((s, b) => s + b.totalSelling, 0);
   const avgMargin = bundles.length > 0 ? bundles.reduce((s, b) => s + b.marginPct, 0) / bundles.length : 0;
   const bestBundle = bundles.length > 0 ? [...bundles].sort((a, b) => b.marginPct - a.marginPct)[0] : null;
+
+  const categoryOptions = Array.from(
+    new Set((products ?? []).map((p: any) => p.category).filter(Boolean))
+  ).sort() as string[];
+
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories((prev) => prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]);
+    setSuggestResult(null);
+  };
+
+  const handleSuggest = () => {
+    if (!maxBudget) return;
+    setSuggestResult(null);
+    suggestBundle.mutate({
+      data: {
+        maxBudget: Number(maxBudget),
+        ...(minBudget ? { minBudget: Number(minBudget) } : {}),
+        ...(selectedCategories.length > 0 ? { categories: selectedCategories } : {}),
+      },
+    }, {
+      onSuccess: (res: any) => setSuggestResult(res),
+    });
+  };
 
   const toggleExpand = (id: number) => {
     setExpanded((prev) => {
@@ -133,6 +179,160 @@ export function BundleCosting() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Smart Suggest */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2">
+            <Wand2 className="w-5 h-5 text-primary" />
+            Smart Suggest
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">Set a budget range, pick categories, then click Suggest Bundle to see matching products</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+
+          {/* Controls row */}
+          <div className="flex flex-wrap items-end gap-4">
+
+            {/* Budget range */}
+            <div className="space-y-1.5 shrink-0">
+              <label className="text-xs font-semibold text-foreground">Budget Range (₹)</label>
+              <div className="flex items-center gap-2">
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">Min</p>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={minBudget}
+                    onChange={(e) => { setMinBudget(e.target.value); setSuggestResult(null); }}
+                    placeholder="e.g. 500"
+                    className="h-9 w-32"
+                  />
+                </div>
+                <span className="text-muted-foreground mt-5">—</span>
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">Max *</p>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={maxBudget}
+                    onChange={(e) => { setMaxBudget(e.target.value); setSuggestResult(null); }}
+                    placeholder="e.g. 2000"
+                    className="h-9 w-32"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Vertical divider */}
+            <div className="hidden lg:block w-px h-16 bg-border shrink-0" />
+
+            {/* Category pills */}
+            <div className="space-y-1.5 flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-foreground">Item Categories</label>
+                {selectedCategories.length > 0 && (
+                  <button
+                    className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                    onClick={() => { setSelectedCategories([]); setSuggestResult(null); }}
+                  >
+                    Clear
+                  </button>
+                )}
+                <span className="text-[10px] text-muted-foreground">
+                  {selectedCategories.length === 0 ? "— all" : `${selectedCategories.length} selected`}
+                </span>
+              </div>
+              {categoryOptions.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No categories found in catalog</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {categoryOptions.map((cat) => {
+                    const active = selectedCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => toggleCategory(cat)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"}`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Suggest button */}
+            <Button
+              onClick={handleSuggest}
+              disabled={!maxBudget || suggestBundle.isPending}
+              className="shrink-0 h-9 px-6"
+            >
+              {suggestBundle.isPending ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  Analysing…
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Wand2 className="w-3.5 h-3.5" />Suggest Bundle
+                </span>
+              )}
+            </Button>
+          </div>
+
+          {/* Results */}
+          {suggestResult && (
+            <div className={`rounded-lg border-2 p-4 space-y-3 ${suggestResult.withinRange ? "border-green-500/40 bg-green-50/30 dark:bg-green-950/10" : "border-amber-400/40 bg-amber-50/30 dark:bg-amber-950/10"}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className={`w-4 h-4 ${suggestResult.withinRange ? "text-green-600" : "text-amber-500"}`} />
+                  <span className="font-semibold text-sm">Suggested Products</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                  <span>Total: <strong className="text-foreground">{fmtShort(suggestResult.totalPrice)}</strong></span>
+                  <span>Margin: <strong className={suggestResult.margin >= 30 ? "text-green-600" : "text-amber-600"}>{Math.round(suggestResult.margin)}%</strong></span>
+                  <span>Budget used: <strong className={suggestResult.priceUtilization >= 80 ? "text-green-600" : "text-amber-600"}>{Math.round(suggestResult.priceUtilization)}%</strong></span>
+                </div>
+              </div>
+
+              {suggestResult.items.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No matching products found for this budget and category selection.</p>
+              ) : (
+                <div className="rounded-md border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="w-28 text-center">Unit Price</TableHead>
+                        <TableHead className="w-16 text-center">Qty</TableHead>
+                        <TableHead className="w-32 text-right">Line Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {suggestResult.items.map((item, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">{item.productName}</TableCell>
+                          <TableCell className="text-center">{fmtShort(item.unitPrice)}</TableCell>
+                          <TableCell className="text-center font-semibold">{item.quantity}</TableCell>
+                          <TableCell className="text-right font-medium">{fmtShort(item.unitPrice * item.quantity)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead colSpan={3} className="text-xs">Total Selling Price</TableHead>
+                        <TableHead className="text-right font-bold text-foreground">{fmtShort(suggestResult.totalPrice)}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                  </Table>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Search */}
       <div className="relative max-w-sm">
@@ -211,7 +411,7 @@ export function BundleCosting() {
                       <TableCell className="text-right font-mono text-sm text-emerald-600 dark:text-emerald-400">
                         {fmt(bundle.grossMargin)}
                       </TableCell>
-                      <TableCell className="text-right">{marginBadge(bundle.marginPct)}</TableCell>
+                      <TableCell className="text-right"><MarginBadge value={bundle.marginPct} /></TableCell>
                     </TableRow>
 
                     {isOpen && (
@@ -254,7 +454,7 @@ export function BundleCosting() {
                                           <TableCell className="text-right font-mono text-sm">{fmt(item.sellingPrice)}</TableCell>
                                           <TableCell className="text-right font-mono text-sm">{fmt(item.lineCost)}</TableCell>
                                           <TableCell className="text-right font-mono text-sm">{fmt(item.lineSelling)}</TableCell>
-                                          <TableCell className="text-right">{marginBadge(itemMargin)}</TableCell>
+                                          <TableCell className="text-right"><MarginBadge value={itemMargin} /></TableCell>
                                         </TableRow>
                                       );
                                     })
@@ -263,7 +463,7 @@ export function BundleCosting() {
                               </Table>
                             </div>
 
-                            {/* Footer totals row */}
+                            {/* Footer totals */}
                             <div className="mt-3 flex justify-end">
                               <div className="grid grid-cols-3 gap-6 text-sm text-right">
                                 <div>

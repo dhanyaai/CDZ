@@ -64,6 +64,45 @@ router.post("/v1/bundles", async (req, res): Promise<void> => {
   res.status(201).json(result);
 });
 
+router.get("/v1/bundles/costing", async (req, res): Promise<void> => {
+  const bundles = await db.select().from(bundlesTable).where(eq(bundlesTable.companyId, req.companyId)).orderBy(bundlesTable.name);
+
+  const results = await Promise.all(
+    bundles.map(async (bundle) => {
+      const rows = await db
+        .select({ item: bundleItemsTable, product: productsTable })
+        .from(bundleItemsTable)
+        .leftJoin(productsTable, eq(bundleItemsTable.productId, productsTable.id))
+        .where(eq(bundleItemsTable.bundleId, bundle.id));
+
+      const items = rows.map((r) => {
+        const qty = r.item.quantity;
+        const costPrice = Number(r.product?.costPrice ?? 0);
+        const sellingPrice = Number(r.product?.sellingPrice ?? 0);
+        return {
+          productId: r.item.productId,
+          productName: r.product?.name ?? "Unknown",
+          category: r.product?.category ?? "",
+          quantity: qty,
+          costPrice,
+          sellingPrice,
+          lineCost: costPrice * qty,
+          lineSelling: sellingPrice * qty,
+        };
+      });
+
+      const totalCost = items.reduce((s, i) => s + i.lineCost, 0);
+      const totalSelling = items.reduce((s, i) => s + i.lineSelling, 0);
+      const grossMargin = totalSelling - totalCost;
+      const marginPct = totalSelling > 0 ? (grossMargin / totalSelling) * 100 : 0;
+
+      return { id: bundle.id, name: bundle.name, occasion: bundle.occasion ?? null, imageUrl: bundle.imageUrl ?? null, items, totalCost, totalSelling, grossMargin, marginPct };
+    })
+  );
+
+  res.json(results);
+});
+
 router.get("/v1/bundles/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const result = await getBundleWithItems(id, req.companyId);
@@ -202,55 +241,6 @@ router.post("/v1/bundles/suggest", async (req, res): Promise<void> => {
     priceUtilization,
     withinRange: totalPrice >= floor && totalPrice <= ceiling,
   });
-});
-
-router.get("/v1/bundles/costing", async (req, res): Promise<void> => {
-  const bundles = await db.select().from(bundlesTable).where(eq(bundlesTable.companyId, req.companyId)).orderBy(bundlesTable.name);
-
-  const results = await Promise.all(
-    bundles.map(async (bundle) => {
-      const rows = await db
-        .select({ item: bundleItemsTable, product: productsTable })
-        .from(bundleItemsTable)
-        .leftJoin(productsTable, eq(bundleItemsTable.productId, productsTable.id))
-        .where(eq(bundleItemsTable.bundleId, bundle.id));
-
-      const items = rows.map((r) => {
-        const qty = r.item.quantity;
-        const costPrice = Number(r.product?.costPrice ?? 0);
-        const sellingPrice = Number(r.product?.sellingPrice ?? 0);
-        return {
-          productId: r.item.productId,
-          productName: r.product?.name ?? "Unknown",
-          category: r.product?.category ?? "",
-          quantity: qty,
-          costPrice,
-          sellingPrice,
-          lineCost: costPrice * qty,
-          lineSelling: sellingPrice * qty,
-        };
-      });
-
-      const totalCost = items.reduce((s, i) => s + i.lineCost, 0);
-      const totalSelling = items.reduce((s, i) => s + i.lineSelling, 0);
-      const grossMargin = totalSelling - totalCost;
-      const marginPct = totalSelling > 0 ? (grossMargin / totalSelling) * 100 : 0;
-
-      return {
-        id: bundle.id,
-        name: bundle.name,
-        occasion: bundle.occasion ?? null,
-        imageUrl: bundle.imageUrl ?? null,
-        items,
-        totalCost,
-        totalSelling,
-        grossMargin,
-        marginPct,
-      };
-    })
-  );
-
-  res.json(results);
 });
 
 export default router;
