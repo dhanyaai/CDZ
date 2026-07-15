@@ -31,7 +31,44 @@ interface ExtractedSheet {
 type Format = "png" | "jpg";
 type Mode = "images" | "excel";
 
-function groupTextByRows(items: pdfjsLib.TextItem[], yTolerance = 5): string[][] {
+interface CellData { text: string; x: number; }
+
+async function getImagePositions(page: pdfjsLib.PDFPageProxy): Promise<{ x: number; y: number }[]> {
+  const opList = await page.getOperatorList();
+  const positions: { x: number; y: number }[] = [];
+  const ctmStack: number[][] = [];
+  let ctm = [1, 0, 0, 1, 0, 0];
+
+  const IMAGE_OPS = new Set([
+    pdfjsLib.OPS.paintImageXObject,
+    pdfjsLib.OPS.paintJpegXObject,
+    pdfjsLib.OPS.paintInlineImageXObject,
+    pdfjsLib.OPS.paintImageMaskXObject,
+  ]);
+
+  for (let i = 0; i < opList.fnArray.length; i++) {
+    const fn = opList.fnArray[i];
+    const args = opList.argsArray[i] as number[];
+    if (fn === pdfjsLib.OPS.save) {
+      ctmStack.push([...ctm]);
+    } else if (fn === pdfjsLib.OPS.restore) {
+      ctm = ctmStack.pop() ?? [1, 0, 0, 1, 0, 0];
+    } else if (fn === pdfjsLib.OPS.transform) {
+      const [a, b, c, d, e, f] = args;
+      const [ca, cb, cc, cd, ce, cf] = ctm;
+      ctm = [
+        ca * a + cc * b, cb * a + cd * b,
+        ca * c + cc * d, cb * c + cd * d,
+        ca * e + cc * f + ce, cb * e + cd * f + cf,
+      ];
+    } else if (IMAGE_OPS.has(fn)) {
+      positions.push({ x: ctm[4], y: ctm[5] });
+    }
+  }
+  return positions;
+}
+
+function groupTextByRows(items: pdfjsLib.TextItem[], yTolerance = 5): { y: number; cells: CellData[] }[] {
   if (!items.length) return [];
 
   // Sort top-to-bottom (Y descending in PDF coords), left-to-right within a row
@@ -54,41 +91,37 @@ function groupTextByRows(items: pdfjsLib.TextItem[], yTolerance = 5): string[][]
     }
   }
 
-  // Step 2: within each row, merge nearby items into cells, split on large X gaps.
-  // IMPORTANT: do NOT use item.width — pdfjs often includes trailing whitespace in it,
-  // which makes gap calculations unreliable. Instead estimate rendered text width from
-  // character count × font size (transform[0] = horizontal scale ≈ font size in pt).
+  // Step 2: merge nearby items into cells, track starting X of each cell for image insertion
   return rows.map((row) => {
     const lineItems = [...row.items].sort((a, b) => a.transform[4] - b.transform[4]);
-    const cells: string[] = [];
-    let currentCell = "";
+    const cells: CellData[] = [];
+    let currentText = "";
+    let cellStartX = 0;
     let prevRight = -Infinity;
 
     for (const item of lineItems) {
       const x = item.transform[4];
       const fontSize = Math.abs(item.transform[0]) || 10;
-      // Rough rendered width: ~0.55 em per character is a safe estimate for most fonts
       const estimatedWidth = item.str.length * fontSize * 0.55;
-      // Column gap threshold: 2× the font size (i.e. ~2 character widths of whitespace)
       const colGapThreshold = fontSize * 2;
       const gap = x - prevRight;
 
-      if (currentCell === "") {
-        currentCell = item.str;
+      if (currentText === "") {
+        currentText = item.str;
+        cellStartX = x;
       } else if (gap > colGapThreshold) {
-        // Significant gap → new cell
-        cells.push(currentCell.trim());
-        currentCell = item.str;
+        cells.push({ text: currentText.trim(), x: cellStartX });
+        currentText = item.str;
+        cellStartX = x;
       } else {
-        // Same cell — add a space if there's any gap at all
         const spacer = gap > 0.5 ? " " : "";
-        currentCell += spacer + item.str;
+        currentText += spacer + item.str;
       }
       prevRight = x + estimatedWidth;
     }
-    if (currentCell.trim()) cells.push(currentCell.trim());
-    return cells;
-  }).filter((row) => row.length > 0 && row.some((c) => c.trim() !== ""));
+    if (currentText.trim()) cells.push({ text: currentText.trim(), x: cellStartX });
+    return { y: row.y, cells };
+  }).filter((row) => row.cells.length > 0 && row.cells.some((c) => c.text.trim() !== ""));
 }
 
 export function PdfExtractor() {
@@ -166,16 +199,47 @@ export function PdfExtractor() {
       const results: ExtractedSheet[] = [];
       for (let i = 1; i <= pageCount; i++) {
         const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
+        const [content, imagePositions] = await Promise.all([
+          page.getTextContent(),
+          getImagePositions(page),
+        ]);
         const textItems = content.items.filter(
           (item): item is pdfjsLib.TextItem => "str" in item && item.str !== "",
         );
-        const rowArrays = groupTextByRows(textItems);
-        const maxCols = Math.max(0, ...rowArrays.map((r) => r.length));
-        const rows: SheetRow[] = rowArrays.map((cells) => {
+        const textRows = groupTextByRows(textItems);
+
+        // Deduplicate image positions (same image can fire multiple paint ops)
+        const seenImgKeys = new Set<string>();
+        const uniqueImages = imagePositions.filter(({ x, y }) => {
+          const key = `${Math.round(x / 10)},${Math.round(y / 10)}`;
+          if (seenImgKeys.has(key)) return false;
+          seenImgKeys.add(key);
+          return true;
+        });
+
+        // Insert [Photo] placeholder into the row whose Y is closest to the image Y
+        for (const img of uniqueImages) {
+          let closest: (typeof textRows)[0] | null = null;
+          let minDist = 30; // only match if within 30pt
+          for (const row of textRows) {
+            const dist = Math.abs(row.y - img.y);
+            if (dist < minDist) { minDist = dist; closest = row; }
+          }
+          if (closest) {
+            // Only insert if no existing cell is at a similar X (avoid duplicates)
+            const alreadyThere = closest.cells.some((c) => Math.abs(c.x - img.x) < 20);
+            if (!alreadyThere) {
+              closest.cells.push({ text: "[Photo]", x: img.x });
+              closest.cells.sort((a, b) => a.x - b.x);
+            }
+          }
+        }
+
+        const maxCols = Math.max(0, ...textRows.map((r) => r.cells.length));
+        const rows: SheetRow[] = textRows.map(({ cells }) => {
           const row: SheetRow = {};
           for (let c = 0; c < maxCols; c++) {
-            row[String.fromCharCode(65 + c)] = cells[c] ?? "";
+            row[String.fromCharCode(65 + c)] = cells[c]?.text ?? "";
           }
           return row;
         });
