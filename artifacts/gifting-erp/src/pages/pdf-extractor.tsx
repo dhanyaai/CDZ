@@ -31,7 +31,7 @@ interface ExtractedSheet {
 type Format = "png" | "jpg";
 type Mode = "images" | "excel";
 
-function groupTextByRows(items: pdfjsLib.TextItem[], yTolerance = 5, xGap = 12): string[][] {
+function groupTextByRows(items: pdfjsLib.TextItem[], yTolerance = 5): string[][] {
   if (!items.length) return [];
 
   // Sort top-to-bottom (Y descending in PDF coords), left-to-right within a row
@@ -54,7 +54,10 @@ function groupTextByRows(items: pdfjsLib.TextItem[], yTolerance = 5, xGap = 12):
     }
   }
 
-  // Step 2: within each row, merge nearby items into cells, split on large X gaps
+  // Step 2: within each row, merge nearby items into cells, split on large X gaps.
+  // IMPORTANT: do NOT use item.width — pdfjs often includes trailing whitespace in it,
+  // which makes gap calculations unreliable. Instead estimate rendered text width from
+  // character count × font size (transform[0] = horizontal scale ≈ font size in pt).
   return rows.map((row) => {
     const lineItems = [...row.items].sort((a, b) => a.transform[4] - b.transform[4]);
     const cells: string[] = [];
@@ -63,21 +66,25 @@ function groupTextByRows(items: pdfjsLib.TextItem[], yTolerance = 5, xGap = 12):
 
     for (const item of lineItems) {
       const x = item.transform[4];
-      const width = item.width ?? 0;
+      const fontSize = Math.abs(item.transform[0]) || 10;
+      // Rough rendered width: ~0.55 em per character is a safe estimate for most fonts
+      const estimatedWidth = item.str.length * fontSize * 0.55;
+      // Column gap threshold: 2× the font size (i.e. ~2 character widths of whitespace)
+      const colGapThreshold = fontSize * 2;
       const gap = x - prevRight;
 
       if (currentCell === "") {
         currentCell = item.str;
-      } else if (gap > xGap) {
-        // Large gap → new cell
+      } else if (gap > colGapThreshold) {
+        // Significant gap → new cell
         cells.push(currentCell.trim());
         currentCell = item.str;
       } else {
-        // Small gap → same cell; add space if needed
-        const spacer = gap > 1 ? " " : "";
+        // Same cell — add a space if there's any gap at all
+        const spacer = gap > 0.5 ? " " : "";
         currentCell += spacer + item.str;
       }
-      prevRight = x + width;
+      prevRight = x + estimatedWidth;
     }
     if (currentCell.trim()) cells.push(currentCell.trim());
     return cells;
