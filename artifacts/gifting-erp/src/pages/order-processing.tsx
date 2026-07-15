@@ -108,6 +108,7 @@ interface OrderFormData {
   dispatchInchargeSignedBy: string;
   checklistItems: ChecklistItem[];
   itemProductionSource: Record<number, string>;
+  itemProductSource: Record<number, string>;
   itemBranding: Record<number, string>;
   attachments: Array<{ name: string; url: string; type: string }>;
 }
@@ -143,6 +144,7 @@ const EMPTY: OrderFormData = {
   dispatchIncharge: "", dispatchInchargeDate: "", dispatchInchargeTime: "", dispatchInchargeSignedBy: "",
   checklistItems: [{ productName: "", inhouseQty: "", procureQty: "", totalReceiveNote: "" }],
   itemProductionSource: {},
+  itemProductSource: {},
   itemBranding: {},
   attachments: [],
 };
@@ -194,6 +196,7 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
       <td style="text-align:right">${item.quantity}</td>
       <td>${data.itemBranding?.[item.id] || "—"}</td>
       <td>${data.itemProductionSource?.[item.id] || "—"}</td>
+      <td>${data.itemProductSource?.[item.id] || "—"}</td>
     </tr>`).join("");
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Order Processing Form — ${meta.orderNumber}</title>
@@ -260,7 +263,7 @@ function printOrderProcessingForm(data: OrderFormData, meta: { orderNumber: stri
   <div class="section">
     <div class="section-title">Sales Order Items</div>
     <table class="checklist">
-      <thead><tr><th style="width:28px;">#</th><th>Product</th><th style="text-align:right;width:55px;">Qty</th><th>Branding</th><th>Production Source</th></tr></thead>
+      <thead><tr><th style="width:28px;">#</th><th>Product</th><th style="text-align:right;width:55px;">Qty</th><th>Branding</th><th>Production Source</th><th>Product Source</th></tr></thead>
       <tbody>${itemsRows || "<tr><td colspan='5' style='text-align:center;color:#888;'>No items</td></tr>"}</tbody>
     </table>
   </div>` : ""}
@@ -501,6 +504,7 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
         designerAttachments: Array.isArray(raw.designerAttachments) ? raw.designerAttachments : [],
         attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
         itemProductionSource: raw.itemProductionSource && typeof raw.itemProductionSource === "object" ? raw.itemProductionSource : {},
+        itemProductSource: raw.itemProductSource && typeof raw.itemProductSource === "object" ? raw.itemProductSource : {},
         itemBranding: raw.itemBranding && typeof raw.itemBranding === "object" ? raw.itemBranding : {},
       });
     }
@@ -835,6 +839,7 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                         <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Qty</th>
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Branding</th>
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Production Source</th>
+                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Product Source</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -887,6 +892,15 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                                 </optgroup>
                               )}
                             </select>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <input
+                              type="text"
+                              value={(formData.itemProductSource ?? {})[item.id] ?? ""}
+                              onChange={(e) => set("itemProductSource", { ...(formData.itemProductSource ?? {}), [item.id]: e.target.value })}
+                              placeholder="e.g. vendor / market"
+                              className="w-full min-w-[160px] rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
                           </td>
                         </tr>
                       ))}
