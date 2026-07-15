@@ -42,7 +42,7 @@ interface Company {
   name: string;
 }
 
-interface Product { id: number; name: string; sku?: string; stockLevel: number; }
+interface Product { id: number; name: string; sku?: string; stockLevel: number; imageUrl?: string | null; }
 interface User { id: number; name: string; role: string; }
 interface Vendor { id: number; name: string; }
 
@@ -1251,27 +1251,39 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                     {formData.checklistItems.map((item, i) => (
                       <tr key={i} className="border-b last:border-0">
                         <td className="py-1.5 px-2">
-                          <Select
-                            value={item.productName || "__none__"}
-                            onValueChange={(v) => {
-                              const name = v === "__none__" ? "" : v;
-                              setChecklist(i, "productName", name);
-                              if (name) {
-                                const p = products.find((p) => p.name === name);
-                                if (p != null) setChecklist(i, "inhouseQty", String(p.stockLevel));
-                              }
-                            }}
-                          >
-                            <SelectTrigger className="h-8 text-sm">
-                              <SelectValue placeholder="Select product…" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">— Select product —</SelectItem>
-                              {products.map((p) => (
-                                <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const p = products.find((p) => p.name === item.productName);
+                              return p?.imageUrl ? (
+                                <img src={p.imageUrl} alt={p.name} className="w-8 h-8 rounded-md object-cover border flex-shrink-0" />
+                              ) : (
+                                <div className="w-8 h-8 rounded-md border bg-muted flex-shrink-0 flex items-center justify-center text-muted-foreground">
+                                  <Package className="w-3.5 h-3.5" />
+                                </div>
+                              );
+                            })()}
+                            <Select
+                              value={item.productName || "__none__"}
+                              onValueChange={(v) => {
+                                const name = v === "__none__" ? "" : v;
+                                setChecklist(i, "productName", name);
+                                if (name) {
+                                  const p = products.find((p) => p.name === name);
+                                  if (p != null) setChecklist(i, "inhouseQty", String(p.stockLevel));
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-sm">
+                                <SelectValue placeholder="Select product…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">— Select product —</SelectItem>
+                                {products.map((p) => (
+                                  <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </td>
                         <td className="py-1.5 px-2">
                           <Input value={item.inhouseQty} placeholder="0" className="h-8 text-sm" onChange={(e) => setChecklist(i, "inhouseQty", e.target.value)} />
