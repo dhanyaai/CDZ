@@ -6,6 +6,9 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { requireAuth } from "./lib/requireAuth";
+import path from "path";
+import { fileURLToPath } from "url";
+import fs from "fs";
 
 const app: Express = express();
 
@@ -53,5 +56,20 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", requireAuth, router);
+
+// Serve the React frontend for all non-API routes (production only).
+// In dev, the Vite dev server handles the frontend separately.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const frontendDist = path.resolve(__dirname, "../../gifting-erp/dist/public");
+
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist, { maxAge: "1d" }));
+  app.use((req, res, next) => {
+    if (req.method !== "GET") return next();
+    res.sendFile(path.join(frontendDist, "index.html"), (err) => {
+      if (err) next(err);
+    });
+  });
+}
 
 export default app;
