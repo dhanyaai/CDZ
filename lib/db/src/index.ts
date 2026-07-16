@@ -12,11 +12,11 @@ if (!connectionString) {
   );
 }
 
+const isLocalDb = connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
+
 export const pool = new Pool({
   connectionString,
-  ssl: connectionString.includes("sslmode=require")
-    ? { rejectUnauthorized: false }
-    : undefined,
+  ssl: isLocalDb ? undefined : { rejectUnauthorized: false },
 });
 export const db = drizzle(pool, { schema });
 

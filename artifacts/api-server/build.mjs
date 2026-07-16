@@ -14,6 +14,12 @@ async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
   await rm(distDir, { recursive: true, force: true });
 
+  // Copy Drizzle migration SQL files so migrate() can find them at runtime
+  const { cp } = await import("node:fs/promises");
+  const migrationsSource = path.resolve(artifactDir, "../../lib/db/migrations");
+  const migrationsDest = path.resolve(distDir, "migrations");
+  await cp(migrationsSource, migrationsDest, { recursive: true });
+
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/index.ts")],
     platform: "node",
