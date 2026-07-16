@@ -11,6 +11,15 @@ export async function bootstrap(): Promise<void> {
     "migrations",
   );
 
+  // Log the DB host we're connecting to (password redacted) to aid debugging
+  const connStr = process.env.DO_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
+  try {
+    const u = new URL(connStr);
+    logger.info({ host: u.hostname, port: u.port, db: u.pathname }, "DB connection target");
+  } catch {
+    logger.warn({ connStr: connStr.slice(0, 40) + "…" }, "Could not parse DB connection string");
+  }
+
   logger.info({ migrationsFolder }, "Running database migrations");
   await migrate(db, { migrationsFolder });
   logger.info("Migrations complete");
