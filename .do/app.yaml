@@ -52,6 +52,12 @@ services:
       - key: PORT
         value: "8080"
         scope: RUN_AND_BUILD_TIME
+      # DO_DATABASE_URL takes priority over DATABASE_URL in code (DO_DATABASE_URL ?? DATABASE_URL).
+      # Set this to your managed PostgreSQL connection string.
+      # DO may auto-inject DATABASE_URL from an attached component; DO_DATABASE_URL overrides it.
+      - key: DO_DATABASE_URL
+        type: SECRET
+        scope: RUN_TIME
       - key: DATABASE_URL
         type: SECRET
         scope: RUN_TIME
