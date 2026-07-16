@@ -5,24 +5,13 @@ import { logger } from "./logger";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-function safeDbHost(): string {
-  const url = process.env.DO_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
-  try {
-    const parsed = new URL(url);
-    return `${parsed.hostname}:${parsed.port}`;
-  } catch {
-    return "(unparseable URL)";
-  }
-}
-
 export async function bootstrap(): Promise<void> {
   const migrationsFolder = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
     "migrations",
   );
 
-  logger.info({ dbHost: safeDbHost(), migrationsFolder }, "Running database migrations");
-
+  logger.info({ migrationsFolder }, "Running database migrations");
   await migrate(db, { migrationsFolder });
   logger.info("Migrations complete");
 

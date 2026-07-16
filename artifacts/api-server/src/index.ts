@@ -16,25 +16,17 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-function startServer() {
-  app.listen(port, (err) => {
-    if (err) {
-      logger.error({ err }, "Error listening on port");
-      process.exit(1);
-    }
-    logger.info({ port }, "Server listening");
+bootstrap()
+  .then(() => {
+    app.listen(port, (err) => {
+      if (err) {
+        logger.error({ err }, "Error listening on port");
+        process.exit(1);
+      }
+      logger.info({ port }, "Server listening");
+    });
+  })
+  .catch((err) => {
+    logger.error({ err }, "Bootstrap failed — server will not start");
+    process.exit(1);
   });
-}
-
-// Bootstrap (migrate + seed) only runs in production.
-// In development the schema is managed via `pnpm --filter @workspace/db run push`.
-if (process.env.NODE_ENV === "production") {
-  bootstrap()
-    .then(() => logger.info("Bootstrap succeeded"))
-    .catch((err) =>
-      logger.error({ err }, "Bootstrap failed — DB unavailable, API calls will fail until fixed"),
-    )
-    .finally(startServer);
-} else {
-  startServer();
-}
