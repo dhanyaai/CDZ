@@ -212,7 +212,7 @@ export function Products() {
       return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const header = CSV_COLUMNS.join(",");
-    const rows = list.map(p => CSV_COLUMNS.map(col => escape((p as Record<string, unknown>)[col])).join(","));
+    const rows = list.map(p => CSV_COLUMNS.map(col => escape((p as unknown as Record<string, unknown>)[col])).join(","));
     const csv = [header, ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);

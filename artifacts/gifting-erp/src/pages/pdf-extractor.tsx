@@ -33,6 +33,11 @@ type Mode = "images" | "excel";
 
 interface CellData { text: string; x: number; }
 
+interface PdfTextItem {
+  str: string;
+  transform: number[];
+}
+
 async function getImagePositions(page: pdfjsLib.PDFPageProxy): Promise<{ x: number; y: number }[]> {
   const opList = await page.getOperatorList();
   const positions: { x: number; y: number }[] = [];
@@ -41,7 +46,7 @@ async function getImagePositions(page: pdfjsLib.PDFPageProxy): Promise<{ x: numb
 
   const IMAGE_OPS = new Set([
     pdfjsLib.OPS.paintImageXObject,
-    pdfjsLib.OPS.paintJpegXObject,
+    pdfjsLib.OPS.paintXObject,
     pdfjsLib.OPS.paintInlineImageXObject,
     pdfjsLib.OPS.paintImageMaskXObject,
   ]);
@@ -68,7 +73,7 @@ async function getImagePositions(page: pdfjsLib.PDFPageProxy): Promise<{ x: numb
   return positions;
 }
 
-function groupTextByRows(items: pdfjsLib.TextItem[], yTolerance = 5): { y: number; cells: CellData[] }[] {
+function groupTextByRows(items: PdfTextItem[], yTolerance = 5): { y: number; cells: CellData[] }[] {
   if (!items.length) return [];
 
   // Sort top-to-bottom (Y descending in PDF coords), left-to-right within a row
@@ -80,7 +85,7 @@ function groupTextByRows(items: pdfjsLib.TextItem[], yTolerance = 5): { y: numbe
   });
 
   // Step 1: group into rows by Y proximity
-  const rows: { y: number; items: pdfjsLib.TextItem[] }[] = [];
+  const rows: { y: number; items: PdfTextItem[] }[] = [];
   for (const item of sorted) {
     const y = item.transform[5];
     const existing = rows.find((r) => Math.abs(r.y - y) <= yTolerance);
@@ -203,8 +208,8 @@ export function PdfExtractor() {
           page.getTextContent(),
           getImagePositions(page),
         ]);
-        const textItems = content.items.filter(
-          (item): item is pdfjsLib.TextItem => "str" in item && item.str !== "",
+        const textItems = (content.items as unknown[]).filter(
+          (item): item is PdfTextItem => typeof (item as PdfTextItem).str === "string" && (item as PdfTextItem).str !== "",
         );
         const textRows = groupTextByRows(textItems);
 
