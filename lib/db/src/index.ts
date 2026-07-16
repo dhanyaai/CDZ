@@ -4,15 +4,17 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
+const connectionString = process.env.DO_DATABASE_URL ?? process.env.DATABASE_URL;
+
+if (!connectionString) {
   throw new Error(
     "DATABASE_URL must be set. Did you forget to provision a database?",
   );
 }
 
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("sslmode=require")
+  connectionString,
+  ssl: connectionString.includes("sslmode=require")
     ? { rejectUnauthorized: false }
     : undefined,
 });
