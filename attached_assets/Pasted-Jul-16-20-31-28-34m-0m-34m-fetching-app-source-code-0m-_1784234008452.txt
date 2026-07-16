@@ -1,0 +1,80 @@
+Jul 16 20:31:28  [34m│[0m [34m › fetching app source code[0m
+Jul 16 20:31:28  [34m│[0m => Selecting branch "main"
+Jul 16 20:31:29  [34m│[0m => Checking out commit "2e746d465fb19ccd3efc2bb1529860d71c5167ba"
+Jul 16 20:31:29  [34m│[0m 
+Jul 16 20:31:29  [34m│[0m [32m ✔ cloned repo to [35m/workspace[0m[0m
+Jul 16 20:31:29  [34m╰────────────────────────────────────────╼[0m
+Jul 16 20:31:29  
+Jul 16 20:31:29  [34m╭────────────[34m[30m[44m buildpack detection [0m[0m[34m───────────╼[0m
+Jul 16 20:31:29  [34m│[0m [34m › using Ubuntu 22.04 stack[0m
+Jul 16 20:31:31  [34m│[0m Detected the following buildpacks suitable to build your app:
+Jul 16 20:31:31  [34m│[0m 
+Jul 16 20:31:31  [34m│[0m    digitalocean/nodejs-appdetect  v0.1.2    
+Jul 16 20:31:31  [34m│[0m    heroku/nodejs                  v0.342.5  (Node.js)
+Jul 16 20:31:31  [34m│[0m    digitalocean/procfile          v0.1.0    (Procfile)
+Jul 16 20:31:31  [34m│[0m    digitalocean/custom            v0.2.0    (Custom Build Command)
+Jul 16 20:31:31  [34m╰─────────────────────────────────────────────╼[0m
+Jul 16 20:31:31  
+Jul 16 20:31:31  [34m╭────────────[34m[30m[44m app build [0m[0m[34m───────────╼[0m
+Jul 16 20:31:31  [34m│[0m [33;1mWarning: [0mno analyzed metadata found at path '/layers/analyzed.toml'
+Jul 16 20:31:31  [34m│[0m Timer: Builder started at 2026-07-16T20:31:31Z
+Jul 16 20:31:31  [34m│[0m Project contains pnpm-lock.yaml, using pnpm
+Jul 16 20:31:32  [34m│[0m        
+Jul 16 20:31:32  [34m│[0m -----> Creating runtime environment
+Jul 16 20:31:32  [34m│[0m        
+Jul 16 20:31:32  [34m│[0m        NPM_CONFIG_LOGLEVEL=error
+Jul 16 20:31:32  [34m│[0m        NODE_VERBOSE=false
+Jul 16 20:31:32  [34m│[0m        NODE_ENV=
+Jul 16 20:31:32  [34m│[0m        NODE_MODULES_CACHE=true
+Jul 16 20:31:32  [34m│[0m        
+Jul 16 20:31:32  [34m│[0m -----> Installing binaries
+Jul 16 20:31:32  [34m│[0m        engines.node (package.json):   22.x
+Jul 16 20:31:32  [34m│[0m        engines.npm (package.json):    unspecified (use default)
+Jul 16 20:31:32  [34m│[0m        engines.pnpm (package.json):   unspecified (use default)
+Jul 16 20:31:32  [34m│[0m        packageManager (package.json): pnpm@10.26.1
+Jul 16 20:31:32  [34m│[0m        
+Jul 16 20:31:32  [34m│[0m        Resolving node version 22.x...
+Jul 16 20:31:32  [34m│[0m        Downloading and installing node 22.22.2...
+Jul 16 20:31:33  [34m│[0m        Validating checksum
+Jul 16 20:31:35  [34m│[0m        Using default npm version: 10.9.7
+Jul 16 20:31:35  [34m│[0m        Downloading and installing pnpm (10.26.1)
+Jul 16 20:31:38  [34m│[0m        Using pnpm 10.26.1
+Jul 16 20:31:40  [34m│[0m        
+Jul 16 20:31:40  [34m│[0m -----> Installing dependencies
+Jul 16 20:31:40  [34m│[0m        Running 'pnpm install' with pnpm-lock.yaml
+Jul 16 20:31:49  [34m│[0m        
+Jul 16 20:31:49  [34m│[0m -----> Build
+Jul 16 20:31:49  [34m│[0m        Running build
+Jul 16 20:31:49  [34m│[0m        
+Jul 16 20:31:49  [34m│[0m        > workspace@0.0.0 build /workspace
+Jul 16 20:31:49  [34m│[0m        > pnpm run typecheck && pnpm -r --if-present run build
+Jul 16 20:31:49  [34m│[0m        
+Jul 16 20:31:49  [34m│[0m        
+Jul 16 20:31:49  [34m│[0m        > workspace@0.0.0 typecheck /workspace
+Jul 16 20:31:49  [34m│[0m        > pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
+Jul 16 20:31:49  [34m│[0m        
+Jul 16 20:31:50  [34m│[0m        
+Jul 16 20:31:50  [34m│[0m        > workspace@0.0.0 typecheck:libs /workspace
+Jul 16 20:31:50  [34m│[0m        > tsc --build
+Jul 16 20:31:50  [34m│[0m        
+Jul 16 20:32:06  [34m│[0m        /workspace/artifacts/gifting-erp-deck:
+Jul 16 20:32:06  [34m│[0m         ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/gifting-erp-deck@0.0.0 build: `vite build --config vite.config.ts`
+Jul 16 20:32:06  [34m│[0m        Exit status 1
+Jul 16 20:32:06  [34m│[0m         ELIFECYCLE  Command failed with exit code 1.
+Jul 16 20:32:06  [34m│[0m 
+Jul 16 20:32:06  [34m│[0m -----> Build failed
+Jul 16 20:32:06  [34m│[0m        
+Jul 16 20:32:06  [34m│[0m        We're sorry this build is failing! You can troubleshoot common issues here:
+Jul 16 20:32:06  [34m│[0m        https://devcenter.heroku.com/articles/troubleshooting-node-deploys
+Jul 16 20:32:06  [34m│[0m        
+Jul 16 20:32:06  [34m│[0m        If you're stuck, please submit a ticket so we can help:
+Jul 16 20:32:06  [34m│[0m        https://help.heroku.com/
+Jul 16 20:32:06  [34m│[0m        
+Jul 16 20:32:06  [34m│[0m        Love,
+Jul 16 20:32:06  [34m│[0m        Heroku
+Jul 16 20:32:06  [34m│[0m        
+Jul 16 20:32:06  [34m│[0m Timer: Builder ran for 35.38463768s and ended at 2026-07-16T20:32:06Z
+Jul 16 20:32:06  [34m│[0m [31;1mERROR: [0mfailed to build: exit status 1
+Jul 16 20:32:07  [34m│[0m 
+Jul 16 20:32:07  [34m│[0m 
+Jul 16 20:32:07  [34m│[0m [31m ✘ build failed[0m
