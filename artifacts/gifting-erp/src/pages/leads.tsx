@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, IndianRupee, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, LayoutList, Columns3, UserPlus, FileSpreadsheet } from "lucide-react";
+import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, LayoutList, Columns3, UserPlus, FileSpreadsheet } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type Lead = {
@@ -53,7 +53,7 @@ function initials(name: string | null) {
   return name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
 }
 
-const BLANK_FORM = { title: "", clientId: "", companyName: "", contactName: "", email: "", phone: "", source: "", estimatedValue: "", ownerId: "", notes: "" };
+const BLANK_FORM = { title: "", clientId: "", companyName: "", contactName: "", email: "", phone: "", source: "", ownerId: "", notes: "" };
 
 export function Leads() {
   const qc = useQueryClient();
@@ -82,7 +82,6 @@ export function Leads() {
         contactName: form.contactName || null,
         email: form.email || null, phone: form.phone || null,
         source: form.source || null,
-        estimatedValue: form.estimatedValue ? Number(form.estimatedValue) : null,
         ownerId: form.ownerId ? Number(form.ownerId) : null,
         notes: form.notes || null,
       }),
@@ -135,8 +134,8 @@ export function Leads() {
   });
 
   const byStatus = (status: string) => filtered.filter(l => l.status === status);
-  const total = (leads ?? []).reduce((s, l) => s + (l.estimatedValue ?? 0), 0);
-  const wonValue = (leads ?? []).filter(l => l.status === "won").reduce((s, l) => s + (l.estimatedValue ?? 0), 0);
+  const totalLeads = (leads ?? []).length;
+  const wonCount = (leads ?? []).filter(l => l.status === "won").length;
   const activeCount = (leads ?? []).filter(l => !["won", "lost"].includes(l.status)).length;
   const winRate = (leads ?? []).length ? Math.round(((leads ?? []).filter(l => l.status === "won").length / (leads ?? []).length) * 100) : 0;
   const sources = Array.from(new Set((leads ?? []).map(l => l.source).filter(Boolean))) as string[];
@@ -163,8 +162,8 @@ export function Leads() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total Pipeline", value: `₹${total.toLocaleString("en-IN")}`, icon: IndianRupee, color: "text-primary" },
-          { label: "Won Value", value: `₹${wonValue.toLocaleString("en-IN")}`, icon: TrendingUp, color: "text-emerald-500" },
+          { label: "Total Leads", value: totalLeads, icon: Users, color: "text-primary" },
+          { label: "Won Leads", value: wonCount, icon: TrendingUp, color: "text-emerald-500" },
           { label: "Active Leads", value: activeCount, icon: Target, color: "text-amber-500" },
           { label: "Win Rate", value: `${winRate}%`, icon: Zap, color: "text-violet-500" },
         ].map(s => (
@@ -219,7 +218,6 @@ export function Leads() {
                 <TableHead>POC Contact</TableHead>
                 <TableHead>Stage</TableHead>
                 <TableHead>Source</TableHead>
-                <TableHead className="text-right">Value (₹)</TableHead>
                 <TableHead>Owner</TableHead>
               </TableRow>
             </TableHeader>
@@ -263,9 +261,6 @@ export function Leads() {
                       ? <span className={`px-2 py-0.5 rounded text-xs font-medium ${SOURCE_COLORS[lead.source] ?? "bg-muted text-muted-foreground"}`}>{lead.source}</span>
                       : <span className="text-muted-foreground/50 text-xs">—</span>}
                   </TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">
-                    {lead.estimatedValue != null ? `₹${lead.estimatedValue.toLocaleString("en-IN")}` : <span className="text-muted-foreground/50 font-normal text-xs">—</span>}
-                  </TableCell>
                   <TableCell>
                     {lead.ownerName
                       ? <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">{initials(lead.ownerName)}</span><span className="text-sm truncate max-w-[80px]">{lead.ownerName}</span></div>
@@ -281,7 +276,6 @@ export function Leads() {
       {viewMode === "kanban" && <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {STAGES.map(stage => {
           const items = byStatus(stage);
-          const stageValue = items.reduce((s, l) => s + (l.estimatedValue ?? 0), 0);
           return (
             <div key={stage} className={`flex flex-col min-h-[300px] rounded-xl border border-t-2 bg-card/50 ${STAGE_HEADER[stage]}`}>
               <div className="p-3 border-b border-border/50">
@@ -289,7 +283,6 @@ export function Leads() {
                   <span className="text-sm font-semibold">{STAGE_LABELS[stage]}</span>
                   <Badge variant="secondary" className="text-xs">{items.length}</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground">₹{stageValue.toLocaleString("en-IN")}</p>
               </div>
               <div className="flex-1 p-2 space-y-2 overflow-y-auto">
                 {items.map(lead => (
@@ -297,7 +290,6 @@ export function Leads() {
                     data-testid={`lead-${lead.id}`} onClick={() => { setSelected(lead); setEditForm({ ...lead }); }}>
                     <div className="font-medium leading-tight">{lead.title}</div>
                     {lead.companyName && <div className="flex items-center gap-1 text-muted-foreground"><Building2 className="w-3 h-3 shrink-0" />{lead.companyName}</div>}
-                    {lead.estimatedValue != null && <div className="font-semibold text-primary">₹{lead.estimatedValue.toLocaleString("en-IN")}</div>}
                     <div className="flex items-center justify-between pt-0.5">
                       {lead.source && <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${SOURCE_COLORS[lead.source] ?? "bg-muted text-muted-foreground"}`}>{lead.source}</span>}
                       {lead.ownerName && <span className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[9px] font-bold ml-auto" title={lead.ownerName}>{initials(lead.ownerName)}</span>}
@@ -370,10 +362,6 @@ export function Leads() {
                   <SelectContent position="popper">{["Inbound", "Outbound", "Instagram", "LinkedIn", "WhatsApp", "BNI", "JCI", "Lions Club", "FTCCI", "Referral", "Others"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Estimated Value (₹)</label>
-                <Input placeholder="0" type="number" value={form.estimatedValue} onChange={e => setForm({ ...form, estimatedValue: e.target.value })} />
-              </div>
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">Notes</label>
@@ -404,12 +392,6 @@ export function Leads() {
                   {selected.phone && <div className="flex items-center gap-2 text-muted-foreground"><Phone className="w-4 h-4 shrink-0" /><span>{selected.phone}</span></div>}
                   {selected.ownerName && <div className="flex items-center gap-2 text-muted-foreground col-span-2"><UserCircle className="w-4 h-4 shrink-0" /><span>Assigned to <strong>{selected.ownerName}</strong></span></div>}
                 </div>
-                {selected.estimatedValue != null && (
-                  <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
-                    <div className="text-xs text-muted-foreground mb-0.5">Estimated Value</div>
-                    <div className="text-2xl font-bold text-primary">₹{selected.estimatedValue.toLocaleString("en-IN")}</div>
-                  </div>
-                )}
                 {selected.notes && <div className="bg-muted/40 rounded-lg p-3"><div className="text-xs font-medium text-muted-foreground mb-1">Notes</div><p className="text-sm whitespace-pre-wrap">{selected.notes}</p></div>}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Stage</label>
