@@ -146,7 +146,7 @@ export function SampleOrders() {
 
   const openReturn = () => {
     if (!detail) return;
-    setReturnQtys(Object.fromEntries(detail.items.map(i => [i.id, i.returnedQty ?? 0])));
+    setReturnQtys(Object.fromEntries(detail.items.map(i => [i.id, i.quantity])));
     setReturnOpen(true);
   };
 
@@ -529,7 +529,7 @@ export function SampleOrders() {
                 {canReturn(detail.status) && (
                   <Button variant="outline" size="sm" className="w-full text-orange-600 border-orange-300 hover:bg-orange-50"
                     onClick={openReturn}>
-                    <Package className="w-4 h-4 mr-2" />Record Return
+                    <Package className="w-4 h-4 mr-2" />Record Return (full or partial)
                   </Button>
                 )}
 
@@ -547,40 +547,54 @@ export function SampleOrders() {
                     ))}
                   </div>
                 )}
-
-                {/* Return dialog (nested) */}
-                <Dialog open={returnOpen} onOpenChange={setReturnOpen}>
-                  <DialogContent className="max-w-sm">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2 text-orange-600">
-                        <Package className="w-4 h-4" />Record Return — {detail.sampleNumber}
-                      </DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <p className="text-xs text-muted-foreground">Enter how many units were returned for each product.</p>
-                      <div className="divide-y border rounded-lg">
-                        {detail.items.map(item => (
-                          <div key={item.id} className="flex items-center gap-3 px-3 py-2.5">
-                            <span className="text-sm font-medium flex-1 min-w-0 truncate">{item.productName}</span>
-                            <span className="text-xs text-muted-foreground whitespace-nowrap">sent: {item.quantity}</span>
-                            <Input
-                              type="number" min={0} max={item.quantity}
-                              className="w-20 h-7 text-sm"
-                              value={returnQtys[item.id] ?? 0}
-                              onChange={e => setReturnQtys(q => ({ ...q, [item.id]: Math.min(item.quantity, Math.max(0, Number(e.target.value))) }))}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-                        onClick={() => returnMutation.mutate()} disabled={returnMutation.isPending}>
-                        {returnMutation.isPending ? "Recording…" : "Confirm Return"}
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
               </div>
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Return Dialog (sibling, NOT nested inside Detail) ── */}
+      <Dialog open={returnOpen} onOpenChange={(o) => { setReturnOpen(o); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <Package className="w-4 h-4" />Record Return — {detail?.sampleNumber}
+            </DialogTitle>
+          </DialogHeader>
+          {detail && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">Adjust qty returned per product (pre-filled = full return).</p>
+                <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-orange-600"
+                  onClick={() => setReturnQtys(Object.fromEntries(detail.items.map(i => [i.id, i.quantity])))}>
+                  Return All
+                </Button>
+              </div>
+              <div className="divide-y border rounded-lg">
+                {detail.items.map(item => (
+                  <div key={item.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <span className="text-sm font-medium flex-1 min-w-0 truncate">{item.productName}</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">sent {item.quantity}</span>
+                    <Input
+                      type="number" min={0} max={item.quantity}
+                      className="w-16 h-7 text-sm text-center"
+                      value={returnQtys[item.id] ?? item.quantity}
+                      onChange={e => setReturnQtys(q => ({ ...q, [item.id]: Math.min(item.quantity, Math.max(0, Number(e.target.value))) }))}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Button className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={() => returnMutation.mutate()} disabled={returnMutation.isPending}>
+                  {returnMutation.isPending ? "Recording…" : "Confirm Return"}
+                </Button>
+                <Button variant="outline" className="shrink-0" title="Print sample order"
+                  onClick={() => printSampleOrder(detail)}>
+                  <Printer className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>

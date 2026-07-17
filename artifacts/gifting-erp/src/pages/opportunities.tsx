@@ -157,7 +157,7 @@ export function Opportunities() {
     try {
       const d = await api<SampleOrderDetail>(`/v1/sample-orders/${id}`);
       setReturningOrder(d);
-      setReturnQtys(Object.fromEntries(d.items.map(i => [i.id, i.returnedQty ?? 0])));
+      setReturnQtys(Object.fromEntries(d.items.map(i => [i.id, i.quantity])));
       setReturnDialog(true);
     } catch {
       toast({ title: "Could not load sample order", variant: "destructive" });
@@ -437,26 +437,38 @@ export function Opportunities() {
           </DialogHeader>
           {returningOrder && (
             <div className="space-y-4">
-              <p className="text-xs text-muted-foreground">Enter how many units were returned for each product.</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">Adjust qty returned per product (pre-filled = full return).</p>
+                <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-orange-600 shrink-0"
+                  onClick={() => setReturnQtys(Object.fromEntries(returningOrder.items.map(i => [i.id, i.quantity])))}>
+                  Return All
+                </Button>
+              </div>
               <div className="divide-y border rounded-lg">
                 {returningOrder.items.map(item => (
                   <div key={item.id} className="flex items-center gap-3 px-3 py-2.5">
                     <span className="text-sm font-medium flex-1 min-w-0 truncate">{item.productName}</span>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">sent: {item.quantity}</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">sent {item.quantity}</span>
                     <Input
                       type="number" min={0} max={item.quantity}
-                      className="w-20 h-7 text-sm"
-                      value={returnQtys[item.id] ?? 0}
+                      className="w-16 h-7 text-sm text-center"
+                      value={returnQtys[item.id] ?? item.quantity}
                       onChange={e => setReturnQtys(q => ({ ...q, [item.id]: Math.min(item.quantity, Math.max(0, Number(e.target.value))) }))}
                     />
                   </div>
                 ))}
               </div>
-              <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-                onClick={() => submitReturn.mutate()}
-                disabled={submitReturn.isPending}>
-                {submitReturn.isPending ? "Recording…" : "Confirm Return"}
-              </Button>
+              <div className="flex gap-2">
+                <Button className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={() => submitReturn.mutate()}
+                  disabled={submitReturn.isPending}>
+                  {submitReturn.isPending ? "Recording…" : "Confirm Return"}
+                </Button>
+                <Button variant="outline" className="shrink-0" title="Print this sample order"
+                  onClick={() => printSampleOrder({ ...returningOrder, opportunityTitle: selected?.title ?? null })}>
+                  <Printer className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
