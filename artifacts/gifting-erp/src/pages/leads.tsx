@@ -74,6 +74,7 @@ export function Leads() {
   const [editForm, setEditForm] = useState<Partial<Lead>>({});
   const [followUpForm, setFollowUpForm] = useState({ subject: "", dueDate: "", description: "" });
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
+  const [customProduct, setCustomProduct] = useState("");
 
   const [, navigate] = useLocation();
   const { data: leads, isLoading } = useQuery({ queryKey: ["leads"], queryFn: () => api<Lead[]>("/v1/leads") });
@@ -84,6 +85,12 @@ export function Leads() {
   const budgetNum = Number(form.budget) || 0;
   const pctNum = Number(form.percentage) || 0;
   const computedTotal = budgetNum + (budgetNum * pctNum) / 100;
+
+  const addCustomProduct = () => {
+    const name = customProduct.replace(/,/g, " ").trim();
+    if (name && !form.products.includes(name)) setForm({ ...form, products: [...form.products, name] });
+    setCustomProduct("");
+  };
 
   const create = useMutation({
     mutationFn: () => api<Lead>("/v1/leads", {
@@ -106,7 +113,7 @@ export function Leads() {
         notes: form.notes || null,
       }),
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); setDialog(false); setForm({ ...BLANK_FORM }); toast({ title: "Lead created" }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); setDialog(false); setForm({ ...BLANK_FORM }); setCustomProduct(""); toast({ title: "Lead created" }); },
   });
 
   const update = useMutation({
@@ -416,6 +423,17 @@ export function Leads() {
                   {productList?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <div className="flex gap-2 pt-1">
+                <Input
+                  placeholder="Or type a custom product & press Enter…"
+                  value={customProduct}
+                  onChange={e => setCustomProduct(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustomProduct(); } }}
+                />
+                <Button type="button" variant="outline" size="icon" className="shrink-0" onClick={addCustomProduct} disabled={!customProduct.trim()}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
               {form.products.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 pt-1.5">
                   {form.products.map(p => (
