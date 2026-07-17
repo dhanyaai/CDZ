@@ -2,12 +2,14 @@ import { pgTable, serial, text, integer, timestamp, uniqueIndex } from "drizzle-
 import { companiesTable } from "./companies";
 import { clientsTable } from "./clients";
 import { productsTable } from "./products";
+import { opportunitiesTable } from "./leads";
 
 export const sampleOrdersTable = pgTable("sample_orders", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().default(1).references(() => companiesTable.id, { onDelete: "cascade" }),
   sampleNumber: text("sample_number").notNull(),
   clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  opportunityId: integer("opportunity_id").references(() => opportunitiesTable.id, { onDelete: "set null" }),
   customerName: text("customer_name"),
   customerPhone: text("customer_phone"),
   customerEmail: text("customer_email"),

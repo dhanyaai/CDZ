@@ -13,8 +13,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle } from "lucide-react";
+import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
+import { printSampleOrder } from "@/lib/print-utils";
 
 type Opportunity = {
   id: number; title: string; clientId: number | null; clientName: string | null;
@@ -24,6 +25,22 @@ type Opportunity = {
 };
 type Lead = { id: number; title: string; companyName: string | null };
 type User = { id: number; name: string; role: string };
+type Product = { id: number; name: string; stockLevel: number };
+type SampleOrderSummary = { id: number; sampleNumber: string; status: string; notes: string | null; createdAt: string };
+type SampleOrderDetail = SampleOrderSummary & {
+  clientName: string | null; customerName: string | null;
+  customerPhone: string | null; customerEmail: string | null;
+  items: { id: number; productId: number; productName: string; quantity: number; notes: string | null }[];
+};
+type SampleLine = { productId: string; quantity: string };
+
+const SAMPLE_STATUS_COLOR: Record<string, string> = {
+  Requested: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  Dispatched: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  Received: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  Converted: "bg-purple-500/10 text-purple-600 border-purple-500/20",
+  Rejected: "bg-red-500/10 text-red-500 border-red-500/20",
+};
 
 const STAGES = ["enquiry", "sent_catalogue", "samples", "shortlisted", "quotation_sent"];
 const LABELS: Record<string, string> = {
@@ -44,11 +61,21 @@ export function Opportunities() {
   const [dialog, setDialog] = useState(false);
   const [selected, setSelected] = useState<Opportunity | null>(null);
   const [form, setForm] = useState({ ...BLANK_FORM });
+  const [sampleDialog, setSampleDialog] = useState(false);
+  const [sampleLines, setSampleLines] = useState<SampleLine[]>([{ productId: "", quantity: "1" }]);
+  const [sampleNotes, setSampleNotes] = useState("");
+  const [sampleCustomer, setSampleCustomer] = useState("");
 
   const { data: opps, isLoading } = useQuery({ queryKey: ["opportunities"], queryFn: () => api<Opportunity[]>("/v1/opportunities") });
   const { data: clients } = useListClients();
   const { data: leads } = useQuery({ queryKey: ["leads"], queryFn: () => api<Lead[]>("/v1/leads") });
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/v1/users") });
+  const { data: sampleOrders } = useQuery({
+    queryKey: ["opp-sample-orders", selected?.id],
+    queryFn: () => api<SampleOrderSummary[]>(`/v1/sample-orders?opportunityId=${selected!.id}`),
+    enabled: !!selected && selected.stage === "samples",
+  });
+  const { data: products } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products"), enabled: sampleDialog });
 
   const create = useMutation({
     mutationFn: () => api("/v1/opportunities", {
@@ -76,6 +103,41 @@ export function Opportunities() {
     mutationFn: (id: number) => api(`/v1/opportunities/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["opportunities"] }); setSelected(null); },
   });
+
+  const resetSampleForm = () => { setSampleLines([{ productId: "", quantity: "1" }]); setSampleNotes(""); setSampleCustomer(""); };
+
+  const createSample = useMutation({
+    mutationFn: () => api("/v1/sample-orders", {
+      method: "POST",
+      body: JSON.stringify({
+        opportunityId: selected!.id,
+        clientId: selected!.clientId ?? undefined,
+        customerName: !selected!.clientId ? sampleCustomer.trim() : undefined,
+        notes: sampleNotes.trim() || undefined,
+        items: sampleLines.map(l => ({ productId: Number(l.productId), quantity: Number(l.quantity) })),
+      }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["opp-sample-orders"] });
+      qc.invalidateQueries({ queryKey: ["sample-orders"] });
+      setSampleDialog(false); resetSampleForm();
+      toast({ title: "Sample order created" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to create sample order", description: e.message, variant: "destructive" }),
+  });
+
+  const canCreateSample = sampleLines.length > 0
+    && sampleLines.every(l => l.productId && Number(l.quantity) > 0)
+    && (!!selected?.clientId || sampleCustomer.trim().length > 0);
+
+  const handlePrintSample = async (id: number) => {
+    try {
+      const d = await api<SampleOrderDetail>(`/v1/sample-orders/${id}`);
+      printSampleOrder({ ...d, opportunityTitle: selected?.title ?? null });
+    } catch {
+      toast({ title: "Could not load sample order for printing", variant: "destructive" });
+    }
+  };
 
   if (isLoading) return <Skeleton className="h-96 w-full" />;
 
@@ -257,6 +319,41 @@ export function Opportunities() {
                     <SelectContent>{STAGES.map(s => <SelectItem key={s} value={s}>{LABELS[s]}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+                {selected.stage === "samples" && (
+                  <div className="space-y-2" data-testid="section-sample-orders">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium flex items-center gap-1.5">
+                        <FlaskConical className="w-4 h-4 text-violet-500" />Sample Orders
+                      </label>
+                      <Button size="sm" variant="outline" className="h-7 text-xs px-2"
+                        onClick={() => { resetSampleForm(); setSampleDialog(true); }}>
+                        <Plus className="w-3 h-3 mr-1" />New Sample Order
+                      </Button>
+                    </div>
+                    {(sampleOrders ?? []).length === 0 ? (
+                      <p className="text-xs text-muted-foreground border rounded-lg p-3 bg-muted/20">
+                        No sample orders yet. Create one to record the samples you're sending, then print or save it as a PDF for the client.
+                      </p>
+                    ) : (
+                      <div className="border rounded-lg divide-y">
+                        {(sampleOrders ?? []).map(so => (
+                          <div key={so.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono text-sm font-medium">{so.sampleNumber}</span>
+                              <Badge variant="outline" className={`text-xs ${SAMPLE_STATUS_COLOR[so.status] ?? ""}`}>{so.status}</Badge>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className="text-xs text-muted-foreground hidden sm:inline">{format(new Date(so.createdAt), "MMM d")}</span>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => handlePrintSample(so.id)}>
+                                <Printer className="w-3.5 h-3.5 mr-1" />PDF / Print
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <Button variant="destructive" className="w-full" onClick={() => del.mutate(selected.id)} disabled={del.isPending}>
                   <Trash2 className="w-4 h-4 mr-2" />Delete Opportunity
                 </Button>
@@ -265,6 +362,71 @@ export function Opportunities() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* ── New Sample Order Dialog ── */}
+      <Dialog open={sampleDialog} onOpenChange={(o) => { setSampleDialog(o); if (!o) resetSampleForm(); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="w-4 h-4 text-violet-500" />New Sample Order
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selected && (
+              <p className="text-sm text-muted-foreground">
+                For <strong className="text-foreground">{selected.title}</strong>
+                {selected.clientName ? <> · {selected.clientName}</> : null}
+              </p>
+            )}
+            {selected && !selected.clientId && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Customer Name *</label>
+                <Input value={sampleCustomer} onChange={e => setSampleCustomer(e.target.value)} placeholder="Customer / company name" data-testid="input-sample-customer" />
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Sample Products *</label>
+              {sampleLines.map((line, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Select value={line.productId} onValueChange={v => setSampleLines(ls => ls.map((l, i) => i === idx ? { ...l, productId: v } : l))}>
+                    <SelectTrigger className="flex-1" data-testid={`select-sample-product-${idx}`}>
+                      <SelectValue placeholder="Select product" />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      {(products ?? []).map(p => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input type="number" min={1} className="w-20" value={line.quantity}
+                    onChange={e => setSampleLines(ls => ls.map((l, i) => i === idx ? { ...l, quantity: e.target.value } : l))}
+                    data-testid={`input-sample-qty-${idx}`} />
+                  {sampleLines.length > 1 && (
+                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0"
+                      onClick={() => setSampleLines(ls => ls.filter((_, i) => i !== idx))}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <Button size="sm" variant="outline" className="text-xs"
+                onClick={() => setSampleLines(ls => [...ls, { productId: "", quantity: "1" }])}>
+                <Plus className="w-3 h-3 mr-1" />Add Product
+              </Button>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Notes</label>
+              <Textarea value={sampleNotes} onChange={e => setSampleNotes(e.target.value)} rows={2}
+                placeholder="Courier details, customization notes…" data-testid="input-sample-notes" />
+            </div>
+            <Button className="w-full" onClick={() => createSample.mutate()}
+              disabled={!canCreateSample || createSample.isPending} data-testid="button-create-sample-order">
+              <FlaskConical className="w-4 h-4 mr-2" />
+              {createSample.isPending ? "Creating…" : "Create Sample Order"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

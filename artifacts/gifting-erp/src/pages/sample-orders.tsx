@@ -15,8 +15,9 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import {
   FlaskConical, Plus, Search, Package, Trash2, ChevronDown, ChevronUp,
-  User, Phone, Mail, Building2, CheckCircle2, Truck, XCircle, RefreshCw, Clock,
+  User, Phone, Mail, Building2, CheckCircle2, Truck, XCircle, RefreshCw, Clock, Printer,
 } from "lucide-react";
+import { printSampleOrder } from "@/lib/print-utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SampleOrderSummary {
@@ -487,6 +488,11 @@ export function SampleOrders() {
                     ))}
                   </div>
                 </div>
+
+                {/* Print */}
+                <Button variant="outline" size="sm" className="w-full" onClick={() => printSampleOrder(detail)} data-testid="button-print-sample">
+                  <Printer className="w-4 h-4 mr-2" />Print / Save as PDF
+                </Button>
 
                 {/* Status actions */}
                 {nextStatuses(detail.status).length > 0 && (

@@ -682,3 +682,82 @@ export function printTaxInvoice(inv: {
   `;
   openWin(inv.invoiceNumber, html);
 }
+
+export function printSampleOrder(so: {
+  sampleNumber: string;
+  clientName?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  status: string;
+  notes?: string | null;
+  createdAt: string;
+  opportunityTitle?: string | null;
+  items?: Array<{ productName: string; quantity: number; notes?: string | null }>;
+}) {
+  const items = so.items ?? [];
+  const customer = so.clientName ?? so.customerName ?? "—";
+  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+
+  const html = `
+    <div class="doc-header">
+      <div><div class="brand">Customize Duniya</div><div class="brand-sub">Sample Order — Product Samples for Evaluation</div></div>
+      <div class="doc-id">
+        <h1>${so.sampleNumber}</h1>
+        <div class="date">${new Date(so.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}</div>
+        <span class="${badgeClass(so.status)}">${so.status}</span>
+      </div>
+    </div>
+
+    <div class="meta-grid">
+      <div class="meta-section">
+        <h3>Sample For</h3>
+        <div class="meta-row"><span class="lbl">Customer</span><span class="val">${customer}</span></div>
+        ${so.customerPhone ? `<div class="meta-row"><span class="lbl">Phone</span><span class="val">${so.customerPhone}</span></div>` : ""}
+        ${so.customerEmail ? `<div class="meta-row"><span class="lbl">Email</span><span class="val">${so.customerEmail}</span></div>` : ""}
+      </div>
+      <div class="meta-section">
+        <h3>Sample Details</h3>
+        <div class="meta-row"><span class="lbl">Sample #</span><span class="val">${so.sampleNumber}</span></div>
+        <div class="meta-row"><span class="lbl">Date</span><span class="val">${new Date(so.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></div>
+        <div class="meta-row"><span class="lbl">Status</span><span class="val">${so.status}</span></div>
+        ${so.opportunityTitle ? `<div class="meta-row"><span class="lbl">Opportunity</span><span class="val">${so.opportunityTitle}</span></div>` : ""}
+      </div>
+    </div>
+
+    ${so.notes ? `<div class="note-box"><strong>Notes</strong>${so.notes}</div>` : ""}
+
+    <div class="section-title">Sample Items</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th class="text-center" style="width:80px;">Qty</th>
+          <th style="width:220px;">Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.length ? items.map(item => `<tr>
+          <td class="font-bold">${item.productName}</td>
+          <td class="text-center">${item.quantity}</td>
+          <td style="color:#6b7280;">${item.notes ?? "—"}</td>
+        </tr>`).join("") : `<tr><td colspan="3" class="text-center" style="color:#9ca3af;padding:20px;">No items</td></tr>`}
+      </tbody>
+    </table>
+
+    <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
+      <div class="totals-box">
+        <div class="total-row sub"><span>Total Items</span><span>${items.length}</span></div>
+        <div class="total-row final"><span>Total Quantity</span><span>${totalQty}</span></div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;padding:12px;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#6b7280;background:#f9fafb;">
+      <strong style="display:block;color:#374151;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Note</strong>
+      These product samples are provided for evaluation purposes. Kindly review and share your feedback so we can proceed with your order.
+    </div>
+
+    <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:20px;">Sample Order — Customize Duniya Corporate Gifting</p>
+  `;
+  openWin(so.sampleNumber, html);
+}

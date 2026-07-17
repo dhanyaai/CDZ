@@ -1,0 +1,2 @@
+ALTER TABLE "sample_orders" ADD COLUMN "opportunity_id" integer;--> statement-breakpoint
+ALTER TABLE "sample_orders" ADD CONSTRAINT "sample_orders_opportunity_id_opportunities_id_fk" FOREIGN KEY ("opportunity_id") REFERENCES "public"."opportunities"("id") ON DELETE set null ON UPDATE no action;

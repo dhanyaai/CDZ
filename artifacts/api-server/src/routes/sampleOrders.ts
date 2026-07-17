@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { and, eq, SQL } from "drizzle-orm";
-import { db, sampleOrdersTable, sampleOrderItemsTable, clientsTable, productsTable } from "@workspace/db";
+import { db, sampleOrdersTable, sampleOrderItemsTable, clientsTable, productsTable, opportunitiesTable } from "@workspace/db";
 
 const router = Router();
 
@@ -25,6 +25,7 @@ async function getDetail(id: number, companyId: number) {
     sampleNumber: row.order.sampleNumber,
     clientId: row.order.clientId ?? null,
     clientName: row.clientName ?? null,
+    opportunityId: row.order.opportunityId ?? null,
     customerName: row.order.customerName ?? null,
     customerPhone: row.order.customerPhone ?? null,
     customerEmail: row.order.customerEmail ?? null,
@@ -43,9 +44,14 @@ async function getDetail(id: number, companyId: number) {
 
 // GET /v1/sample-orders
 router.get("/v1/sample-orders", async (req, res): Promise<void> => {
-  const { status } = req.query as { status?: string };
+  const { status, opportunityId } = req.query as { status?: string; opportunityId?: string };
   const conditions: SQL[] = [eq(sampleOrdersTable.companyId, req.companyId)];
   if (status) conditions.push(eq(sampleOrdersTable.status, status));
+  if (opportunityId) {
+    const oid = parseInt(opportunityId, 10);
+    if (Number.isNaN(oid)) { res.status(400).json({ error: "opportunityId must be a number" }); return; }
+    conditions.push(eq(sampleOrdersTable.opportunityId, oid));
+  }
 
   const rows = await db
     .select({ order: sampleOrdersTable, clientName: clientsTable.companyName })
@@ -59,6 +65,7 @@ router.get("/v1/sample-orders", async (req, res): Promise<void> => {
     sampleNumber: r.order.sampleNumber,
     clientId: r.order.clientId ?? null,
     clientName: r.clientName ?? null,
+    opportunityId: r.order.opportunityId ?? null,
     customerName: r.order.customerName ?? null,
     status: r.order.status,
     notes: r.order.notes ?? null,
@@ -76,7 +83,7 @@ router.get("/v1/sample-orders/:id", async (req, res): Promise<void> => {
 
 // POST /v1/sample-orders
 router.post("/v1/sample-orders", async (req, res): Promise<void> => {
-  const { clientId, customerName, customerPhone, customerEmail, notes, items } = req.body ?? {};
+  const { clientId, opportunityId, customerName, customerPhone, customerEmail, notes, items } = req.body ?? {};
 
   if (!Array.isArray(items) || items.length === 0) {
     res.status(400).json({ error: "items[] is required" }); return;
@@ -91,10 +98,21 @@ router.post("/v1/sample-orders", async (req, res): Promise<void> => {
     if (!client) { res.status(404).json({ error: "Client not found" }); return; }
   }
 
+  if (opportunityId !== undefined && opportunityId !== null && !Number.isInteger(opportunityId)) {
+    res.status(400).json({ error: "opportunityId must be an integer" }); return;
+  }
+
+  if (opportunityId) {
+    const [opp] = await db.select({ id: opportunitiesTable.id }).from(opportunitiesTable)
+      .where(and(eq(opportunitiesTable.id, opportunityId), eq(opportunitiesTable.companyId, req.companyId)));
+    if (!opp) { res.status(404).json({ error: "Opportunity not found" }); return; }
+  }
+
   const [order] = await db.insert(sampleOrdersTable).values({
     companyId: req.companyId,
     sampleNumber: "SMPL-TEMP",
     clientId: clientId ?? null,
+    opportunityId: opportunityId ?? null,
     customerName: customerName ?? null,
     customerPhone: customerPhone ?? null,
     customerEmail: customerEmail ?? null,
