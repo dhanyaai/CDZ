@@ -213,7 +213,7 @@ export function Leads() {
               <TableRow className="bg-muted/50">
                 <TableHead className="w-[260px]">Lead</TableHead>
                 <TableHead>Company</TableHead>
-                <TableHead>Contact</TableHead>
+                <TableHead>POC Contact</TableHead>
                 <TableHead>Stage</TableHead>
                 <TableHead>Source</TableHead>
                 <TableHead className="text-right">Value (₹)</TableHead>
@@ -335,8 +335,8 @@ export function Leads() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="text-sm font-medium">Contact Name</label>
-                <Input placeholder="Primary contact" value={form.contactName} onChange={e => setForm({ ...form, contactName: e.target.value })} />
+                <label className="text-sm font-medium">POC Contact</label>
+                <Input placeholder="Point of contact" value={form.contactName} onChange={e => setForm({ ...form, contactName: e.target.value })} />
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Assigned To</label>
@@ -351,12 +351,12 @@ export function Leads() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="text-sm font-medium">Email</label>
-                <Input placeholder="Email" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+                <label className="text-sm font-medium">POC Email</label>
+                <Input placeholder="POC email" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">Phone</label>
-                <Input placeholder="Phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+                <label className="text-sm font-medium">POC Phone</label>
+                <Input placeholder="POC phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
