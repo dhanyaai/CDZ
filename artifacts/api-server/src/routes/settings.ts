@@ -40,7 +40,7 @@ router.patch("/v1/settings/company", requireAdmin, async (req, res): Promise<voi
 router.post("/v1/auth/change-password", async (req, res): Promise<void> => {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const userId = getSessionUserId(auth.slice(7));
+  const userId = await getSessionUserId(auth.slice(7));
   if (userId == null) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const { currentPassword, newPassword } = req.body ?? {};

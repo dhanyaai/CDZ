@@ -8,6 +8,13 @@
       "when": 1784237460843,
       "tag": "0000_slippery_tattoo",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784259443569,
+      "tag": "0001_smooth_major_mapleleaf",
+      "breakpoints": true
     }
   ]
 }

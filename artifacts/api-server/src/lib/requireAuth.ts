@@ -1,9 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
-import { sessions } from "./sessions";
+import { getSession } from "./sessions";
 
 const PUBLIC_PREFIXES = ["/v1/auth/login", "/healthz"];
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (PUBLIC_PREFIXES.some((p) => req.path === p || req.path.startsWith(p + "/"))) {
     next();
     return;
@@ -13,7 +13,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  const session = sessions.get(auth.slice(7));
+  const session = await getSession(auth.slice(7));
   if (session == null) {
     res.status(401).json({ error: "Unauthorized" });
     return;

@@ -19,7 +19,7 @@ router.post("/v1/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
-  const token = createSession(user.id, user.companyId, user.role ?? "");
+  const token = await createSession(user.id, user.companyId, user.role ?? "");
 
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, user.companyId));
 
@@ -41,14 +41,14 @@ router.post("/v1/auth/login", async (req, res): Promise<void> => {
 
 router.post("/v1/auth/logout", async (req, res): Promise<void> => {
   const auth = req.headers.authorization;
-  if (auth?.startsWith("Bearer ")) destroySession(auth.slice(7));
+  if (auth?.startsWith("Bearer ")) await destroySession(auth.slice(7));
   res.json({ success: true });
 });
 
 router.get("/v1/auth/me", async (req, res): Promise<void> => {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const session = getSession(auth.slice(7));
+  const session = await getSession(auth.slice(7));
   if (session == null) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, session.userId));
