@@ -308,8 +308,7 @@ router.get("/v1/analytics/sales-leaderboard", async (req, res): Promise<void> =>
     const entry = byUser.get(r.ownerId);
     if (!entry) continue;
     const v = Number(r.total);
-    if (r.stage === "closed_won") { entry.won += v; entry.wonCount += r.cnt; }
-    else if (r.stage !== "closed_lost") { entry.pipeline += v; entry.openCount += r.cnt; }
+    entry.pipeline += v; entry.openCount += r.cnt;
   }
   const out = Array.from(byUser.values()).filter((u) => u.pipeline > 0 || u.won > 0).sort((a, b) => b.won + b.pipeline - (a.won + a.pipeline));
   res.json(out);

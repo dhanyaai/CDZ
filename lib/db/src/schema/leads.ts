@@ -35,7 +35,7 @@ export const opportunitiesTable = pgTable("opportunities", {
   title: text("title").notNull(),
   clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
   leadId: integer("lead_id").references(() => leadsTable.id, { onDelete: "set null" }),
-  stage: text("stage").notNull().default("prospect"),
+  stage: text("stage").notNull().default("enquiry"),
   value: numeric("value", { precision: 12, scale: 2 }),
   probability: integer("probability").notNull().default(50),
   expectedCloseDate: timestamp("expected_close_date", { withTimezone: true }),

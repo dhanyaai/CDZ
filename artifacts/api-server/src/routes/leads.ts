@@ -111,7 +111,7 @@ router.post("/v1/leads/:id/convert", async (req, res): Promise<void> => {
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
   const [opp] = await db.insert(opportunitiesTable).values({
     companyId: req.companyId, title: lead.title, clientId: lead.clientId, leadId: lead.id,
-    stage: "qualified", value: lead.estimatedValue, ownerId: lead.ownerId,
+    stage: "enquiry", value: lead.estimatedValue, ownerId: lead.ownerId,
   }).returning();
   await db.update(leadsTable).set({ status: "converted" }).where(eq(leadsTable.id, id));
   res.status(201).json(opp);
@@ -145,7 +145,7 @@ router.post("/v1/opportunities", async (req, res): Promise<void> => {
   const { title, clientId, leadId, stage, value, probability, expectedCloseDate, ownerId, notes } = req.body ?? {};
   if (!title) { res.status(400).json({ error: "title is required" }); return; }
   const [opp] = await db.insert(opportunitiesTable).values({
-    companyId: req.companyId, title, clientId, leadId, stage: stage ?? "prospect",
+    companyId: req.companyId, title, clientId, leadId, stage: stage ?? "enquiry",
     value, probability: probability ?? 50,
     expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null,
     ownerId, notes,

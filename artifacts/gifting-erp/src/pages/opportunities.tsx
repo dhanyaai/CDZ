@@ -25,14 +25,14 @@ type Opportunity = {
 type Lead = { id: number; title: string; companyName: string | null };
 type User = { id: number; name: string; role: string };
 
-const STAGES = ["prospect", "qualified", "proposal", "negotiation", "closed_won", "closed_lost"];
+const STAGES = ["enquiry", "sent_catalogue", "samples", "shortlisted", "quotation_sent"];
 const LABELS: Record<string, string> = {
-  prospect: "Prospect", qualified: "Qualified", proposal: "Proposal",
-  negotiation: "Negotiation", closed_won: "Won", closed_lost: "Lost",
+  enquiry: "Enquiry", sent_catalogue: "Sent Catalogue", samples: "Samples",
+  shortlisted: "Shortlisted Products", quotation_sent: "Quotation Sent",
 };
 const STAGE_HEADER: Record<string, string> = {
-  prospect: "border-t-slate-400", qualified: "border-t-blue-400", proposal: "border-t-violet-400",
-  negotiation: "border-t-amber-400", closed_won: "border-t-emerald-400", closed_lost: "border-t-red-400",
+  enquiry: "border-t-slate-400", sent_catalogue: "border-t-blue-400", samples: "border-t-violet-400",
+  shortlisted: "border-t-amber-400", quotation_sent: "border-t-emerald-400",
 };
 const PROB_COLOR = (p: number) => { if (p >= 75) return "bg-emerald-500"; if (p >= 50) return "bg-amber-500"; if (p >= 25) return "bg-blue-500"; return "bg-slate-500"; };
 
@@ -79,10 +79,10 @@ export function Opportunities() {
 
   if (isLoading) return <Skeleton className="h-96 w-full" />;
 
-  const totalPipeline = (opps ?? []).filter(o => !["closed_won", "closed_lost"].includes(o.stage)).reduce((s, o) => s + (o.value ?? 0), 0);
-  const totalWeighted = (opps ?? []).filter(o => !["closed_won", "closed_lost"].includes(o.stage)).reduce((s, o) => s + ((o.value ?? 0) * o.probability) / 100, 0);
-  const wonValue = (opps ?? []).filter(o => o.stage === "closed_won").reduce((s, o) => s + (o.value ?? 0), 0);
-  const winRate = (opps ?? []).length ? Math.round(((opps ?? []).filter(o => o.stage === "closed_won").length / (opps ?? []).length) * 100) : 0;
+  const totalPipeline = (opps ?? []).reduce((s, o) => s + (o.value ?? 0), 0);
+  const totalWeighted = (opps ?? []).reduce((s, o) => s + ((o.value ?? 0) * o.probability) / 100, 0);
+  const quotationValue = (opps ?? []).filter(o => o.stage === "quotation_sent").reduce((s, o) => s + (o.value ?? 0), 0);
+  const totalDeals = (opps ?? []).length;
 
   return (
     <div className="space-y-6" data-testid="page-opportunities">
@@ -98,8 +98,8 @@ export function Opportunities() {
         {[
           { label: "Total Pipeline", value: `₹${totalPipeline.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`, icon: IndianRupee, color: "text-primary" },
           { label: "Weighted Forecast", value: `₹${totalWeighted.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`, icon: BarChart3, color: "text-violet-500" },
-          { label: "Closed Won", value: `₹${wonValue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`, icon: TrendingUp, color: "text-emerald-500" },
-          { label: "Win Rate", value: `${winRate}%`, icon: Target, color: "text-amber-500" },
+          { label: "Quotation Sent", value: `₹${quotationValue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`, icon: TrendingUp, color: "text-emerald-500" },
+          { label: "Total Deals", value: `${totalDeals}`, icon: Target, color: "text-amber-500" },
         ].map(s => (
           <Card key={s.label} className="elev-1">
             <CardContent className="p-4 flex items-center gap-3">
@@ -110,7 +110,7 @@ export function Opportunities() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {STAGES.map(stage => {
           const items = (opps ?? []).filter(o => o.stage === stage);
           const stageVal = items.reduce((s, o) => s + (o.value ?? 0), 0);

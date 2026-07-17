@@ -261,10 +261,10 @@ async function seed() {
   ]).returning();
 
   const [oppAccenture, oppAmazon, oppGoogle, oppFlipkart] = await db.insert(opportunitiesTable).values([
-    { companyId: co.id, title: "Accenture Diwali Gift Campaign",    leadId: ldAccenture.id, stage: "proposal",   probability: 65, value: "1500000", ownerId: priya.id  },
-    { companyId: co.id, title: "Amazon Employee Kit Program",       leadId: ldAmazon.id,    stage: "negotiate",  probability: 75, value: "800000",  ownerId: priya.id  },
-    { companyId: co.id, title: "Google I/O India Swag",            leadId: ldGoogle.id,    stage: "prospect",   probability: 40, value: "500000",  ownerId: arjun.id  },
-    { companyId: co.id, title: "Flipkart Joiner Kit",              leadId: ldFlipkart.id,  stage: "proposal",   probability: 55, value: "350000",  ownerId: arjun.id  },
+    { companyId: co.id, title: "Accenture Diwali Gift Campaign",    leadId: ldAccenture.id, stage: "samples",        probability: 65, value: "1500000", ownerId: priya.id  },
+    { companyId: co.id, title: "Amazon Employee Kit Program",       leadId: ldAmazon.id,    stage: "shortlisted",    probability: 75, value: "800000",  ownerId: priya.id  },
+    { companyId: co.id, title: "Google I/O India Swag",            leadId: ldGoogle.id,    stage: "enquiry",        probability: 40, value: "500000",  ownerId: arjun.id  },
+    { companyId: co.id, title: "Flipkart Joiner Kit",              leadId: ldFlipkart.id,  stage: "quotation_sent", probability: 55, value: "350000",  ownerId: arjun.id  },
   ]).returning();
 
   // ── Quotes ────────────────────────────────────────────────────────────────────

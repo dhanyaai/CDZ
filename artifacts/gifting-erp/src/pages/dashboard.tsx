@@ -250,7 +250,7 @@ export function Dashboard() {
                     }`}>{i + 1}</div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{rep.name}</div>
-                      <div className="text-xs text-muted-foreground">{rep.wonCount} won · {rep.openCount} open</div>
+                      <div className="text-xs text-muted-foreground">{rep.openCount} open deal{rep.openCount === 1 ? "" : "s"}</div>
                     </div>
                     <div className="font-semibold text-sm">₹{Number(rep.pipeline).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
                   </div>
