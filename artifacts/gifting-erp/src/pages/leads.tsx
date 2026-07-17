@@ -325,13 +325,15 @@ export function Leads() {
 
       {/* New lead dialog */}
       <Dialog open={dialog} onOpenChange={setDialog}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl w-[95vw] max-h-[92vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Lead</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
               <label className="text-sm font-medium">Lead Title *</label>
               <Input placeholder="e.g. Diwali Gifting - Infosys 2025" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
             </div>
+            <div className="grid md:grid-cols-2 gap-x-6 gap-y-3 items-start">
+            <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Link to Existing Client</label>
@@ -387,6 +389,8 @@ export function Leads() {
                 <Input placeholder="0" type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} />
               </div>
             </div>
+            </div>
+            <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Budget (₹)</label>
@@ -444,6 +448,8 @@ export function Leads() {
                 <label className="text-sm font-medium">Total Value (₹)</label>
                 <Input readOnly value={form.budget ? computedTotal.toLocaleString("en-IN") : ""} placeholder="Budget + %" className="bg-muted/50" />
               </div>
+            </div>
+            </div>
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">Notes</label>
