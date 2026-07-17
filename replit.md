@@ -38,7 +38,11 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Production runs on DigitalOcean App Platform (GitHub repo dhanyaai/CDZ, branch main) with `deploy_on_push` enabled — every push to main auto-deploys to https://customizeduniya-dqjm2.ondigitalocean.app
+- DB connection selection lives in `lib/db/src/index.ts`: development prefers local `DATABASE_URL` (Replit Postgres, no SSL); production prefers `DO_DATABASE_URL ?? DATABASE_URL` with sslmode stripped and relaxed TLS (DO self-signed CA)
+- `pnpm --filter @workspace/db run push` targets the LOCAL dev database only (`lib/db/drizzle.config.ts`); production schema changes go through generated migrations applied by `migrate()` at server startup
+- Both dev and prod databases are baselined in `drizzle.__drizzle_migrations`; never use `db push` against prod
+- The `DO_DATABASE_URL` Replit secret has a stale password; the DO database is firewalled to the app only
 
 ## Pointers
 

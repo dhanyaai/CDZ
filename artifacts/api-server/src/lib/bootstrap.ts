@@ -1,5 +1,11 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { db, companiesTable, usersTable, userCompaniesTable } from "@workspace/db";
+import {
+  db,
+  dbConnectionInfo,
+  companiesTable,
+  usersTable,
+  userCompaniesTable,
+} from "@workspace/db";
 import { hashPassword } from "./password";
 import { logger } from "./logger";
 import path from "node:path";
@@ -12,13 +18,14 @@ export async function bootstrap(): Promise<void> {
   );
 
   // Log the DB host we're connecting to (password redacted) to aid debugging
-  const connStr = process.env.DO_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
-  try {
-    const u = new URL(connStr);
-    logger.info({ host: u.hostname, port: u.port, db: u.pathname }, "DB connection target");
-  } catch {
-    logger.warn({ connStr: connStr.slice(0, 40) + "…" }, "Could not parse DB connection string");
-  }
+  logger.info(
+    {
+      host: dbConnectionInfo.host,
+      port: dbConnectionInfo.port,
+      db: dbConnectionInfo.database,
+    },
+    "DB connection target",
+  );
 
   logger.info({ migrationsFolder }, "Running database migrations");
   await migrate(db, { migrationsFolder });

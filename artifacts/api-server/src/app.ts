@@ -12,6 +12,10 @@ import fs from "fs";
 
 const app: Express = express();
 
+// Behind DigitalOcean's / Replit's reverse proxy — trust X-Forwarded-For
+// so express-rate-limit identifies clients by real IP, not the proxy IP.
+app.set("trust proxy", 1);
+
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(
