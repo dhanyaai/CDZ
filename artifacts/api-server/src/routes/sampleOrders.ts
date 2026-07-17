@@ -37,6 +37,7 @@ async function getDetail(id: number, companyId: number) {
       productId: r.item.productId,
       productName: r.product?.name ?? "Unknown",
       quantity: r.item.quantity,
+      returnedQty: r.item.returnedQty ?? 0,
       notes: r.item.notes ?? null,
     })),
   };
@@ -141,7 +142,7 @@ router.post("/v1/sample-orders", async (req, res): Promise<void> => {
 router.patch("/v1/sample-orders/:id/status", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const { status } = req.body ?? {};
-  const allowed = ["Requested", "Dispatched", "Received", "Converted", "Rejected"];
+  const allowed = ["Requested", "Dispatched", "Received", "Converted", "Rejected", "Returned"];
   if (!status || !allowed.includes(status)) {
     res.status(400).json({ error: `status must be one of: ${allowed.join(", ")}` }); return;
   }
@@ -150,6 +151,35 @@ router.patch("/v1/sample-orders/:id/status", async (req, res): Promise<void> => 
     .where(and(eq(sampleOrdersTable.id, id), eq(sampleOrdersTable.companyId, req.companyId)))
     .returning();
   if (!updated) { res.status(404).json({ error: "Sample order not found" }); return; }
+  const detail = await getDetail(id, req.companyId);
+  res.json(detail);
+});
+
+// PATCH /v1/sample-orders/:id/return
+router.patch("/v1/sample-orders/:id/return", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const { items, notes } = req.body ?? {};
+
+  const [order] = await db.select({ id: sampleOrdersTable.id, status: sampleOrdersTable.status })
+    .from(sampleOrdersTable)
+    .where(and(eq(sampleOrdersTable.id, id), eq(sampleOrdersTable.companyId, req.companyId)));
+  if (!order) { res.status(404).json({ error: "Sample order not found" }); return; }
+  if (order.status !== "Received") { res.status(400).json({ error: "Only received orders can have returns" }); return; }
+
+  if (Array.isArray(items) && items.length > 0) {
+    for (const { itemId, returnedQty } of items) {
+      if (typeof itemId !== "number" || typeof returnedQty !== "number" || returnedQty < 0) continue;
+      await db.update(sampleOrderItemsTable)
+        .set({ returnedQty })
+        .where(and(eq(sampleOrderItemsTable.id, itemId), eq(sampleOrderItemsTable.sampleOrderId, id)));
+    }
+  }
+
+  const updates: Record<string, unknown> = { status: "Returned" };
+  if (notes !== undefined) updates.notes = notes;
+  await db.update(sampleOrdersTable).set(updates)
+    .where(and(eq(sampleOrdersTable.id, id), eq(sampleOrdersTable.companyId, req.companyId)));
+
   const detail = await getDetail(id, req.companyId);
   res.json(detail);
 });

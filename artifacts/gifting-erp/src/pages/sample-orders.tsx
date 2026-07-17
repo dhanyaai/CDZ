@@ -28,7 +28,7 @@ interface SampleOrderSummary {
 }
 interface SampleOrderDetail extends SampleOrderSummary {
   customerPhone: string | null; customerEmail: string | null;
-  items: { id: number; productId: number; productName: string; quantity: number; notes: string | null }[];
+  items: { id: number; productId: number; productName: string; quantity: number; returnedQty: number; notes: string | null }[];
 }
 interface Client { id: number; companyName: string }
 interface Product { id: number; name: string; stockLevel: number }
@@ -41,6 +41,7 @@ const STATUS_META: Record<string, { label: string; color: string; icon: React.El
   Received:   { label: "Received",   color: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20", icon: CheckCircle2 },
   Converted:  { label: "Converted to SO", color: "bg-purple-500/10 text-purple-600 border-purple-500/20", icon: RefreshCw },
   Rejected:   { label: "Rejected",   color: "bg-red-500/10 text-red-500 border-red-500/20", icon: XCircle },
+  Returned:   { label: "Returned",   color: "bg-orange-500/10 text-orange-600 border-orange-500/20", icon: Package },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -53,7 +54,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-const TABS = ["All", "Requested", "Dispatched", "Received", "Converted", "Rejected"] as const;
+const TABS = ["All", "Requested", "Dispatched", "Received", "Converted", "Rejected", "Returned"] as const;
 type TabKey = typeof TABS[number];
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -140,6 +141,29 @@ export function SampleOrders() {
     onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
 
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [returnQtys, setReturnQtys] = useState<Record<number, number>>({});
+
+  const openReturn = () => {
+    if (!detail) return;
+    setReturnQtys(Object.fromEntries(detail.items.map(i => [i.id, i.returnedQty ?? 0])));
+    setReturnOpen(true);
+  };
+
+  const returnMutation = useMutation({
+    mutationFn: () => api(`/v1/sample-orders/${detail!.id}/return`, {
+      method: "PATCH",
+      body: JSON.stringify({ items: detail!.items.map(i => ({ itemId: i.id, returnedQty: returnQtys[i.id] ?? 0 })) }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sample-orders"] });
+      qc.invalidateQueries({ queryKey: ["sample-order", selectedId] });
+      setReturnOpen(false); setDetailOpen(false);
+      toast({ title: "Return recorded — status set to Returned" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to record return", description: e.message, variant: "destructive" }),
+  });
+
   // ── Filtering ────────────────────────────────────────────────────────────────
   const filtered = orders.filter((o) => {
     if (tab !== "All" && o.status !== tab) return false;
@@ -168,6 +192,8 @@ export function SampleOrders() {
     if (current === "Received") return ["Converted", "Rejected"];
     return [];
   }
+
+  function canReturn(current: string) { return current === "Received"; }
 
   return (
     <div className="space-y-6">
@@ -483,7 +509,12 @@ export function SampleOrders() {
                           <span className="font-medium">{item.productName}</span>
                           {item.notes && <span className="text-xs text-muted-foreground ml-2">· {item.notes}</span>}
                         </div>
-                        <span className="font-semibold tabular-nums">×{item.quantity}</span>
+                        <div className="flex items-center gap-2">
+                          {item.returnedQty > 0 && (
+                            <span className="text-xs text-orange-600 font-medium">↩ {item.returnedQty} returned</span>
+                          )}
+                          <span className="font-semibold tabular-nums">×{item.quantity}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -493,6 +524,14 @@ export function SampleOrders() {
                 <Button variant="outline" size="sm" className="w-full" onClick={() => printSampleOrder(detail)} data-testid="button-print-sample">
                   <Printer className="w-4 h-4 mr-2" />Print / Save as PDF
                 </Button>
+
+                {/* Return action */}
+                {canReturn(detail.status) && (
+                  <Button variant="outline" size="sm" className="w-full text-orange-600 border-orange-300 hover:bg-orange-50"
+                    onClick={openReturn}>
+                    <Package className="w-4 h-4 mr-2" />Record Return
+                  </Button>
+                )}
 
                 {/* Status actions */}
                 {nextStatuses(detail.status).length > 0 && (
@@ -508,6 +547,38 @@ export function SampleOrders() {
                     ))}
                   </div>
                 )}
+
+                {/* Return dialog (nested) */}
+                <Dialog open={returnOpen} onOpenChange={setReturnOpen}>
+                  <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2 text-orange-600">
+                        <Package className="w-4 h-4" />Record Return — {detail.sampleNumber}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <p className="text-xs text-muted-foreground">Enter how many units were returned for each product.</p>
+                      <div className="divide-y border rounded-lg">
+                        {detail.items.map(item => (
+                          <div key={item.id} className="flex items-center gap-3 px-3 py-2.5">
+                            <span className="text-sm font-medium flex-1 min-w-0 truncate">{item.productName}</span>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">sent: {item.quantity}</span>
+                            <Input
+                              type="number" min={0} max={item.quantity}
+                              className="w-20 h-7 text-sm"
+                              value={returnQtys[item.id] ?? 0}
+                              onChange={e => setReturnQtys(q => ({ ...q, [item.id]: Math.min(item.quantity, Math.max(0, Number(e.target.value))) }))}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                        onClick={() => returnMutation.mutate()} disabled={returnMutation.isPending}>
+                        {returnMutation.isPending ? "Recording…" : "Confirm Return"}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </>
           )}

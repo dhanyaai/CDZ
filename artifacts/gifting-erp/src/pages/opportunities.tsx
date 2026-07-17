@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer } from "lucide-react";
+import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
 import { printSampleOrder } from "@/lib/print-utils";
 
@@ -30,7 +30,7 @@ type SampleOrderSummary = { id: number; sampleNumber: string; status: string; no
 type SampleOrderDetail = SampleOrderSummary & {
   clientName: string | null; customerName: string | null;
   customerPhone: string | null; customerEmail: string | null;
-  items: { id: number; productId: number; productName: string; quantity: number; notes: string | null }[];
+  items: { id: number; productId: number; productName: string; quantity: number; returnedQty: number; notes: string | null }[];
 };
 type SampleLine = { productId: string; quantity: string };
 
@@ -65,6 +65,9 @@ export function Opportunities() {
   const [sampleLines, setSampleLines] = useState<SampleLine[]>([{ productId: "", quantity: "1" }]);
   const [sampleNotes, setSampleNotes] = useState("");
   const [sampleCustomer, setSampleCustomer] = useState("");
+  const [returnDialog, setReturnDialog] = useState(false);
+  const [returningOrder, setReturningOrder] = useState<SampleOrderDetail | null>(null);
+  const [returnQtys, setReturnQtys] = useState<Record<number, number>>({});
 
   const { data: opps, isLoading } = useQuery({ queryKey: ["opportunities"], queryFn: () => api<Opportunity[]>("/v1/opportunities") });
   const { data: clients } = useListClients();
@@ -138,6 +141,48 @@ export function Opportunities() {
       toast({ title: "Could not load sample order for printing", variant: "destructive" });
     }
   };
+
+  const updateSampleStatus = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      api(`/v1/sample-orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["opp-sample-orders"] });
+      qc.invalidateQueries({ queryKey: ["sample-orders"] });
+      toast({ title: "Status updated" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to update status", description: e.message, variant: "destructive" }),
+  });
+
+  const openReturnDialog = async (id: number) => {
+    try {
+      const d = await api<SampleOrderDetail>(`/v1/sample-orders/${id}`);
+      setReturningOrder(d);
+      setReturnQtys(Object.fromEntries(d.items.map(i => [i.id, i.returnedQty ?? 0])));
+      setReturnDialog(true);
+    } catch {
+      toast({ title: "Could not load sample order", variant: "destructive" });
+    }
+  };
+
+  const submitReturn = useMutation({
+    mutationFn: () => api(`/v1/sample-orders/${returningOrder!.id}/return`, {
+      method: "PATCH",
+      body: JSON.stringify({ items: returningOrder!.items.map(i => ({ itemId: i.id, returnedQty: returnQtys[i.id] ?? 0 })) }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["opp-sample-orders"] });
+      qc.invalidateQueries({ queryKey: ["sample-orders"] });
+      setReturnDialog(false); setReturningOrder(null);
+      toast({ title: "Return recorded — status set to Returned" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to record return", description: e.message, variant: "destructive" }),
+  });
+
+  function oppNextStatuses(status: string) {
+    if (status === "Requested") return ["Dispatched", "Rejected"];
+    if (status === "Dispatched") return ["Received", "Rejected"];
+    return [];
+  }
 
   if (isLoading) return <Skeleton className="h-96 w-full" />;
 
@@ -337,15 +382,34 @@ export function Opportunities() {
                     ) : (
                       <div className="border rounded-lg divide-y">
                         {(sampleOrders ?? []).map(so => (
-                          <div key={so.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-mono text-sm font-medium">{so.sampleNumber}</span>
+                          <div key={so.id} className="px-3 py-2.5 space-y-2">
+                            {/* Row 1: number + badge + date */}
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm font-semibold">{so.sampleNumber}</span>
                               <Badge variant="outline" className={`text-xs ${SAMPLE_STATUS_COLOR[so.status] ?? ""}`}>{so.status}</Badge>
+                              <span className="text-xs text-muted-foreground ml-auto">{format(new Date(so.createdAt), "MMM d")}</span>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <span className="text-xs text-muted-foreground hidden sm:inline">{format(new Date(so.createdAt), "MMM d")}</span>
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => handlePrintSample(so.id)}>
-                                <Printer className="w-3.5 h-3.5 mr-1" />PDF / Print
+                            {/* Row 2: action buttons */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {oppNextStatuses(so.status).map(ns => (
+                                <Button key={ns} size="sm"
+                                  variant={ns === "Rejected" ? "destructive" : "outline"}
+                                  className="h-6 text-xs px-2"
+                                  disabled={updateSampleStatus.isPending}
+                                  onClick={() => updateSampleStatus.mutate({ id: so.id, status: ns })}>
+                                  {ns}
+                                </Button>
+                              ))}
+                              {so.status === "Received" && (
+                                <Button size="sm" variant="outline"
+                                  className="h-6 text-xs px-2 text-orange-600 border-orange-300 hover:bg-orange-50"
+                                  onClick={() => openReturnDialog(so.id)}>
+                                  Return
+                                </Button>
+                              )}
+                              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs ml-auto"
+                                onClick={() => handlePrintSample(so.id)}>
+                                <Printer className="w-3 h-3 mr-1" />Print
                               </Button>
                             </div>
                           </div>
@@ -362,6 +426,41 @@ export function Opportunities() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* ── Return Dialog ── */}
+      <Dialog open={returnDialog} onOpenChange={(o) => { setReturnDialog(o); if (!o) setReturningOrder(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <Package className="w-4 h-4" />Record Return — {returningOrder?.sampleNumber}
+            </DialogTitle>
+          </DialogHeader>
+          {returningOrder && (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">Enter how many units were returned for each product.</p>
+              <div className="divide-y border rounded-lg">
+                {returningOrder.items.map(item => (
+                  <div key={item.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <span className="text-sm font-medium flex-1 min-w-0 truncate">{item.productName}</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">sent: {item.quantity}</span>
+                    <Input
+                      type="number" min={0} max={item.quantity}
+                      className="w-20 h-7 text-sm"
+                      value={returnQtys[item.id] ?? 0}
+                      onChange={e => setReturnQtys(q => ({ ...q, [item.id]: Math.min(item.quantity, Math.max(0, Number(e.target.value))) }))}
+                    />
+                  </div>
+                ))}
+              </div>
+              <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                onClick={() => submitReturn.mutate()}
+                disabled={submitReturn.isPending}>
+                {submitReturn.isPending ? "Recording…" : "Confirm Return"}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ── New Sample Order Dialog ── */}
       <Dialog open={sampleDialog} onOpenChange={(o) => { setSampleDialog(o); if (!o) resetSampleForm(); }}>

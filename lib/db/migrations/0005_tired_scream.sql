@@ -1,0 +1,1 @@
+ALTER TABLE "sample_order_items" ADD COLUMN "returned_qty" integer DEFAULT 0 NOT NULL;
