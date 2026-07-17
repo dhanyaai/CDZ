@@ -40,9 +40,12 @@ const STAGE_HEADER: Record<string, string> = {
   negotiation: "border-t-amber-400", won: "border-t-emerald-400", lost: "border-t-red-400",
 };
 const SOURCE_COLORS: Record<string, string> = {
-  Web: "bg-sky-500/10 text-sky-400", Referral: "bg-emerald-500/10 text-emerald-400",
-  "Cold call": "bg-orange-500/10 text-orange-400", LinkedIn: "bg-blue-500/10 text-blue-400",
-  Event: "bg-violet-500/10 text-violet-400",
+  Inbound: "bg-sky-500/10 text-sky-400", Outbound: "bg-orange-500/10 text-orange-400",
+  Instagram: "bg-pink-500/10 text-pink-400", LinkedIn: "bg-blue-500/10 text-blue-400",
+  WhatsApp: "bg-green-500/10 text-green-400", BNI: "bg-red-500/10 text-red-400",
+  JCI: "bg-cyan-500/10 text-cyan-400", "Lions Club": "bg-amber-500/10 text-amber-400",
+  FTCCI: "bg-indigo-500/10 text-indigo-400", Referral: "bg-emerald-500/10 text-emerald-400",
+  Others: "bg-slate-500/10 text-slate-400",
 };
 
 function initials(name: string | null) {
@@ -364,7 +367,7 @@ export function Leads() {
                 <label className="text-sm font-medium">Source</label>
                 <Select value={form.source} onValueChange={v => setForm({ ...form, source: v })}>
                   <SelectTrigger><SelectValue placeholder="Lead source…" /></SelectTrigger>
-                  <SelectContent position="popper">{["Web", "Referral", "Cold call", "LinkedIn", "Event", "Other"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  <SelectContent position="popper">{["Inbound", "Outbound", "Instagram", "LinkedIn", "WhatsApp", "BNI", "JCI", "Lions Club", "FTCCI", "Referral", "Others"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
