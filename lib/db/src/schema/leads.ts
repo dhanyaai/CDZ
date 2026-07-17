@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, numeric, boolean } from "drizzle-orm/pg-core";
 import { clientsTable } from "./clients";
 import { usersTable } from "./users";
 import { companiesTable } from "./companies";
@@ -15,6 +15,14 @@ export const leadsTable = pgTable("leads", {
   source: text("source"),
   status: text("status").notNull().default("new"),
   estimatedValue: numeric("estimated_value", { precision: 12, scale: 2 }),
+  qty: integer("qty"),
+  budget: numeric("budget", { precision: 12, scale: 2 }),
+  products: text("products"),
+  deliveryTime: text("delivery_time"),
+  deliveryDate: timestamp("delivery_date", { withTimezone: true }),
+  branding: boolean("branding"),
+  percentage: numeric("percentage", { precision: 5, scale: 2 }),
+  totalValue: numeric("total_value", { precision: 12, scale: 2 }),
   ownerId: integer("owner_id").references(() => usersTable.id, { onDelete: "set null" }),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

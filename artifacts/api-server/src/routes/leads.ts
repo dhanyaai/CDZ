@@ -13,6 +13,9 @@ router.get("/v1/leads", async (req, res): Promise<void> => {
       source: leadsTable.source, status: leadsTable.status,
       estimatedValue: leadsTable.estimatedValue, ownerId: leadsTable.ownerId,
       ownerName: usersTable.name, notes: leadsTable.notes,
+      qty: leadsTable.qty, budget: leadsTable.budget, products: leadsTable.products,
+      deliveryTime: leadsTable.deliveryTime, deliveryDate: leadsTable.deliveryDate,
+      branding: leadsTable.branding, percentage: leadsTable.percentage, totalValue: leadsTable.totalValue,
       createdAt: leadsTable.createdAt, updatedAt: leadsTable.updatedAt,
     })
     .from(leadsTable)
@@ -22,30 +25,52 @@ router.get("/v1/leads", async (req, res): Promise<void> => {
     .orderBy(leadsTable.createdAt);
   res.json(rows.map((r) => ({
     ...r, estimatedValue: r.estimatedValue ? Number(r.estimatedValue) : null,
+    budget: r.budget ? Number(r.budget) : null,
+    percentage: r.percentage ? Number(r.percentage) : null,
+    totalValue: r.totalValue ? Number(r.totalValue) : null,
+    deliveryDate: r.deliveryDate?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
   })));
 });
 
+function serializeLead(lead: typeof leadsTable.$inferSelect) {
+  return {
+    ...lead,
+    estimatedValue: lead.estimatedValue ? Number(lead.estimatedValue) : null,
+    budget: lead.budget ? Number(lead.budget) : null,
+    percentage: lead.percentage ? Number(lead.percentage) : null,
+    totalValue: lead.totalValue ? Number(lead.totalValue) : null,
+    deliveryDate: lead.deliveryDate?.toISOString() ?? null,
+    createdAt: lead.createdAt.toISOString(), updatedAt: lead.updatedAt.toISOString(),
+  };
+}
+
 router.post("/v1/leads", async (req, res): Promise<void> => {
-  const { title, clientId, companyName, contactName, email, phone, source, status, estimatedValue, ownerId, notes } = req.body ?? {};
+  const { title, clientId, companyName, contactName, email, phone, source, status, estimatedValue, ownerId, notes,
+    qty, budget, products, deliveryTime, deliveryDate, branding, percentage, totalValue } = req.body ?? {};
   if (!title) { res.status(400).json({ error: "title is required" }); return; }
   const [lead] = await db.insert(leadsTable).values({
     companyId: req.companyId, title, clientId, companyName, contactName, email, phone, source,
     status: status ?? "new", estimatedValue, ownerId, notes,
+    qty, budget, products, deliveryTime,
+    deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+    branding, percentage, totalValue,
   }).returning();
-  res.status(201).json({ ...lead, estimatedValue: lead.estimatedValue ? Number(lead.estimatedValue) : null,
-    createdAt: lead.createdAt.toISOString(), updatedAt: lead.updatedAt.toISOString() });
+  res.status(201).json(serializeLead(lead));
 });
 
 router.patch("/v1/leads/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const fields = ["title", "clientId", "companyName", "contactName", "email", "phone", "source", "status", "estimatedValue", "ownerId", "notes"] as const;
+  const fields = ["title", "clientId", "companyName", "contactName", "email", "phone", "source", "status", "estimatedValue", "ownerId", "notes",
+    "qty", "budget", "products", "deliveryTime", "branding", "percentage", "totalValue"] as const;
   const updates: Record<string, unknown> = {};
   for (const f of fields) if (req.body[f] !== undefined) updates[f] = req.body[f];
+  if (req.body.deliveryDate !== undefined) {
+    updates.deliveryDate = req.body.deliveryDate ? new Date(req.body.deliveryDate) : null;
+  }
   const [lead] = await db.update(leadsTable).set(updates).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId))).returning();
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
-  res.json({ ...lead, estimatedValue: lead.estimatedValue ? Number(lead.estimatedValue) : null,
-    createdAt: lead.createdAt.toISOString(), updatedAt: lead.updatedAt.toISOString() });
+  res.json(serializeLead(lead));
 });
 
 router.delete("/v1/leads/:id", async (req, res): Promise<void> => {

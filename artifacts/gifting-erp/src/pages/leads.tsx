@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { useListClients } from "@workspace/api-client-react";
+import { useListClients, useListProducts } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,13 +13,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, LayoutList, Columns3, UserPlus, FileSpreadsheet } from "lucide-react";
+import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, LayoutList, Columns3, UserPlus, FileSpreadsheet, X } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type Lead = {
   id: number; title: string; clientId: number | null; companyName: string | null;
   contactName: string | null; email: string | null; phone: string | null;
   source: string | null; status: string; estimatedValue: number | null;
+  qty: number | null; budget: number | null; products: string | null;
+  deliveryTime: string | null; deliveryDate: string | null; branding: boolean | null;
+  percentage: number | null; totalValue: number | null;
   ownerId: number | null; ownerName: string | null; notes: string | null;
   createdAt: string;
 };
@@ -53,7 +56,11 @@ function initials(name: string | null) {
   return name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
 }
 
-const BLANK_FORM = { title: "", clientId: "", companyName: "", contactName: "", email: "", phone: "", source: "", ownerId: "", notes: "" };
+const BLANK_FORM = {
+  title: "", clientId: "", companyName: "", contactName: "", email: "", phone: "", source: "",
+  qty: "", budget: "", products: [] as string[], deliveryTime: "", deliveryDate: "", branding: "", percentage: "",
+  ownerId: "", notes: "",
+};
 
 export function Leads() {
   const qc = useQueryClient();
@@ -71,7 +78,12 @@ export function Leads() {
   const [, navigate] = useLocation();
   const { data: leads, isLoading } = useQuery({ queryKey: ["leads"], queryFn: () => api<Lead[]>("/v1/leads") });
   const { data: clients } = useListClients();
+  const { data: productList } = useListProducts();
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/v1/users") });
+
+  const budgetNum = Number(form.budget) || 0;
+  const pctNum = Number(form.percentage) || 0;
+  const computedTotal = budgetNum + (budgetNum * pctNum) / 100;
 
   const create = useMutation({
     mutationFn: () => api<Lead>("/v1/leads", {
@@ -82,6 +94,14 @@ export function Leads() {
         contactName: form.contactName || null,
         email: form.email || null, phone: form.phone || null,
         source: form.source || null,
+        qty: form.qty ? Number(form.qty) : null,
+        budget: form.budget ? Number(form.budget) : null,
+        products: form.products.length ? form.products.join(",") : null,
+        deliveryTime: form.deliveryTime || null,
+        deliveryDate: form.deliveryDate ? new Date(form.deliveryDate).toISOString() : null,
+        branding: form.branding === "yes" ? true : form.branding === "no" ? false : null,
+        percentage: form.percentage ? Number(form.percentage) : null,
+        totalValue: form.budget ? computedTotal : null,
         ownerId: form.ownerId ? Number(form.ownerId) : null,
         notes: form.notes || null,
       }),
@@ -362,6 +382,68 @@ export function Leads() {
                   <SelectContent position="popper">{["Inbound", "Outbound", "Instagram", "LinkedIn", "WhatsApp", "BNI", "JCI", "Lions Club", "FTCCI", "Referral", "Others"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Qty</label>
+                <Input placeholder="0" type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Budget (₹)</label>
+                <Input placeholder="0" type="number" value={form.budget} onChange={e => setForm({ ...form, budget: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Branding</label>
+                <Select value={form.branding || "__none__"} onValueChange={v => setForm({ ...form, branding: v === "__none__" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="Yes / No" /></SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="__none__">— Not set —</SelectItem>
+                    <SelectItem value="yes">Yes</SelectItem>
+                    <SelectItem value="no">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Products</label>
+              <Select value="" onValueChange={p => { if (p && !form.products.includes(p)) setForm({ ...form, products: [...form.products, p] }); }}>
+                <SelectTrigger><SelectValue placeholder="Add product…" /></SelectTrigger>
+                <SelectContent position="popper" className="max-h-60">
+                  {productList?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {form.products.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1.5">
+                  {form.products.map(p => (
+                    <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                      #{p}
+                      <button type="button" className="hover:text-destructive" onClick={() => setForm({ ...form, products: form.products.filter(x => x !== p) })}>
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Delivery Time</label>
+                <Input placeholder="e.g. 10 days" value={form.deliveryTime} onChange={e => setForm({ ...form, deliveryTime: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Delivery Date</label>
+                <Input type="date" value={form.deliveryDate} onChange={e => setForm({ ...form, deliveryDate: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Percentage (%)</label>
+                <Input placeholder="0" type="number" value={form.percentage} onChange={e => setForm({ ...form, percentage: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Total Value (₹)</label>
+                <Input readOnly value={form.budget ? computedTotal.toLocaleString("en-IN") : ""} placeholder="Budget + %" className="bg-muted/50" />
+              </div>
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">Notes</label>
@@ -392,6 +474,27 @@ export function Leads() {
                   {selected.phone && <div className="flex items-center gap-2 text-muted-foreground"><Phone className="w-4 h-4 shrink-0" /><span>{selected.phone}</span></div>}
                   {selected.ownerName && <div className="flex items-center gap-2 text-muted-foreground col-span-2"><UserCircle className="w-4 h-4 shrink-0" /><span>Assigned to <strong>{selected.ownerName}</strong></span></div>}
                 </div>
+                {(selected.qty != null || selected.budget != null || selected.deliveryTime || selected.deliveryDate || selected.branding != null || selected.percentage != null) && (
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-muted/40 rounded-lg p-3">
+                    {selected.qty != null && <div><span className="text-xs text-muted-foreground block">Qty</span>{selected.qty.toLocaleString("en-IN")}</div>}
+                    {selected.budget != null && <div><span className="text-xs text-muted-foreground block">Budget</span>₹{selected.budget.toLocaleString("en-IN")}</div>}
+                    {selected.branding != null && <div><span className="text-xs text-muted-foreground block">Branding</span>{selected.branding ? "Yes" : "No"}</div>}
+                    {selected.percentage != null && <div><span className="text-xs text-muted-foreground block">Percentage</span>{selected.percentage}%</div>}
+                    {selected.deliveryTime && <div><span className="text-xs text-muted-foreground block">Delivery Time</span>{selected.deliveryTime}</div>}
+                    {selected.deliveryDate && <div><span className="text-xs text-muted-foreground block">Delivery Date</span>{new Date(selected.deliveryDate).toLocaleDateString("en-IN")}</div>}
+                  </div>
+                )}
+                {selected.products && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selected.products.split(",").map(p => <span key={p} className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">#{p.trim()}</span>)}
+                  </div>
+                )}
+                {selected.totalValue != null && (
+                  <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+                    <div className="text-xs text-muted-foreground mb-0.5">Total Value (Budget + {selected.percentage ?? 0}%)</div>
+                    <div className="text-2xl font-bold text-primary">₹{selected.totalValue.toLocaleString("en-IN")}</div>
+                  </div>
+                )}
                 {selected.notes && <div className="bg-muted/40 rounded-lg p-3"><div className="text-xs font-medium text-muted-foreground mb-1">Notes</div><p className="text-sm whitespace-pre-wrap">{selected.notes}</p></div>}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Stage</label>
