@@ -91,7 +91,7 @@ export function Leads() {
   const qtyNum = Number(form.qty) || 0;
   const pctNum = Number(form.percentage) || 0;
   const computedTotal = qtyNum * budgetNum;
-  const afterMargin = computedTotal - (computedTotal * pctNum) / 100;
+  const afterMargin = budgetNum - (budgetNum * pctNum) / 100;
 
   const addCustomProduct = () => {
     const name = customProduct.replace(/,/g, " ").trim();
