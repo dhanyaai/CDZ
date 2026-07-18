@@ -88,8 +88,8 @@ export function Leads() {
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/v1/users") });
 
   const budgetNum = Number(form.budget) || 0;
-  const pctNum = Number(form.percentage) || 0;
-  const computedTotal = budgetNum + (budgetNum * pctNum) / 100;
+  const qtyNum = Number(form.qty) || 0;
+  const computedTotal = qtyNum * budgetNum;
 
   const addCustomProduct = () => {
     const name = customProduct.replace(/,/g, " ").trim();
