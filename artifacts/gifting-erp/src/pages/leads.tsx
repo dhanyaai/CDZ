@@ -62,7 +62,7 @@ function initials(name: string | null) {
 
 const BLANK_FORM = {
   title: "", clientId: "", companyName: "", contactName: "", email: "", phone: "", source: "",
-  qty: "", budget: "", products: [] as string[], customProducts: "",
+  qty: "", budget: "", products: [] as string[], customProducts: [] as string[],
   leadDate: "", deliveryTime: "", deliveryDate: "", cityOfDelivery: "",
   branding: "", percentage: "", ownerId: "", notes: "",
 };
@@ -80,6 +80,7 @@ export function Leads() {
   const [followUpForm, setFollowUpForm] = useState({ subject: "", dueDate: "", description: "" });
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
   const [customProduct, setCustomProduct] = useState("");
+  const [customProductInput, setCustomProductInput] = useState("");
 
   const [, navigate] = useLocation();
   const { data: leads, isLoading } = useQuery({ queryKey: ["leads"], queryFn: () => api<Lead[]>("/v1/leads") });
@@ -111,7 +112,7 @@ export function Leads() {
         qty: form.qty ? Number(form.qty) : null,
         budget: form.budget ? Number(form.budget) : null,
         products: form.products.length ? form.products.join(",") : null,
-        customProducts: form.customProducts || null,
+        customProducts: form.customProducts.length ? form.customProducts.join(",") : null,
         leadDate: form.leadDate ? new Date(form.leadDate).toISOString() : null,
         deliveryTime: form.deliveryTime || null,
         deliveryDate: form.deliveryDate ? new Date(form.deliveryDate).toISOString() : null,
@@ -123,7 +124,7 @@ export function Leads() {
         notes: form.notes || null,
       }),
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); setDialog(false); setForm({ ...BLANK_FORM }); setCustomProduct(""); toast({ title: "Lead created" }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); setDialog(false); setForm({ ...BLANK_FORM }); setCustomProduct(""); setCustomProductInput(""); toast({ title: "Lead created" }); },
   });
 
   const update = useMutation({
@@ -469,12 +470,44 @@ export function Leads() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Custom Products</label>
-                <Textarea
-                  placeholder="Describe any custom or non-catalogue products…"
-                  rows={3}
-                  value={form.customProducts}
-                  onChange={e => setForm({ ...form, customProducts: e.target.value })}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Type a custom product & press Enter…"
+                    value={customProductInput}
+                    onChange={e => setCustomProductInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const name = customProductInput.trim();
+                        if (name && !form.customProducts.includes(name))
+                          setForm({ ...form, customProducts: [...form.customProducts, name] });
+                        setCustomProductInput("");
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="outline" size="icon" className="shrink-0"
+                    onClick={() => {
+                      const name = customProductInput.trim();
+                      if (name && !form.customProducts.includes(name))
+                        setForm({ ...form, customProducts: [...form.customProducts, name] });
+                      setCustomProductInput("");
+                    }}
+                    disabled={!customProductInput.trim()}>
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+                {form.customProducts.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {form.customProducts.map(p => (
+                      <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-medium">
+                        #{p}
+                        <button type="button" className="hover:text-destructive" onClick={() => setForm({ ...form, customProducts: form.customProducts.filter(x => x !== p) })}>
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
