@@ -380,7 +380,7 @@ export function Opportunities() {
                         <FlaskConical className="w-4 h-4 text-violet-500" />Sample Orders
                       </label>
                       <Button size="sm" variant="outline" className="h-7 text-xs px-2"
-                        onClick={() => { resetSampleForm(); setSampleDialog(true); }}>
+                        onClick={() => { resetSampleForm(); if (!selected?.clientId) setSampleCustomer(selected?.title ?? ""); setSampleDialog(true); }}>
                         <Plus className="w-3 h-3 mr-1" />New Sample Order
                       </Button>
                     </div>
