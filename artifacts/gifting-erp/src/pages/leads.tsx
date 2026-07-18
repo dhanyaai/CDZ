@@ -398,8 +398,8 @@ export function Leads() {
               </div>
             </div>
 
-            {/* Row 3: Source | QTY | Budget | Total | Margin | After Margin | Branding */}
-            <div className="grid grid-cols-7 gap-3">
+            {/* Row 3: Source | QTY | Budget per piece | Total | Margin | After Margin */}
+            <div className="grid grid-cols-6 gap-3">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Source</label>
                 <Select value={form.source || "__none__"} onValueChange={v => setForm({ ...form, source: v === "__none__" ? "" : v })}>
@@ -427,7 +427,11 @@ export function Leads() {
                 <label className="text-sm font-medium">After Margin (₹)</label>
                 <Input readOnly value={computedTotal ? afterMargin.toLocaleString("en-IN", { maximumFractionDigits: 0 }) : ""} placeholder="Auto" className="bg-muted/50 text-emerald-600 font-medium" />
               </div>
-              <div className="space-y-1">
+            </div>
+
+            {/* Row 3b: Branding */}
+            <div className="flex items-end gap-3">
+              <div className="space-y-1 w-40">
                 <label className="text-sm font-medium">Branding</label>
                 <Select value={form.branding || "__none__"} onValueChange={v => setForm({ ...form, branding: v === "__none__" ? "" : v })}>
                   <SelectTrigger className="text-xs"><SelectValue placeholder="Yes / No" /></SelectTrigger>
