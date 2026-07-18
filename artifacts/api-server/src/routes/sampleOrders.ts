@@ -190,22 +190,36 @@ router.patch("/v1/sample-orders/:id/return", async (req, res): Promise<void> => 
     .from(sampleOrdersTable)
     .where(and(eq(sampleOrdersTable.id, id), eq(sampleOrdersTable.companyId, req.companyId)));
   if (!order) { res.status(404).json({ error: "Sample order not found" }); return; }
-  if (order.status !== "Received") { res.status(400).json({ error: "Only received orders can have returns" }); return; }
+  if (order.status !== "Received" && order.status !== "Returned") {
+    res.status(400).json({ error: "Only received or returned orders can be updated" }); return;
+  }
+
+  const alreadyReturned = order.status === "Returned";
 
   if (Array.isArray(items) && items.length > 0) {
     for (const { itemId, returnedQty, disposition } of items) {
-      if (typeof itemId !== "number" || typeof returnedQty !== "number" || returnedQty < 0) continue;
+      if (typeof itemId !== "number") continue;
       const validDisposition = ["gift", "invoice"].includes(disposition) ? disposition : null;
-      await db.update(sampleOrderItemsTable)
-        .set({ returnedQty, disposition: validDisposition })
-        .where(and(eq(sampleOrderItemsTable.id, itemId), eq(sampleOrderItemsTable.sampleOrderId, id)));
+      if (alreadyReturned) {
+        // Disposition-only update — qty is finalised
+        await db.update(sampleOrderItemsTable)
+          .set({ disposition: validDisposition })
+          .where(and(eq(sampleOrderItemsTable.id, itemId), eq(sampleOrderItemsTable.sampleOrderId, id)));
+      } else {
+        if (typeof returnedQty !== "number" || returnedQty < 0) continue;
+        await db.update(sampleOrderItemsTable)
+          .set({ returnedQty, disposition: validDisposition })
+          .where(and(eq(sampleOrderItemsTable.id, itemId), eq(sampleOrderItemsTable.sampleOrderId, id)));
+      }
     }
   }
 
-  const updates: Record<string, unknown> = { status: "Returned" };
-  if (notes !== undefined) updates.notes = notes;
-  await db.update(sampleOrdersTable).set(updates)
-    .where(and(eq(sampleOrdersTable.id, id), eq(sampleOrdersTable.companyId, req.companyId)));
+  if (!alreadyReturned) {
+    const updates: Record<string, unknown> = { status: "Returned" };
+    if (notes !== undefined) updates.notes = notes;
+    await db.update(sampleOrdersTable).set(updates)
+      .where(and(eq(sampleOrdersTable.id, id), eq(sampleOrdersTable.companyId, req.companyId)));
+  }
 
   const detail = await getDetail(id, req.companyId);
   res.json(detail);

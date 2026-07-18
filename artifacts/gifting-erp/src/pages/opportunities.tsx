@@ -159,7 +159,8 @@ export function Opportunities() {
     try {
       const d = await api<SampleOrderDetail>(`/v1/sample-orders/${id}`);
       setReturningOrder(d);
-      setReturnQtys(Object.fromEntries(d.items.map(i => [i.id, i.quantity])));
+      // For already-Returned orders: lock qty at existing returnedQty; for Received: default to full qty
+      setReturnQtys(Object.fromEntries(d.items.map(i => [i.id, d.status === "Returned" ? i.returnedQty : i.quantity])));
       setDispositions(Object.fromEntries(d.items.map(i => [i.id, i.disposition])));
       setReturnDialog(true);
     } catch {
@@ -181,8 +182,9 @@ export function Opportunities() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["opp-sample-orders"] });
       qc.invalidateQueries({ queryKey: ["sample-orders"] });
+      const wasReturned = returningOrder?.status === "Returned";
       setReturnDialog(false); setReturningOrder(null);
-      toast({ title: "Return recorded — status set to Returned" });
+      toast({ title: wasReturned ? "Disposition saved" : "Return recorded — status set to Returned" });
     },
     onError: (e: Error) => toast({ title: "Failed to record return", description: e.message, variant: "destructive" }),
   });
@@ -449,6 +451,13 @@ export function Opportunities() {
                                   Return
                                 </Button>
                               )}
+                              {so.status === "Returned" && (so.items ?? []).some(i => i.quantity - i.returnedQty > 0 && !i.disposition) && (
+                                <Button size="sm" variant="outline"
+                                  className="h-6 text-xs px-2 text-amber-600 border-amber-300 hover:bg-amber-50"
+                                  onClick={() => openReturnDialog(so.id)}>
+                                  Set Disposition
+                                </Button>
+                              )}
                               <Button size="sm" variant="ghost" className="h-6 px-2 text-xs ml-auto"
                                 onClick={() => handlePrintSample(so.id)}>
                                 <Printer className="w-3 h-3 mr-1" />Print
@@ -474,17 +483,23 @@ export function Opportunities() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-orange-600">
-              <Package className="w-4 h-4" />Record Return — {returningOrder?.sampleNumber}
+              <Package className="w-4 h-4" />{returningOrder?.status === "Returned" ? "Set Disposition" : "Record Return"} — {returningOrder?.sampleNumber}
             </DialogTitle>
           </DialogHeader>
           {returningOrder && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">Set returned qty. For any units kept, choose Gift or Invoice.</p>
-                <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-orange-600 shrink-0"
-                  onClick={() => setReturnQtys(Object.fromEntries(returningOrder.items.map(i => [i.id, i.quantity])))}>
-                  Return All
-                </Button>
+                <p className="text-xs text-muted-foreground">
+                  {returningOrder.status === "Returned"
+                    ? "Assign Gift or Invoice for kept items."
+                    : "Set returned qty. For any units kept, choose Gift or Invoice."}
+                </p>
+                {returningOrder.status !== "Returned" && (
+                  <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-orange-600 shrink-0"
+                    onClick={() => setReturnQtys(Object.fromEntries(returningOrder.items.map(i => [i.id, i.quantity])))}>
+                    Return All
+                  </Button>
+                )}
               </div>
               <div className="divide-y border rounded-lg overflow-hidden">
                 {returningOrder.items.map(item => {
@@ -496,15 +511,21 @@ export function Opportunities() {
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-medium flex-1 min-w-0 truncate">{item.productName}</span>
                         <span className="text-xs text-muted-foreground whitespace-nowrap">sent {item.quantity}</span>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
-                          <span>return</span>
-                          <Input
-                            type="number" min={0} max={item.quantity}
-                            className="w-14 h-7 text-sm text-center px-1"
-                            value={rQty}
-                            onChange={e => setReturnQtys(q => ({ ...q, [item.id]: Math.min(item.quantity, Math.max(0, Number(e.target.value))) }))}
-                          />
-                        </div>
+                        {returningOrder.status === "Returned" ? (
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {rQty > 0 ? `${rQty} returned` : "none returned"}
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
+                            <span>return</span>
+                            <Input
+                              type="number" min={0} max={item.quantity}
+                              className="w-14 h-7 text-sm text-center px-1"
+                              value={rQty}
+                              onChange={e => setReturnQtys(q => ({ ...q, [item.id]: Math.min(item.quantity, Math.max(0, Number(e.target.value))) }))}
+                            />
+                          </div>
+                        )}
                       </div>
                       {keptQty > 0 && (
                         <div className="flex items-center gap-2 pl-1">
@@ -531,7 +552,7 @@ export function Opportunities() {
                 <Button className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
                   onClick={() => submitReturn.mutate()}
                   disabled={submitReturn.isPending}>
-                  {submitReturn.isPending ? "Recording…" : "Confirm Return"}
+                  {submitReturn.isPending ? "Saving…" : returningOrder.status === "Returned" ? "Save Disposition" : "Confirm Return"}
                 </Button>
                 <Button variant="outline" className="shrink-0" title="Print this sample order"
                   onClick={() => printSampleOrder({ ...returningOrder, opportunityTitle: selected?.title ?? null })}>
