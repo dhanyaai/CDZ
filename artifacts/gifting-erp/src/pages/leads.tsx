@@ -89,7 +89,9 @@ export function Leads() {
 
   const budgetNum = Number(form.budget) || 0;
   const qtyNum = Number(form.qty) || 0;
+  const pctNum = Number(form.percentage) || 0;
   const computedTotal = qtyNum * budgetNum;
+  const afterMargin = computedTotal - (computedTotal * pctNum) / 100;
 
   const addCustomProduct = () => {
     const name = customProduct.replace(/,/g, " ").trim();
@@ -396,8 +398,8 @@ export function Leads() {
               </div>
             </div>
 
-            {/* Row 3: Source | QTY | Budget | Total | Margin | Branding */}
-            <div className="grid grid-cols-6 gap-3">
+            {/* Row 3: Source | QTY | Budget | Total | Margin | After Margin | Branding */}
+            <div className="grid grid-cols-7 gap-3">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Source</label>
                 <Select value={form.source || "__none__"} onValueChange={v => setForm({ ...form, source: v === "__none__" ? "" : v })}>
@@ -420,6 +422,10 @@ export function Leads() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Margin (%)</label>
                 <Input placeholder="0" type="number" value={form.percentage} onChange={e => setForm({ ...form, percentage: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">After Margin (₹)</label>
+                <Input readOnly value={computedTotal ? afterMargin.toLocaleString("en-IN", { maximumFractionDigits: 0 }) : ""} placeholder="Auto" className="bg-muted/50 text-emerald-600 font-medium" />
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Branding</label>
