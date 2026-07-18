@@ -99,6 +99,7 @@ export function Opportunities() {
   const [catalogueSelected, setCatalogueSelected] = useState<Set<number>>(new Set());
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [listSearch, setListSearch] = useState("");
   const [listStage, setListStage] = useState("all");
@@ -292,7 +293,7 @@ export function Opportunities() {
                   {items.map(o => {
                     const daysLeft = o.expectedCloseDate ? differenceInDays(new Date(o.expectedCloseDate), new Date()) : null;
                     return (
-                      <div key={o.id} className="p-2.5 border rounded-lg bg-card text-xs space-y-2 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all" onClick={() => setSelected(o)}>
+                      <div key={o.id} className="p-2.5 border rounded-lg bg-card text-xs space-y-2 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all" onClick={() => { setSelected(o); setShareUrl(null); }}>
                         <div className="font-medium leading-tight">{o.title}</div>
                         {o.clientName && <div className="flex items-center gap-1 text-muted-foreground"><Building2 className="w-3 h-3 shrink-0" />{o.clientName}</div>}
                         {o.value != null && <div className="font-semibold text-primary">₹{o.value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>}
@@ -410,7 +411,7 @@ export function Opportunities() {
                       return (
                         <tr key={o.id}
                           className={`cursor-pointer transition-colors hover:bg-muted/40 ${idx % 2 === 0 ? "" : "bg-muted/10"}`}
-                          onClick={() => setSelected(o)}>
+                          onClick={() => { setSelected(o); setShareUrl(null); }}>
                           <td className="px-4 py-3 font-medium max-w-[200px]">
                             <div className="truncate">{o.title}</div>
                           </td>
@@ -676,10 +677,8 @@ export function Opportunities() {
                             const { token } = res as { token: string };
                             const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
                             const url = `${window.location.origin}${base}/catalogue/${token}`;
-                            await navigator.clipboard.writeText(url);
-                            setShareCopied(true);
-                            toast({ title: "Link copied!", description: "Share this link with your customer. It's valid for 30 days." });
-                            setTimeout(() => setShareCopied(false), 3000);
+                            setShareUrl(url);
+                            try { await navigator.clipboard.writeText(url); setShareCopied(true); setTimeout(() => setShareCopied(false), 3000); } catch { /* clipboard unavailable — user will copy from dialog */ }
                           } catch {
                             toast({ title: "Failed to generate link", variant: "destructive" });
                           } finally {
@@ -690,6 +689,26 @@ export function Opportunities() {
                         {shareLoading ? "Generating…" : shareCopied ? "Copied!" : "Share Link"}
                       </Button>
                     </div>
+                    {shareUrl && (
+                      <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3 space-y-2">
+                        <p className="text-xs font-medium text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                          <Link2 className="w-3.5 h-3.5" />Shareable link (valid 30 days)
+                        </p>
+                        <div className="flex gap-2 items-center">
+                          <input readOnly value={shareUrl} className="flex-1 text-xs bg-white dark:bg-background border rounded px-2 py-1.5 font-mono truncate select-all" onFocus={e => e.target.select()} />
+                          <Button size="sm" variant="outline" className="h-7 text-xs px-2 shrink-0"
+                            onClick={async () => {
+                              try { await navigator.clipboard.writeText(shareUrl); setShareCopied(true); setTimeout(() => setShareCopied(false), 2000); } catch {
+                                const el = document.querySelector<HTMLInputElement>('input[value="' + shareUrl + '"]'); el?.select(); document.execCommand("copy"); setShareCopied(true); setTimeout(() => setShareCopied(false), 2000);
+                              }
+                            }}>
+                            {shareCopied ? <Check className="w-3 h-3 text-green-500" /> : <Link2 className="w-3 h-3" />}
+                            {shareCopied ? "Copied!" : "Copy"}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-blue-500 dark:text-blue-400">Tap the link to select it, then copy & share with your customer.</p>
+                      </div>
+                    )}
                   </div>
                 )}
                 {selected.stage === "samples" && (
