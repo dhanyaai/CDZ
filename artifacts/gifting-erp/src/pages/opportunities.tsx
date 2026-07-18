@@ -43,14 +43,37 @@ const SAMPLE_STATUS_COLOR: Record<string, string> = {
   Rejected: "bg-red-500/10 text-red-500 border-red-500/20",
 };
 
-const STAGES = ["enquiry", "sent_catalogue", "samples", "shortlisted", "quotation_sent"];
+const STAGES = [
+  "enquiry", "sent_catalogue", "samples",
+  "negotiation", "shortlisted", "quotation_sent",
+  "final_negotiation", "received_po", "material_supplied",
+  "received_payments", "lost",
+];
 const LABELS: Record<string, string> = {
-  enquiry: "Enquiry", sent_catalogue: "Sent Catalogue", samples: "Samples",
-  shortlisted: "Shortlisted Products", quotation_sent: "Quotation Sent",
+  enquiry: "Enquiry",
+  sent_catalogue: "Sent Catalogue",
+  samples: "Samples",
+  negotiation: "Negotiation",
+  shortlisted: "Shortlisted Products",
+  quotation_sent: "Quotation Sent",
+  final_negotiation: "Final Negotiation",
+  received_po: "Received PO / Advance",
+  material_supplied: "Material Supplied",
+  received_payments: "Received Complete Payments",
+  lost: "Lost",
 };
 const STAGE_HEADER: Record<string, string> = {
-  enquiry: "border-t-slate-400", sent_catalogue: "border-t-blue-400", samples: "border-t-violet-400",
-  shortlisted: "border-t-amber-400", quotation_sent: "border-t-emerald-400",
+  enquiry: "border-t-slate-400",
+  sent_catalogue: "border-t-blue-400",
+  samples: "border-t-violet-400",
+  negotiation: "border-t-orange-400",
+  shortlisted: "border-t-amber-400",
+  quotation_sent: "border-t-emerald-400",
+  final_negotiation: "border-t-cyan-400",
+  received_po: "border-t-indigo-400",
+  material_supplied: "border-t-green-400",
+  received_payments: "border-t-teal-400",
+  lost: "border-t-red-400",
 };
 const PROB_COLOR = (p: number) => { if (p >= 75) return "bg-emerald-500"; if (p >= 50) return "bg-amber-500"; if (p >= 25) return "bg-blue-500"; return "bg-slate-500"; };
 
@@ -304,8 +327,14 @@ export function Opportunities() {
           enquiry: "bg-slate-100 text-slate-700",
           sent_catalogue: "bg-blue-100 text-blue-700",
           samples: "bg-violet-100 text-violet-700",
+          negotiation: "bg-orange-100 text-orange-700",
           shortlisted: "bg-amber-100 text-amber-700",
           quotation_sent: "bg-emerald-100 text-emerald-700",
+          final_negotiation: "bg-cyan-100 text-cyan-700",
+          received_po: "bg-indigo-100 text-indigo-700",
+          material_supplied: "bg-green-100 text-green-700",
+          received_payments: "bg-teal-100 text-teal-700",
+          lost: "bg-red-100 text-red-700",
         };
         const filtered = (opps ?? [])
           .filter(o => {
