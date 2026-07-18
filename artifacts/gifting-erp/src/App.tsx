@@ -49,6 +49,7 @@ import { PdfExtractor } from "@/pages/pdf-extractor";
 import { OrderProcessingList } from "@/pages/order-processing-list";
 import { OrderProcessing } from "@/pages/order-processing";
 import { Services } from "@/pages/services";
+import { CatalogueViewer } from "@/pages/catalogue-viewer";
 
 initAuth();
 initTheme();
@@ -74,12 +75,18 @@ function OrderProcessingWrapper() {
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
+  const isPublic = location === "/login" || location.startsWith("/catalogue/");
   useEffect(() => {
-    if (!getToken() && location !== "/login") navigate("/login");
-  }, [location, navigate]);
-  if (location === "/login") return <>{children}</>;
+    if (!getToken() && !isPublic) navigate("/login");
+  }, [location, navigate, isPublic]);
+  if (isPublic) return <>{children}</>;
   if (!getToken()) return null;
   return <AppLayout>{children}</AppLayout>;
+}
+
+function CatalogueViewerWrapper() {
+  const [, params] = useRoute("/catalogue/:token");
+  return <CatalogueViewer token={params?.token ?? ""} />;
 }
 
 function Router() {
@@ -87,6 +94,7 @@ function Router() {
     <AuthGate>
       <Switch>
         <Route path="/login" component={Login} />
+        <Route path="/catalogue/:token" component={CatalogueViewerWrapper} />
         <Route path="/" component={() => <Redirect to="/dashboard" />} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/clients" component={Clients} />

@@ -32,6 +32,7 @@ import creditNotesRouter from "./creditNotes";
 import auditLogsRouter from "./auditLogs";
 import reportsRouter from "./reports";
 import servicesRouter from "./services";
+import catalogueSharesRouter from "./catalogueShares";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(creditNotesRouter);
 router.use(auditLogsRouter);
 router.use(reportsRouter);
 router.use(servicesRouter);
+router.use(catalogueSharesRouter);
 
 export default router;

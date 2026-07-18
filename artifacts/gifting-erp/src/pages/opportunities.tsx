@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3 } from "lucide-react";
+import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
 import { printSampleOrder, printReturnNote, printCatalogue } from "@/lib/print-utils";
 
@@ -74,6 +74,8 @@ export function Opportunities() {
   const [catalogueCustomType, setCatalogueCustomType] = useState("");
   const [catalogueSearch, setCatalogueSearch] = useState("");
   const [catalogueSelected, setCatalogueSelected] = useState<Set<number>>(new Set());
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [listSearch, setListSearch] = useState("");
   const [listStage, setListStage] = useState("all");
@@ -615,18 +617,50 @@ export function Opportunities() {
                         <p className="text-xs text-blue-600 font-medium">{catalogueSelected.size} product{catalogueSelected.size !== 1 ? "s" : ""} selected</p>
                       )}
                     </div>
-                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-8 text-sm"
-                      disabled={catalogueSelected.size === 0 || (catalogueType === "Custom" && !catalogueCustomType.trim())}
-                      onClick={() => {
-                        const selectedProducts = (products ?? []).filter(p => catalogueSelected.has(p.id));
-                        printCatalogue({
-                          title: catalogueType === "Custom" ? catalogueCustomType.trim() : catalogueType,
-                          clientName: selected.clientName ?? selected.title,
-                          products: selectedProducts,
-                        });
-                      }}>
-                      <Printer className="w-3.5 h-3.5 mr-1.5" />Generate Catalogue PDF ({catalogueSelected.size})
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-8 text-sm"
+                        disabled={catalogueSelected.size === 0 || (catalogueType === "Custom" && !catalogueCustomType.trim())}
+                        onClick={() => {
+                          const selectedProducts = (products ?? []).filter(p => catalogueSelected.has(p.id));
+                          printCatalogue({
+                            title: catalogueType === "Custom" ? catalogueCustomType.trim() : catalogueType,
+                            clientName: selected.clientName ?? selected.title,
+                            products: selectedProducts,
+                          });
+                        }}>
+                        <Printer className="w-3.5 h-3.5 mr-1.5" />PDF ({catalogueSelected.size})
+                      </Button>
+                      <Button className="flex-1 h-8 text-sm" variant="outline"
+                        disabled={catalogueSelected.size === 0 || (catalogueType === "Custom" && !catalogueCustomType.trim()) || shareLoading}
+                        onClick={async () => {
+                          setShareLoading(true);
+                          try {
+                            const res = await api("/v1/catalogue-shares", {
+                              method: "POST",
+                              body: JSON.stringify({
+                                opportunityTitle: selected.title,
+                                clientName: selected.clientName ?? selected.title,
+                                catalogueType: catalogueType === "Custom" ? catalogueCustomType.trim() : catalogueType,
+                                productIds: Array.from(catalogueSelected),
+                              }),
+                            });
+                            const { token } = res as { token: string };
+                            const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+                            const url = `${window.location.origin}${base}/catalogue/${token}`;
+                            await navigator.clipboard.writeText(url);
+                            setShareCopied(true);
+                            toast({ title: "Link copied!", description: "Share this link with your customer. It's valid for 30 days." });
+                            setTimeout(() => setShareCopied(false), 3000);
+                          } catch {
+                            toast({ title: "Failed to generate link", variant: "destructive" });
+                          } finally {
+                            setShareLoading(false);
+                          }
+                        }}>
+                        {shareCopied ? <Check className="w-3.5 h-3.5 mr-1.5 text-green-500" /> : <Link2 className="w-3.5 h-3.5 mr-1.5" />}
+                        {shareLoading ? "Generating…" : shareCopied ? "Copied!" : "Share Link"}
+                      </Button>
+                    </div>
                   </div>
                 )}
                 {selected.stage === "samples" && (

@@ -35,3 +35,4 @@ export * from "./vendorProducts";
 export * from "./permissions";
 export * from "./services";
 export * from "./sessions";
+export * from "./catalogueShares";

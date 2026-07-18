@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { getSession } from "./sessions";
 
-const PUBLIC_PREFIXES = ["/v1/auth/login", "/healthz"];
+const PUBLIC_PREFIXES = ["/v1/auth/login", "/healthz", "/v1/public"];
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (PUBLIC_PREFIXES.some((p) => req.path === p || req.path.startsWith(p + "/"))) {
