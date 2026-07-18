@@ -27,6 +27,7 @@ export const sampleOrderItemsTable = pgTable("sample_order_items", {
   productId: integer("product_id").notNull().references(() => productsTable.id, { onDelete: "restrict" }),
   quantity: integer("quantity").notNull().default(1),
   returnedQty: integer("returned_qty").notNull().default(0),
+  disposition: text("disposition"),
   notes: text("notes"),
 });
 

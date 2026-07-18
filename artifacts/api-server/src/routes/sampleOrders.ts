@@ -38,6 +38,7 @@ async function getDetail(id: number, companyId: number) {
       productName: r.product?.name ?? "Unknown",
       quantity: r.item.quantity,
       returnedQty: r.item.returnedQty ?? 0,
+      disposition: (r.item.disposition ?? null) as "gift" | "invoice" | null,
       notes: r.item.notes ?? null,
     })),
   };
@@ -167,10 +168,11 @@ router.patch("/v1/sample-orders/:id/return", async (req, res): Promise<void> => 
   if (order.status !== "Received") { res.status(400).json({ error: "Only received orders can have returns" }); return; }
 
   if (Array.isArray(items) && items.length > 0) {
-    for (const { itemId, returnedQty } of items) {
+    for (const { itemId, returnedQty, disposition } of items) {
       if (typeof itemId !== "number" || typeof returnedQty !== "number" || returnedQty < 0) continue;
+      const validDisposition = ["gift", "invoice"].includes(disposition) ? disposition : null;
       await db.update(sampleOrderItemsTable)
-        .set({ returnedQty })
+        .set({ returnedQty, disposition: validDisposition })
         .where(and(eq(sampleOrderItemsTable.id, itemId), eq(sampleOrderItemsTable.sampleOrderId, id)));
     }
   }

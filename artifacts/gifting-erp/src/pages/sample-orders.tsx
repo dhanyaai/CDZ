@@ -28,7 +28,7 @@ interface SampleOrderSummary {
 }
 interface SampleOrderDetail extends SampleOrderSummary {
   customerPhone: string | null; customerEmail: string | null;
-  items: { id: number; productId: number; productName: string; quantity: number; returnedQty: number; notes: string | null }[];
+  items: { id: number; productId: number; productName: string; quantity: number; returnedQty: number; disposition: "gift" | "invoice" | null; notes: string | null }[];
 }
 interface Client { id: number; companyName: string }
 interface Product { id: number; name: string; stockLevel: number }
@@ -143,17 +143,25 @@ export function SampleOrders() {
 
   const [returnOpen, setReturnOpen] = useState(false);
   const [returnQtys, setReturnQtys] = useState<Record<number, number>>({});
+  const [dispositions, setDispositions] = useState<Record<number, "gift" | "invoice" | null>>({});
 
   const openReturn = () => {
     if (!detail) return;
     setReturnQtys(Object.fromEntries(detail.items.map(i => [i.id, i.quantity])));
+    setDispositions(Object.fromEntries(detail.items.map(i => [i.id, i.disposition])));
     setReturnOpen(true);
   };
 
   const returnMutation = useMutation({
     mutationFn: () => api(`/v1/sample-orders/${detail!.id}/return`, {
       method: "PATCH",
-      body: JSON.stringify({ items: detail!.items.map(i => ({ itemId: i.id, returnedQty: returnQtys[i.id] ?? 0 })) }),
+      body: JSON.stringify({
+        items: detail!.items.map(i => ({
+          itemId: i.id,
+          returnedQty: returnQtys[i.id] ?? 0,
+          disposition: (returnQtys[i.id] ?? 0) < i.quantity ? (dispositions[i.id] ?? null) : null,
+        })),
+      }),
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sample-orders"] });
@@ -503,20 +511,34 @@ export function SampleOrders() {
                 <div>
                   <p className="text-sm font-medium mb-2">Products</p>
                   <div className="divide-y border rounded-md">
-                    {detail.items.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                        <div>
-                          <span className="font-medium">{item.productName}</span>
-                          {item.notes && <span className="text-xs text-muted-foreground ml-2">· {item.notes}</span>}
-                        </div>
-                        <div className="flex items-center gap-2">
+                    {detail.items.map((item) => {
+                      const keptQty = item.quantity - item.returnedQty;
+                      return (
+                        <div key={item.id} className="px-3 py-2 text-sm space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-medium">{item.productName}</span>
+                              {item.notes && <span className="text-xs text-muted-foreground ml-2">· {item.notes}</span>}
+                            </div>
+                            <span className="font-semibold tabular-nums">×{item.quantity}</span>
+                          </div>
                           {item.returnedQty > 0 && (
-                            <span className="text-xs text-orange-600 font-medium">↩ {item.returnedQty} returned</span>
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-orange-600 font-medium">↩ {item.returnedQty} returned</span>
+                              {keptQty > 0 && item.disposition === "gift" && (
+                                <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">🎁 {keptQty} gifted</span>
+                              )}
+                              {keptQty > 0 && item.disposition === "invoice" && (
+                                <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">🧾 {keptQty} to invoice</span>
+                              )}
+                              {keptQty > 0 && !item.disposition && (
+                                <span className="text-muted-foreground">{keptQty} kept — disposition pending</span>
+                              )}
+                            </div>
                           )}
-                          <span className="font-semibold tabular-nums">×{item.quantity}</span>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -555,7 +577,7 @@ export function SampleOrders() {
 
       {/* ── Return Dialog (sibling, NOT nested inside Detail) ── */}
       <Dialog open={returnOpen} onOpenChange={(o) => { setReturnOpen(o); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-orange-600">
               <Package className="w-4 h-4" />Record Return — {detail?.sampleNumber}
@@ -564,25 +586,52 @@ export function SampleOrders() {
           {detail && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">Adjust qty returned per product (pre-filled = full return).</p>
+                <p className="text-xs text-muted-foreground">Set returned qty. For any units kept, choose Gift or Invoice.</p>
                 <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-orange-600"
                   onClick={() => setReturnQtys(Object.fromEntries(detail.items.map(i => [i.id, i.quantity])))}>
                   Return All
                 </Button>
               </div>
-              <div className="divide-y border rounded-lg">
-                {detail.items.map(item => (
-                  <div key={item.id} className="flex items-center gap-3 px-3 py-2.5">
-                    <span className="text-sm font-medium flex-1 min-w-0 truncate">{item.productName}</span>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">sent {item.quantity}</span>
-                    <Input
-                      type="number" min={0} max={item.quantity}
-                      className="w-16 h-7 text-sm text-center"
-                      value={returnQtys[item.id] ?? item.quantity}
-                      onChange={e => setReturnQtys(q => ({ ...q, [item.id]: Math.min(item.quantity, Math.max(0, Number(e.target.value))) }))}
-                    />
-                  </div>
-                ))}
+              <div className="divide-y border rounded-lg overflow-hidden">
+                {detail.items.map(item => {
+                  const rQty = returnQtys[item.id] ?? item.quantity;
+                  const keptQty = item.quantity - rQty;
+                  const disp = dispositions[item.id] ?? null;
+                  return (
+                    <div key={item.id} className="px-3 py-2.5 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium flex-1 min-w-0 truncate">{item.productName}</span>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">sent {item.quantity}</span>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
+                          <span>return</span>
+                          <Input
+                            type="number" min={0} max={item.quantity}
+                            className="w-14 h-7 text-sm text-center px-1"
+                            value={rQty}
+                            onChange={e => setReturnQtys(q => ({ ...q, [item.id]: Math.min(item.quantity, Math.max(0, Number(e.target.value))) }))}
+                          />
+                        </div>
+                      </div>
+                      {keptQty > 0 && (
+                        <div className="flex items-center gap-2 pl-1">
+                          <span className="text-xs text-muted-foreground">Kept {keptQty} →</span>
+                          <button
+                            type="button"
+                            onClick={() => setDispositions(d => ({ ...d, [item.id]: "gift" }))}
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${disp === "gift" ? "bg-emerald-500 text-white border-emerald-500" : "border-muted-foreground/30 text-muted-foreground hover:border-emerald-400 hover:text-emerald-600"}`}>
+                            🎁 Gift
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDispositions(d => ({ ...d, [item.id]: "invoice" }))}
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${disp === "invoice" ? "bg-blue-500 text-white border-blue-500" : "border-muted-foreground/30 text-muted-foreground hover:border-blue-400 hover:text-blue-600"}`}>
+                            🧾 Invoice
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-2">
                 <Button className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"

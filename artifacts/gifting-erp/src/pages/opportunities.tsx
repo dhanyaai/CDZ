@@ -30,7 +30,7 @@ type SampleOrderSummary = { id: number; sampleNumber: string; status: string; no
 type SampleOrderDetail = SampleOrderSummary & {
   clientName: string | null; customerName: string | null;
   customerPhone: string | null; customerEmail: string | null;
-  items: { id: number; productId: number; productName: string; quantity: number; returnedQty: number; notes: string | null }[];
+  items: { id: number; productId: number; productName: string; quantity: number; returnedQty: number; disposition: "gift" | "invoice" | null; notes: string | null }[];
 };
 type SampleLine = { productId: string; quantity: string };
 
@@ -68,6 +68,7 @@ export function Opportunities() {
   const [returnDialog, setReturnDialog] = useState(false);
   const [returningOrder, setReturningOrder] = useState<SampleOrderDetail | null>(null);
   const [returnQtys, setReturnQtys] = useState<Record<number, number>>({});
+  const [dispositions, setDispositions] = useState<Record<number, "gift" | "invoice" | null>>({});
 
   const { data: opps, isLoading } = useQuery({ queryKey: ["opportunities"], queryFn: () => api<Opportunity[]>("/v1/opportunities") });
   const { data: clients } = useListClients();
@@ -158,6 +159,7 @@ export function Opportunities() {
       const d = await api<SampleOrderDetail>(`/v1/sample-orders/${id}`);
       setReturningOrder(d);
       setReturnQtys(Object.fromEntries(d.items.map(i => [i.id, i.quantity])));
+      setDispositions(Object.fromEntries(d.items.map(i => [i.id, i.disposition])));
       setReturnDialog(true);
     } catch {
       toast({ title: "Could not load sample order", variant: "destructive" });
@@ -167,7 +169,13 @@ export function Opportunities() {
   const submitReturn = useMutation({
     mutationFn: () => api(`/v1/sample-orders/${returningOrder!.id}/return`, {
       method: "PATCH",
-      body: JSON.stringify({ items: returningOrder!.items.map(i => ({ itemId: i.id, returnedQty: returnQtys[i.id] ?? 0 })) }),
+      body: JSON.stringify({
+        items: returningOrder!.items.map(i => ({
+          itemId: i.id,
+          returnedQty: returnQtys[i.id] ?? 0,
+          disposition: (returnQtys[i.id] ?? 0) < i.quantity ? (dispositions[i.id] ?? null) : null,
+        })),
+      }),
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["opp-sample-orders"] });
@@ -438,25 +446,52 @@ export function Opportunities() {
           {returningOrder && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">Adjust qty returned per product (pre-filled = full return).</p>
+                <p className="text-xs text-muted-foreground">Set returned qty. For any units kept, choose Gift or Invoice.</p>
                 <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-orange-600 shrink-0"
                   onClick={() => setReturnQtys(Object.fromEntries(returningOrder.items.map(i => [i.id, i.quantity])))}>
                   Return All
                 </Button>
               </div>
-              <div className="divide-y border rounded-lg">
-                {returningOrder.items.map(item => (
-                  <div key={item.id} className="flex items-center gap-3 px-3 py-2.5">
-                    <span className="text-sm font-medium flex-1 min-w-0 truncate">{item.productName}</span>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">sent {item.quantity}</span>
-                    <Input
-                      type="number" min={0} max={item.quantity}
-                      className="w-16 h-7 text-sm text-center"
-                      value={returnQtys[item.id] ?? item.quantity}
-                      onChange={e => setReturnQtys(q => ({ ...q, [item.id]: Math.min(item.quantity, Math.max(0, Number(e.target.value))) }))}
-                    />
-                  </div>
-                ))}
+              <div className="divide-y border rounded-lg overflow-hidden">
+                {returningOrder.items.map(item => {
+                  const rQty = returnQtys[item.id] ?? item.quantity;
+                  const keptQty = item.quantity - rQty;
+                  const disp = dispositions[item.id] ?? null;
+                  return (
+                    <div key={item.id} className="px-3 py-2.5 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium flex-1 min-w-0 truncate">{item.productName}</span>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">sent {item.quantity}</span>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
+                          <span>return</span>
+                          <Input
+                            type="number" min={0} max={item.quantity}
+                            className="w-14 h-7 text-sm text-center px-1"
+                            value={rQty}
+                            onChange={e => setReturnQtys(q => ({ ...q, [item.id]: Math.min(item.quantity, Math.max(0, Number(e.target.value))) }))}
+                          />
+                        </div>
+                      </div>
+                      {keptQty > 0 && (
+                        <div className="flex items-center gap-2 pl-1">
+                          <span className="text-xs text-muted-foreground">Kept {keptQty} →</span>
+                          <button
+                            type="button"
+                            onClick={() => setDispositions(d => ({ ...d, [item.id]: "gift" }))}
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${disp === "gift" ? "bg-emerald-500 text-white border-emerald-500" : "border-muted-foreground/30 text-muted-foreground hover:border-emerald-400 hover:text-emerald-600"}`}>
+                            🎁 Gift
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDispositions(d => ({ ...d, [item.id]: "invoice" }))}
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${disp === "invoice" ? "bg-blue-500 text-white border-blue-500" : "border-muted-foreground/30 text-muted-foreground hover:border-blue-400 hover:text-blue-600"}`}>
+                            🧾 Invoice
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-2">
                 <Button className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
