@@ -193,7 +193,7 @@ export function Leads() {
           <h1 className="text-3xl font-bold">Leads Pipeline</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Track and convert your incoming leads</p>
         </div>
-        <Button onClick={() => setDialog(true)} data-testid="button-new-lead">
+        <Button onClick={() => { setDialog(true); setForm(f => ({ ...f, leadDate: new Date().toISOString().split("T")[0] })); }} data-testid="button-new-lead">
           <Plus className="w-4 h-4 mr-2" />New Lead
         </Button>
       </div>
@@ -365,7 +365,7 @@ export function Leads() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Lead Date</label>
-                <Input type="date" value={form.leadDate} onChange={e => setForm({ ...form, leadDate: e.target.value })} />
+                <Input type="date" value={form.leadDate} readOnly className="bg-muted/50 cursor-not-allowed" />
               </div>
             </div>
 
