@@ -14,8 +14,11 @@ router.get("/v1/leads", async (req, res): Promise<void> => {
       estimatedValue: leadsTable.estimatedValue, ownerId: leadsTable.ownerId,
       ownerName: usersTable.name, notes: leadsTable.notes,
       qty: leadsTable.qty, budget: leadsTable.budget, products: leadsTable.products,
+      leadDate: leadsTable.leadDate,
       deliveryTime: leadsTable.deliveryTime, deliveryDate: leadsTable.deliveryDate,
+      cityOfDelivery: leadsTable.cityOfDelivery,
       branding: leadsTable.branding, percentage: leadsTable.percentage, totalValue: leadsTable.totalValue,
+      customProducts: leadsTable.customProducts,
       createdAt: leadsTable.createdAt, updatedAt: leadsTable.updatedAt,
     })
     .from(leadsTable)
@@ -28,6 +31,7 @@ router.get("/v1/leads", async (req, res): Promise<void> => {
     budget: r.budget ? Number(r.budget) : null,
     percentage: r.percentage ? Number(r.percentage) : null,
     totalValue: r.totalValue ? Number(r.totalValue) : null,
+    leadDate: r.leadDate?.toISOString() ?? null,
     deliveryDate: r.deliveryDate?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
   })));
@@ -40,6 +44,7 @@ function serializeLead(lead: typeof leadsTable.$inferSelect) {
     budget: lead.budget ? Number(lead.budget) : null,
     percentage: lead.percentage ? Number(lead.percentage) : null,
     totalValue: lead.totalValue ? Number(lead.totalValue) : null,
+    leadDate: lead.leadDate?.toISOString() ?? null,
     deliveryDate: lead.deliveryDate?.toISOString() ?? null,
     createdAt: lead.createdAt.toISOString(), updatedAt: lead.updatedAt.toISOString(),
   };
@@ -47,13 +52,16 @@ function serializeLead(lead: typeof leadsTable.$inferSelect) {
 
 router.post("/v1/leads", async (req, res): Promise<void> => {
   const { title, clientId, companyName, contactName, email, phone, source, status, estimatedValue, ownerId, notes,
-    qty, budget, products, deliveryTime, deliveryDate, branding, percentage, totalValue } = req.body ?? {};
+    qty, budget, products, customProducts, leadDate, deliveryTime, deliveryDate, cityOfDelivery, branding, percentage, totalValue } = req.body ?? {};
   if (!title) { res.status(400).json({ error: "title is required" }); return; }
   const [lead] = await db.insert(leadsTable).values({
     companyId: req.companyId, title, clientId, companyName, contactName, email, phone, source,
     status: status ?? "new", estimatedValue, ownerId, notes,
-    qty, budget, products, deliveryTime,
+    qty, budget, products, customProducts,
+    leadDate: leadDate ? new Date(leadDate) : null,
+    deliveryTime,
     deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+    cityOfDelivery,
     branding, percentage, totalValue,
   }).returning();
   res.status(201).json(serializeLead(lead));
@@ -62,9 +70,12 @@ router.post("/v1/leads", async (req, res): Promise<void> => {
 router.patch("/v1/leads/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const fields = ["title", "clientId", "companyName", "contactName", "email", "phone", "source", "status", "estimatedValue", "ownerId", "notes",
-    "qty", "budget", "products", "deliveryTime", "branding", "percentage", "totalValue"] as const;
+    "qty", "budget", "products", "customProducts", "deliveryTime", "cityOfDelivery", "branding", "percentage", "totalValue"] as const;
   const updates: Record<string, unknown> = {};
   for (const f of fields) if (req.body[f] !== undefined) updates[f] = req.body[f];
+  if (req.body.leadDate !== undefined) {
+    updates.leadDate = req.body.leadDate ? new Date(req.body.leadDate) : null;
+  }
   if (req.body.deliveryDate !== undefined) {
     updates.deliveryDate = req.body.deliveryDate ? new Date(req.body.deliveryDate) : null;
   }

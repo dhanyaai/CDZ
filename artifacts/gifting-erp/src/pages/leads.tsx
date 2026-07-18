@@ -21,7 +21,11 @@ type Lead = {
   contactName: string | null; email: string | null; phone: string | null;
   source: string | null; status: string; estimatedValue: number | null;
   qty: number | null; budget: number | null; products: string | null;
-  deliveryTime: string | null; deliveryDate: string | null; branding: boolean | null;
+  customProducts: string | null;
+  leadDate: string | null;
+  deliveryTime: string | null; deliveryDate: string | null;
+  cityOfDelivery: string | null;
+  branding: boolean | null;
   percentage: number | null; totalValue: number | null;
   ownerId: number | null; ownerName: string | null; notes: string | null;
   createdAt: string;
@@ -58,8 +62,9 @@ function initials(name: string | null) {
 
 const BLANK_FORM = {
   title: "", clientId: "", companyName: "", contactName: "", email: "", phone: "", source: "",
-  qty: "", budget: "", products: [] as string[], deliveryTime: "", deliveryDate: "", branding: "", percentage: "",
-  ownerId: "", notes: "",
+  qty: "", budget: "", products: [] as string[], customProducts: "",
+  leadDate: "", deliveryTime: "", deliveryDate: "", cityOfDelivery: "",
+  branding: "", percentage: "", ownerId: "", notes: "",
 };
 
 export function Leads() {
@@ -104,8 +109,11 @@ export function Leads() {
         qty: form.qty ? Number(form.qty) : null,
         budget: form.budget ? Number(form.budget) : null,
         products: form.products.length ? form.products.join(",") : null,
+        customProducts: form.customProducts || null,
+        leadDate: form.leadDate ? new Date(form.leadDate).toISOString() : null,
         deliveryTime: form.deliveryTime || null,
         deliveryDate: form.deliveryDate ? new Date(form.deliveryDate).toISOString() : null,
+        cityOfDelivery: form.cityOfDelivery || null,
         branding: form.branding === "yes" ? true : form.branding === "no" ? false : null,
         percentage: form.percentage ? Number(form.percentage) : null,
         totalValue: form.budget ? computedTotal : null,
@@ -332,35 +340,15 @@ export function Leads() {
 
       {/* New lead dialog */}
       <Dialog open={dialog} onOpenChange={setDialog}>
-        <DialogContent className="sm:max-w-4xl w-[95vw] max-h-[92vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-5xl w-[97vw] max-h-[92vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Lead</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Lead Title *</label>
-              <Input placeholder="e.g. Diwali Gifting - Infosys 2025" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
-            </div>
-            <div className="grid md:grid-cols-2 gap-x-6 gap-y-3 items-start">
-            <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-4">
+
+            {/* Row 1: Lead Title | Assigned To | Lead Date */}
+            <div className="grid grid-cols-[2fr_1.5fr_1fr] gap-3">
               <div className="space-y-1">
-                <label className="text-sm font-medium">Link to Existing Client</label>
-                <Select value={form.clientId || "__none__"} onValueChange={v => setForm({ ...form, clientId: v === "__none__" ? "" : v, companyName: v !== "__none__" ? (clients?.find(c => String(c.id) === v)?.companyName ?? form.companyName) : form.companyName })}>
-                  <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
-                  <SelectContent position="popper" className="max-h-60">
-                    <SelectItem value="__none__">— None / New prospect —</SelectItem>
-                    {clients?.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.companyName}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Company Name</label>
-                <Input placeholder="If not in client list" value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">POC Contact</label>
-                <Input placeholder="Point of contact" value={form.contactName} onChange={e => setForm({ ...form, contactName: e.target.value })} />
+                <label className="text-sm font-medium">Lead Title *</label>
+                <Input placeholder="e.g. Diwali Gifting - Infosys 2025" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Assigned To</label>
@@ -372,41 +360,71 @@ export function Leads() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="text-sm font-medium">POC Email</label>
-                <Input placeholder="POC email" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">POC Phone</label>
-                <Input placeholder="POC phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+                <label className="text-sm font-medium">Lead Date</label>
+                <Input type="date" value={form.leadDate} onChange={e => setForm({ ...form, leadDate: e.target.value })} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+
+            {/* Row 2: Link to Client | Company Name | POC Name | POC Phone | POC Email */}
+            <div className="grid grid-cols-5 gap-3">
               <div className="space-y-1">
-                <label className="text-sm font-medium">Source</label>
-                <Select value={form.source} onValueChange={v => setForm({ ...form, source: v })}>
-                  <SelectTrigger><SelectValue placeholder="Lead source…" /></SelectTrigger>
-                  <SelectContent position="popper">{["Inbound", "Outbound", "Instagram", "LinkedIn", "WhatsApp", "BNI", "JCI", "Lions Club", "FTCCI", "Referral", "Others"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                <label className="text-sm font-medium">Link to Existing Client</label>
+                <Select value={form.clientId || "__none__"} onValueChange={v => setForm({ ...form, clientId: v === "__none__" ? "" : v, companyName: v !== "__none__" ? (clients?.find(c => String(c.id) === v)?.companyName ?? form.companyName) : form.companyName })}>
+                  <SelectTrigger className="text-xs"><SelectValue placeholder="Select client…" /></SelectTrigger>
+                  <SelectContent position="popper" className="max-h-60">
+                    <SelectItem value="__none__">— None / New prospect —</SelectItem>
+                    {clients?.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.companyName}</SelectItem>)}
+                  </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">Qty</label>
-                <Input placeholder="0" type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} />
+                <label className="text-sm font-medium">Company Name</label>
+                <Input placeholder="If not in list" value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">POC Name</label>
+                <Input placeholder="Contact name" value={form.contactName} onChange={e => setForm({ ...form, contactName: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">POC Phone</label>
+                <Input placeholder="Phone number" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">POC Email</label>
+                <Input placeholder="Email address" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
               </div>
             </div>
-            </div>
-            <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
+
+            {/* Row 3: Source | QTY | Budget | Total | Margin | Branding */}
+            <div className="grid grid-cols-6 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Source</label>
+                <Select value={form.source || "__none__"} onValueChange={v => setForm({ ...form, source: v === "__none__" ? "" : v })}>
+                  <SelectTrigger className="text-xs"><SelectValue placeholder="Source…" /></SelectTrigger>
+                  <SelectContent position="popper">{["__none__", "Inbound", "Outbound", "Instagram", "LinkedIn", "WhatsApp", "BNI", "JCI", "Lions Club", "FTCCI", "Referral", "Others"].map(s => <SelectItem key={s} value={s}>{s === "__none__" ? "— None —" : s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">QTY</label>
+                <Input placeholder="0" type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} />
+              </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Budget (₹)</label>
                 <Input placeholder="0" type="number" value={form.budget} onChange={e => setForm({ ...form, budget: e.target.value })} />
               </div>
               <div className="space-y-1">
+                <label className="text-sm font-medium">Total (₹)</label>
+                <Input readOnly value={form.budget ? computedTotal.toLocaleString("en-IN") : ""} placeholder="Auto" className="bg-muted/50 text-primary font-medium" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Margin (%)</label>
+                <Input placeholder="0" type="number" value={form.percentage} onChange={e => setForm({ ...form, percentage: e.target.value })} />
+              </div>
+              <div className="space-y-1">
                 <label className="text-sm font-medium">Branding</label>
                 <Select value={form.branding || "__none__"} onValueChange={v => setForm({ ...form, branding: v === "__none__" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="Yes / No" /></SelectTrigger>
+                  <SelectTrigger className="text-xs"><SelectValue placeholder="Yes / No" /></SelectTrigger>
                   <SelectContent position="popper">
                     <SelectItem value="__none__">— Not set —</SelectItem>
                     <SelectItem value="yes">Yes</SelectItem>
@@ -415,60 +433,57 @@ export function Leads() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Products</label>
-              <Select value="" onValueChange={p => { if (p && !form.products.includes(p)) setForm({ ...form, products: [...form.products, p] }); }}>
-                <SelectTrigger><SelectValue placeholder="Add product…" /></SelectTrigger>
-                <SelectContent position="popper" className="max-h-60">
-                  {productList?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <div className="flex gap-2 pt-1">
-                <Input
-                  placeholder="Or type a custom product & press Enter…"
-                  value={customProduct}
-                  onChange={e => setCustomProduct(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustomProduct(); } }}
-                />
-                <Button type="button" variant="outline" size="icon" className="shrink-0" onClick={addCustomProduct} disabled={!customProduct.trim()}>
-                  <Plus className="w-4 h-4" />
-                </Button>
+
+            {/* Row 4: Products | Custom Products */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Products</label>
+                <Select value="" onValueChange={p => { if (p && !form.products.includes(p)) setForm({ ...form, products: [...form.products, p] }); }}>
+                  <SelectTrigger><SelectValue placeholder="Add from catalogue…" /></SelectTrigger>
+                  <SelectContent position="popper" className="max-h-60">
+                    {productList?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {form.products.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {form.products.map(p => (
+                      <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                        #{p}
+                        <button type="button" className="hover:text-destructive" onClick={() => setForm({ ...form, products: form.products.filter(x => x !== p) })}>
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-              {form.products.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1.5">
-                  {form.products.map(p => (
-                    <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                      #{p}
-                      <button type="button" className="hover:text-destructive" onClick={() => setForm({ ...form, products: form.products.filter(x => x !== p) })}>
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Custom Products</label>
+                <Textarea
+                  placeholder="Describe any custom or non-catalogue products…"
+                  rows={3}
+                  value={form.customProducts}
+                  onChange={e => setForm({ ...form, customProducts: e.target.value })}
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+
+            {/* Row 5: Delivery Date | Delivery Time | City Of Delivery */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Delivery Date</label>
+                <Input type="date" value={form.deliveryDate} onChange={e => setForm({ ...form, deliveryDate: e.target.value })} />
+              </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Delivery Time</label>
                 <Input placeholder="e.g. 10 days" value={form.deliveryTime} onChange={e => setForm({ ...form, deliveryTime: e.target.value })} />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">Delivery Date</label>
-                <Input type="date" value={form.deliveryDate} onChange={e => setForm({ ...form, deliveryDate: e.target.value })} />
+                <label className="text-sm font-medium">City Of Delivery</label>
+                <Input placeholder="e.g. Hyderabad" value={form.cityOfDelivery} onChange={e => setForm({ ...form, cityOfDelivery: e.target.value })} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Percentage (%)</label>
-                <Input placeholder="0" type="number" value={form.percentage} onChange={e => setForm({ ...form, percentage: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Total Value (₹)</label>
-                <Input readOnly value={form.budget ? computedTotal.toLocaleString("en-IN") : ""} placeholder="Budget + %" className="bg-muted/50" />
-              </div>
-            </div>
-            </div>
-            </div>
+
             <div className="space-y-1">
               <label className="text-sm font-medium">Notes</label>
               <Textarea placeholder="Additional notes or context…" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
