@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
-import { printSampleOrder } from "@/lib/print-utils";
+import { printSampleOrder, printReturnNote } from "@/lib/print-utils";
 
 type Opportunity = {
   id: number; title: string; clientId: number | null; clientName: string | null;
@@ -462,6 +462,12 @@ export function Opportunities() {
                                 onClick={() => handlePrintSample(so.id)}>
                                 <Printer className="w-3 h-3 mr-1" />Print
                               </Button>
+                              {so.status === "Returned" && (
+                                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-orange-600"
+                                  onClick={() => printReturnNote({ ...so, opportunityTitle: selected?.title ?? null })}>
+                                  <Printer className="w-3 h-3 mr-1" />Return Note
+                                </Button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -554,8 +560,11 @@ export function Opportunities() {
                   disabled={submitReturn.isPending}>
                   {submitReturn.isPending ? "Saving…" : returningOrder.status === "Returned" ? "Save Disposition" : "Confirm Return"}
                 </Button>
-                <Button variant="outline" className="shrink-0" title="Print this sample order"
-                  onClick={() => printSampleOrder({ ...returningOrder, opportunityTitle: selected?.title ?? null })}>
+                <Button variant="outline" className="shrink-0"
+                  title={returningOrder.status === "Returned" ? "Print Return Note" : "Print Sample Order"}
+                  onClick={() => returningOrder.status === "Returned"
+                    ? printReturnNote({ ...returningOrder, opportunityTitle: selected?.title ?? null })
+                    : printSampleOrder({ ...returningOrder, opportunityTitle: selected?.title ?? null })}>
                   <Printer className="w-4 h-4" />
                 </Button>
               </div>

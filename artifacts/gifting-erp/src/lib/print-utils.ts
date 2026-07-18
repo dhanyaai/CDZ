@@ -683,6 +683,103 @@ export function printTaxInvoice(inv: {
   openWin(inv.invoiceNumber, html);
 }
 
+export function printReturnNote(so: {
+  sampleNumber: string;
+  clientName?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  opportunityTitle?: string | null;
+  status: string;
+  notes?: string | null;
+  createdAt: string;
+  items?: Array<{
+    productName: string;
+    quantity: number;
+    returnedQty: number;
+    disposition: "gift" | "invoice" | null;
+    notes?: string | null;
+  }>;
+}) {
+  const items = so.items ?? [];
+  const customer = so.clientName ?? so.customerName ?? "—";
+  const totalSent = items.reduce((s, i) => s + i.quantity, 0);
+  const totalReturned = items.reduce((s, i) => s + i.returnedQty, 0);
+  const totalKept = totalSent - totalReturned;
+
+  const dispLabel = (d: "gift" | "invoice" | null, keptQty: number) => {
+    if (keptQty === 0) return "—";
+    if (d === "gift") return `<span style="color:#7c3aed;font-weight:700;">Gift</span>`;
+    if (d === "invoice") return `<span style="color:#0369a1;font-weight:700;">Invoice</span>`;
+    return `<span style="color:#d97706;font-weight:700;">Pending</span>`;
+  };
+
+  const itemRows = items.map(item => {
+    const keptQty = item.quantity - item.returnedQty;
+    return `<tr>
+      <td class="font-bold">${item.productName}</td>
+      <td class="text-center">${item.quantity}</td>
+      <td class="text-center">${item.returnedQty}</td>
+      <td class="text-center">${keptQty > 0 ? keptQty : "—"}</td>
+      <td class="text-center">${dispLabel(item.disposition, keptQty)}</td>
+      <td style="color:#6b7280;">${item.notes ?? "—"}</td>
+    </tr>`;
+  }).join("");
+
+  const html = `
+    <div class="doc-header">
+      <div><div class="brand">Customize Duniya</div><div class="brand-sub">Sample Return Note</div></div>
+      <div class="doc-id">
+        <h1>${so.sampleNumber}</h1>
+        <div class="date">${new Date(so.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}</div>
+        <span class="${badgeClass(so.status)}">${so.status}</span>
+      </div>
+    </div>
+
+    <div class="meta-grid">
+      <div class="meta-section">
+        <h3>Customer</h3>
+        <div class="meta-row"><span class="lbl">Name</span><span class="val">${customer}</span></div>
+        ${so.customerPhone ? `<div class="meta-row"><span class="lbl">Phone</span><span class="val">${so.customerPhone}</span></div>` : ""}
+        ${so.customerEmail ? `<div class="meta-row"><span class="lbl">Email</span><span class="val">${so.customerEmail}</span></div>` : ""}
+        ${so.opportunityTitle ? `<div class="meta-row"><span class="lbl">Opportunity</span><span class="val">${so.opportunityTitle}</span></div>` : ""}
+      </div>
+      <div class="meta-section">
+        <h3>Return Summary</h3>
+        <div class="meta-row"><span class="lbl">Sample #</span><span class="val">${so.sampleNumber}</span></div>
+        <div class="meta-row"><span class="lbl">Total Sent</span><span class="val">${totalSent}</span></div>
+        <div class="meta-row"><span class="lbl">Total Returned</span><span class="val">${totalReturned}</span></div>
+        ${totalKept > 0 ? `<div class="meta-row"><span class="lbl">Kept by Customer</span><span class="val">${totalKept}</span></div>` : ""}
+      </div>
+    </div>
+
+    ${so.notes ? `<div class="note-box"><strong>Notes</strong>${so.notes}</div>` : ""}
+
+    <div class="section-title">Item-wise Return Details</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th class="text-center" style="width:75px;">Sent</th>
+          <th class="text-center" style="width:80px;">Returned</th>
+          <th class="text-center" style="width:65px;">Kept</th>
+          <th class="text-center" style="width:85px;">Disposition</th>
+          <th style="width:140px;">Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows || `<tr><td colspan="6" class="text-center" style="color:#9ca3af;padding:20px;">No items</td></tr>`}
+      </tbody>
+    </table>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px;">
+      <div style="border-top:1px solid #d1d5db;padding-top:8px;font-size:11px;color:#6b7280;text-align:center;">Customer Signature</div>
+      <div style="border-top:1px solid #d1d5db;padding-top:8px;font-size:11px;color:#6b7280;text-align:center;">Authorised By (Customize Duniya)</div>
+    </div>
+  `;
+  openWin(`Return-${so.sampleNumber}`, html);
+}
+
 export function printSampleOrder(so: {
   sampleNumber: string;
   clientName?: string | null;

@@ -17,7 +17,7 @@ import {
   FlaskConical, Plus, Search, Package, Trash2, ChevronDown, ChevronUp,
   User, Phone, Mail, Building2, CheckCircle2, Truck, XCircle, RefreshCw, Clock, Printer,
 } from "lucide-react";
-import { printSampleOrder } from "@/lib/print-utils";
+import { printSampleOrder, printReturnNote } from "@/lib/print-utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SampleOrderSummary {
@@ -546,6 +546,12 @@ export function SampleOrders() {
                 <Button variant="outline" size="sm" className="w-full" onClick={() => printSampleOrder(detail)} data-testid="button-print-sample">
                   <Printer className="w-4 h-4 mr-2" />Print / Save as PDF
                 </Button>
+                {detail.status === "Returned" && (
+                  <Button variant="outline" size="sm" className="w-full text-orange-600 border-orange-300 hover:bg-orange-50"
+                    onClick={() => printReturnNote(detail)}>
+                    <Printer className="w-4 h-4 mr-2" />Print Return Note
+                  </Button>
+                )}
 
                 {/* Return action */}
                 {canReturn(detail.status) && (
@@ -638,8 +644,8 @@ export function SampleOrders() {
                   onClick={() => returnMutation.mutate()} disabled={returnMutation.isPending}>
                   {returnMutation.isPending ? "Recording…" : "Confirm Return"}
                 </Button>
-                <Button variant="outline" className="shrink-0" title="Print sample order"
-                  onClick={() => printSampleOrder(detail)}>
+                <Button variant="outline" className="shrink-0" title="Print Return Note"
+                  onClick={() => printReturnNote(detail)}>
                   <Printer className="w-4 h-4" />
                 </Button>
               </div>
