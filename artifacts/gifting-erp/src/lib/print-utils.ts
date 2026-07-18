@@ -683,6 +683,83 @@ export function printTaxInvoice(inv: {
   openWin(inv.invoiceNumber, html);
 }
 
+export function printCatalogue(opts: {
+  title: string;
+  clientName?: string | null;
+  products: Array<{
+    id: number;
+    name: string;
+    sku?: string | null;
+    brand?: string | null;
+    category: string;
+    sellingPrice: string | number;
+    imageUrl?: string | null;
+    brandable?: boolean;
+  }>;
+}) {
+  const { title, clientName, products } = opts;
+
+  const cardCss = `
+    .cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+    .cat-card { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; break-inside: avoid; }
+    .cat-img { width: 100%; height: 150px; object-fit: cover; background: #ede9fe; display: block; }
+    .cat-img-placeholder { width: 100%; height: 150px; background: linear-gradient(135deg, #ede9fe 0%, #dbeafe 100%); display: flex; align-items: center; justify-content: center; font-size: 48px; }
+    .cat-body { padding: 10px 12px 12px; }
+    .cat-name { font-weight: 700; font-size: 12px; color: #1a1a2e; margin-bottom: 3px; line-height: 1.3; }
+    .cat-cat { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .cat-price { font-size: 14px; font-weight: 800; color: #4338ca; }
+    .cat-brand { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+    .cat-brandable { display: inline-block; font-size: 9px; font-weight: 700; color: #7c3aed; background: #ede9fe; border-radius: 4px; padding: 1px 5px; margin-top: 4px; }
+    @media print { body { padding: 0; } @page { margin: 14mm; size: A4; } .cat-grid { grid-template-columns: repeat(3, 1fr); } }
+  `;
+
+  const productCards = products.map(p => `
+    <div class="cat-card">
+      ${p.imageUrl
+        ? `<img class="cat-img" src="${p.imageUrl}" alt="${p.name}" />`
+        : `<div class="cat-img-placeholder">🎁</div>`}
+      <div class="cat-body">
+        <div class="cat-name">${p.name}</div>
+        <div class="cat-cat">${p.category}</div>
+        <div class="cat-price">₹${Number(p.sellingPrice).toLocaleString("en-IN")}</div>
+        ${p.brand ? `<div class="cat-brand">${p.brand}</div>` : ""}
+        ${p.brandable ? `<div class="cat-brandable">✦ Brandable</div>` : ""}
+      </div>
+    </div>
+  `).join("");
+
+  const html = `
+    <style>${cardCss}</style>
+    <div class="doc-header">
+      <div>
+        <div class="brand">Customize Duniya</div>
+        <div class="brand-sub">Corporate Gifting Solutions</div>
+      </div>
+      <div class="doc-id">
+        <h1 style="font-size:20px;">${title}</h1>
+        ${clientName ? `<div class="date" style="margin-top:4px;">Prepared for: <strong>${clientName}</strong></div>` : ""}
+        <div class="date">Date: ${printedOn()}</div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:#6b7280;margin-bottom:20px;">
+      ${products.length} product${products.length !== 1 ? "s" : ""} · All prices are inclusive of applicable taxes.
+      ${products.some(p => p.brandable) ? " ✦ = Can be branded with your company logo." : ""}
+    </p>
+
+    <div class="cat-grid">
+      ${productCards}
+    </div>
+
+    <div style="margin-top:16px;padding:12px 16px;border:1px solid #e5e7eb;border-radius:8px;font-size:11px;color:#6b7280;background:#f9fafb;">
+      <strong style="display:block;color:#374151;margin-bottom:3px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Terms &amp; Conditions</strong>
+      Prices are indicative and subject to change based on quantity and customization. Minimum order quantities may apply.
+      Delivery timelines vary by product. Please contact us for bulk pricing and branding options.
+    </div>
+  `;
+  openWin(`Catalogue-${title}`, html);
+}
+
 export function printReturnNote(so: {
   sampleNumber: string;
   clientName?: string | null;

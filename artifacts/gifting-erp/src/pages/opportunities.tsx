@@ -13,9 +13,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package } from "lucide-react";
+import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
-import { printSampleOrder, printReturnNote } from "@/lib/print-utils";
+import { printSampleOrder, printReturnNote, printCatalogue } from "@/lib/print-utils";
 
 type Opportunity = {
   id: number; title: string; clientId: number | null; clientName: string | null;
@@ -25,7 +25,7 @@ type Opportunity = {
 };
 type Lead = { id: number; title: string; companyName: string | null };
 type User = { id: number; name: string; role: string };
-type Product = { id: number; name: string; stockLevel: number };
+type Product = { id: number; name: string; sku: string | null; brand: string | null; category: string; sellingPrice: string | number; imageUrl: string | null; brandable: boolean; stockLevel: number };
 type SampleOrderItem = { id: number; productId: number; productName: string; quantity: number; returnedQty: number; disposition: "gift" | "invoice" | null; notes: string | null };
 type SampleOrderSummary = { id: number; sampleNumber: string; status: string; notes: string | null; createdAt: string; items: SampleOrderItem[] };
 type SampleOrderDetail = SampleOrderSummary & {
@@ -70,6 +70,10 @@ export function Opportunities() {
   const [returningOrder, setReturningOrder] = useState<SampleOrderDetail | null>(null);
   const [returnQtys, setReturnQtys] = useState<Record<number, number>>({});
   const [dispositions, setDispositions] = useState<Record<number, "gift" | "invoice" | null>>({});
+  const [catalogueType, setCatalogueType] = useState("Corporate Gifts");
+  const [catalogueCustomType, setCatalogueCustomType] = useState("");
+  const [catalogueSearch, setCatalogueSearch] = useState("");
+  const [catalogueSelected, setCatalogueSelected] = useState<Set<number>>(new Set());
 
   const { data: opps, isLoading } = useQuery({ queryKey: ["opportunities"], queryFn: () => api<Opportunity[]>("/v1/opportunities") });
   const { data: clients } = useListClients();
@@ -80,7 +84,7 @@ export function Opportunities() {
     queryFn: () => api<SampleOrderSummary[]>(`/v1/sample-orders?opportunityId=${selected!.id}`),
     enabled: !!selected && selected.stage === "samples",
   });
-  const { data: products } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products"), enabled: sampleDialog });
+  const { data: products } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products"), enabled: sampleDialog || selected?.stage === "sent_catalogue" });
 
   const create = useMutation({
     mutationFn: () => api("/v1/opportunities", {
@@ -375,6 +379,92 @@ export function Opportunities() {
                     <SelectContent>{STAGES.map(s => <SelectItem key={s} value={s}>{LABELS[s]}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+                {selected.stage === "sent_catalogue" && (
+                  <div className="space-y-3 border rounded-xl p-4 bg-blue-50/40">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-semibold text-blue-700">Product Catalogue</span>
+                    </div>
+                    {/* Catalogue type */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Catalogue Type</label>
+                      <Select value={catalogueType} onValueChange={v => { setCatalogueType(v); if (v !== "Custom") setCatalogueCustomType(""); }}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {["Corporate Gifts","Diwali Gifting","New Year Collection","Festive Hampers","Premium Executive Gifts","Custom"].map(t => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {catalogueType === "Custom" && (
+                        <Input className="h-8 text-sm" placeholder="Enter catalogue title…"
+                          value={catalogueCustomType} onChange={e => setCatalogueCustomType(e.target.value)} />
+                      )}
+                    </div>
+                    {/* Product search */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-muted-foreground">Select Products</label>
+                        <div className="flex gap-1.5 text-xs text-muted-foreground">
+                          <button className="hover:text-foreground underline-offset-2 hover:underline"
+                            onClick={() => setCatalogueSelected(new Set((products ?? []).map(p => p.id)))}>All</button>
+                          <span>·</span>
+                          <button className="hover:text-foreground underline-offset-2 hover:underline"
+                            onClick={() => setCatalogueSelected(new Set())}>None</button>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <Input className="h-8 text-sm pl-8" placeholder="Search products…"
+                          value={catalogueSearch} onChange={e => setCatalogueSearch(e.target.value)} />
+                      </div>
+                      <div className="border rounded-lg bg-background max-h-48 overflow-y-auto divide-y">
+                        {(products ?? [])
+                          .filter(p => p.name.toLowerCase().includes(catalogueSearch.toLowerCase()) || p.category.toLowerCase().includes(catalogueSearch.toLowerCase()))
+                          .map(p => (
+                            <label key={p.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors">
+                              <input type="checkbox" className="accent-blue-600 w-3.5 h-3.5"
+                                checked={catalogueSelected.has(p.id)}
+                                onChange={e => setCatalogueSelected(prev => {
+                                  const next = new Set(prev);
+                                  e.target.checked ? next.add(p.id) : next.delete(p.id);
+                                  return next;
+                                })} />
+                              {p.imageUrl
+                                ? <img src={p.imageUrl} className="w-7 h-7 rounded object-cover border shrink-0" />
+                                : <div className="w-7 h-7 rounded bg-blue-100 flex items-center justify-content-center shrink-0 text-base flex items-center justify-center">🎁</div>
+                              }
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium truncate">{p.name}</div>
+                                <div className="text-xs text-muted-foreground">{p.category}{p.brand ? ` · ${p.brand}` : ""}</div>
+                              </div>
+                              <span className="text-xs font-semibold text-blue-700 shrink-0">₹{Number(p.sellingPrice).toLocaleString("en-IN")}</span>
+                            </label>
+                          ))}
+                        {(products ?? []).length === 0 && (
+                          <p className="text-xs text-muted-foreground text-center py-4">Loading products…</p>
+                        )}
+                      </div>
+                      {catalogueSelected.size > 0 && (
+                        <p className="text-xs text-blue-600 font-medium">{catalogueSelected.size} product{catalogueSelected.size !== 1 ? "s" : ""} selected</p>
+                      )}
+                    </div>
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-8 text-sm"
+                      disabled={catalogueSelected.size === 0 || (catalogueType === "Custom" && !catalogueCustomType.trim())}
+                      onClick={() => {
+                        const selectedProducts = (products ?? []).filter(p => catalogueSelected.has(p.id));
+                        printCatalogue({
+                          title: catalogueType === "Custom" ? catalogueCustomType.trim() : catalogueType,
+                          clientName: selected.clientName ?? selected.title,
+                          products: selectedProducts,
+                        });
+                      }}>
+                      <Printer className="w-3.5 h-3.5 mr-1.5" />Generate Catalogue PDF ({catalogueSelected.size})
+                    </Button>
+                  </div>
+                )}
                 {selected.stage === "samples" && (
                   <div className="space-y-2" data-testid="section-sample-orders">
                     <div className="flex items-center justify-between">
