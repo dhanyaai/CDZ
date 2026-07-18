@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq, SQL } from "drizzle-orm";
+import { and, eq, inArray, SQL } from "drizzle-orm";
 import { db, sampleOrdersTable, sampleOrderItemsTable, clientsTable, productsTable, opportunitiesTable } from "@workspace/db";
 
 const router = Router();
@@ -62,6 +62,30 @@ router.get("/v1/sample-orders", async (req, res): Promise<void> => {
     .where(and(...conditions))
     .orderBy(sampleOrdersTable.createdAt);
 
+  // When filtering by opportunity, include items for inline display
+  let itemsByOrderId: Record<number, { id: number; productId: number; productName: string; quantity: number; returnedQty: number; disposition: string | null; notes: string | null }[]> = {};
+  if (opportunityId && rows.length > 0) {
+    const orderIds = rows.map(r => r.order.id);
+    const allItems = await db
+      .select({ item: sampleOrderItemsTable, product: productsTable })
+      .from(sampleOrderItemsTable)
+      .leftJoin(productsTable, eq(sampleOrderItemsTable.productId, productsTable.id))
+      .where(inArray(sampleOrderItemsTable.sampleOrderId, orderIds));
+    for (const r of allItems) {
+      const oid = r.item.sampleOrderId;
+      if (!itemsByOrderId[oid]) itemsByOrderId[oid] = [];
+      itemsByOrderId[oid].push({
+        id: r.item.id,
+        productId: r.item.productId,
+        productName: r.product?.name ?? "Unknown",
+        quantity: r.item.quantity,
+        returnedQty: r.item.returnedQty ?? 0,
+        disposition: r.item.disposition ?? null,
+        notes: r.item.notes ?? null,
+      });
+    }
+  }
+
   res.json(rows.map((r) => ({
     id: r.order.id,
     sampleNumber: r.order.sampleNumber,
@@ -72,6 +96,7 @@ router.get("/v1/sample-orders", async (req, res): Promise<void> => {
     status: r.order.status,
     notes: r.order.notes ?? null,
     createdAt: r.order.createdAt.toISOString(),
+    items: itemsByOrderId[r.order.id] ?? [],
   })));
 });
 

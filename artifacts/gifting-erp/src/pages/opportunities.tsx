@@ -26,7 +26,8 @@ type Opportunity = {
 type Lead = { id: number; title: string; companyName: string | null };
 type User = { id: number; name: string; role: string };
 type Product = { id: number; name: string; stockLevel: number };
-type SampleOrderSummary = { id: number; sampleNumber: string; status: string; notes: string | null; createdAt: string };
+type SampleOrderItem = { id: number; productId: number; productName: string; quantity: number; returnedQty: number; disposition: "gift" | "invoice" | null; notes: string | null };
+type SampleOrderSummary = { id: number; sampleNumber: string; status: string; notes: string | null; createdAt: string; items: SampleOrderItem[] };
 type SampleOrderDetail = SampleOrderSummary & {
   clientName: string | null; customerName: string | null;
   customerPhone: string | null; customerEmail: string | null;
@@ -397,6 +398,39 @@ export function Opportunities() {
                               <Badge variant="outline" className={`text-xs ${SAMPLE_STATUS_COLOR[so.status] ?? ""}`}>{so.status}</Badge>
                               <span className="text-xs text-muted-foreground ml-auto">{format(new Date(so.createdAt), "MMM d")}</span>
                             </div>
+                            {/* Item-wise details */}
+                            {(so.items ?? []).length > 0 && (
+                              <div className="rounded-md bg-muted/30 divide-y divide-border/50 border border-border/50 text-xs">
+                                {(so.items ?? []).map(item => {
+                                  const keptQty = item.quantity - item.returnedQty;
+                                  const isReturned = so.status === "Returned" || item.returnedQty > 0;
+                                  return (
+                                    <div key={item.id} className="flex flex-col gap-1 px-2.5 py-1.5">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="font-medium truncate">{item.productName}</span>
+                                        <span className="text-muted-foreground shrink-0">×{item.quantity}</span>
+                                      </div>
+                                      {isReturned && (
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          {item.returnedQty > 0 && (
+                                            <span className="text-orange-600 font-medium">↩ {item.returnedQty} returned</span>
+                                          )}
+                                          {keptQty > 0 && item.disposition === "gift" && (
+                                            <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">🎁 {keptQty} gifted</span>
+                                          )}
+                                          {keptQty > 0 && item.disposition === "invoice" && (
+                                            <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">🧾 {keptQty} to invoice</span>
+                                          )}
+                                          {keptQty > 0 && !item.disposition && (
+                                            <span className="text-amber-600 font-medium">{keptQty} kept — disposition pending</span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                             {/* Row 2: action buttons */}
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {oppNextStatuses(so.status).map(ns => (
