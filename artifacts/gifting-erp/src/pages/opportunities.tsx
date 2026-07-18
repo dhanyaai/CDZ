@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search } from "lucide-react";
+import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3 } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
 import { printSampleOrder, printReturnNote, printCatalogue } from "@/lib/print-utils";
 
@@ -74,6 +74,11 @@ export function Opportunities() {
   const [catalogueCustomType, setCatalogueCustomType] = useState("");
   const [catalogueSearch, setCatalogueSearch] = useState("");
   const [catalogueSelected, setCatalogueSelected] = useState<Set<number>>(new Set());
+  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [listSearch, setListSearch] = useState("");
+  const [listStage, setListStage] = useState("all");
+  const [sortField, setSortField] = useState<"title" | "value" | "probability" | "expectedCloseDate" | "createdAt">("createdAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const { data: opps, isLoading } = useQuery({ queryKey: ["opportunities"], queryFn: () => api<Opportunity[]>("/v1/opportunities") });
   const { data: clients } = useListClients();
@@ -213,7 +218,19 @@ export function Opportunities() {
           <h1 className="text-3xl font-bold">Opportunities</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Sales pipeline with probability-weighted forecast</p>
         </div>
-        <Button onClick={() => setDialog(true)}><Plus className="w-4 h-4 mr-2" />New Opportunity</Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center border rounded-lg p-0.5 bg-muted/40">
+            <button onClick={() => setViewMode("kanban")}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === "kanban" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              <Columns3 className="w-3.5 h-3.5" />Kanban
+            </button>
+            <button onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === "list" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              <LayoutList className="w-3.5 h-3.5" />List
+            </button>
+          </div>
+          <Button onClick={() => setDialog(true)}><Plus className="w-4 h-4 mr-2" />New Opportunity</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -232,44 +249,191 @@ export function Opportunities() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        {STAGES.map(stage => {
-          const items = (opps ?? []).filter(o => o.stage === stage);
-          const stageVal = items.reduce((s, o) => s + (o.value ?? 0), 0);
-          return (
-            <div key={stage} className={`flex flex-col min-h-[280px] rounded-xl border border-t-2 bg-card/50 ${STAGE_HEADER[stage]}`}>
-              <div className="p-3 border-b border-border/50">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-sm font-semibold">{LABELS[stage]}</span>
-                  <Badge variant="secondary" className="text-xs">{items.length}</Badge>
+      {viewMode === "kanban" && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {STAGES.map(stage => {
+            const items = (opps ?? []).filter(o => o.stage === stage);
+            const stageVal = items.reduce((s, o) => s + (o.value ?? 0), 0);
+            return (
+              <div key={stage} className={`flex flex-col min-h-[280px] rounded-xl border border-t-2 bg-card/50 ${STAGE_HEADER[stage]}`}>
+                <div className="p-3 border-b border-border/50">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-sm font-semibold">{LABELS[stage]}</span>
+                    <Badge variant="secondary" className="text-xs">{items.length}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">₹{stageVal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p>
                 </div>
-                <p className="text-xs text-muted-foreground">₹{stageVal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p>
-              </div>
-              <div className="flex-1 p-2 space-y-2 overflow-y-auto">
-                {items.map(o => {
-                  const daysLeft = o.expectedCloseDate ? differenceInDays(new Date(o.expectedCloseDate), new Date()) : null;
-                  return (
-                    <div key={o.id} className="p-2.5 border rounded-lg bg-card text-xs space-y-2 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all" onClick={() => setSelected(o)}>
-                      <div className="font-medium leading-tight">{o.title}</div>
-                      {o.clientName && <div className="flex items-center gap-1 text-muted-foreground"><Building2 className="w-3 h-3 shrink-0" />{o.clientName}</div>}
-                      {o.value != null && <div className="font-semibold text-primary">₹{o.value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>{o.probability}%</span>
-                          {daysLeft !== null && <span className={daysLeft < 0 ? "text-red-400" : daysLeft < 7 ? "text-amber-400" : ""}>{daysLeft < 0 ? `${Math.abs(daysLeft)}d late` : `${daysLeft}d`}</span>}
+                <div className="flex-1 p-2 space-y-2 overflow-y-auto">
+                  {items.map(o => {
+                    const daysLeft = o.expectedCloseDate ? differenceInDays(new Date(o.expectedCloseDate), new Date()) : null;
+                    return (
+                      <div key={o.id} className="p-2.5 border rounded-lg bg-card text-xs space-y-2 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all" onClick={() => setSelected(o)}>
+                        <div className="font-medium leading-tight">{o.title}</div>
+                        {o.clientName && <div className="flex items-center gap-1 text-muted-foreground"><Building2 className="w-3 h-3 shrink-0" />{o.clientName}</div>}
+                        {o.value != null && <div className="font-semibold text-primary">₹{o.value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>{o.probability}%</span>
+                            {daysLeft !== null && <span className={daysLeft < 0 ? "text-red-400" : daysLeft < 7 ? "text-amber-400" : ""}>{daysLeft < 0 ? `${Math.abs(daysLeft)}d late` : `${daysLeft}d`}</span>}
+                          </div>
+                          <Progress value={o.probability} className="h-1" indicatorClassName={PROB_COLOR(o.probability)} />
                         </div>
-                        <Progress value={o.probability} className="h-1" indicatorClassName={PROB_COLOR(o.probability)} />
+                        {o.ownerName && <div className="flex items-center gap-1 text-muted-foreground pt-0.5"><UserCircle className="w-3 h-3 shrink-0" />{o.ownerName}</div>}
                       </div>
-                      {o.ownerName && <div className="flex items-center gap-1 text-muted-foreground pt-0.5"><UserCircle className="w-3 h-3 shrink-0" />{o.ownerName}</div>}
-                    </div>
-                  );
-                })}
-                {items.length === 0 && <div className="text-center text-muted-foreground/50 text-xs py-6">No opportunities</div>}
+                    );
+                  })}
+                  {items.length === 0 && <div className="text-center text-muted-foreground/50 text-xs py-6">No opportunities</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {viewMode === "list" && (() => {
+        const toggleSort = (field: typeof sortField) => {
+          if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+          else { setSortField(field); setSortDir("asc"); }
+        };
+        const SortIcon = ({ field }: { field: typeof sortField }) => (
+          <span className="ml-1 text-muted-foreground/60">{sortField === field ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+        );
+        const STAGE_BADGE: Record<string, string> = {
+          enquiry: "bg-slate-100 text-slate-700",
+          sent_catalogue: "bg-blue-100 text-blue-700",
+          samples: "bg-violet-100 text-violet-700",
+          shortlisted: "bg-amber-100 text-amber-700",
+          quotation_sent: "bg-emerald-100 text-emerald-700",
+        };
+        const filtered = (opps ?? [])
+          .filter(o => {
+            const q = listSearch.toLowerCase();
+            const matchQ = !q || o.title.toLowerCase().includes(q) || (o.clientName ?? "").toLowerCase().includes(q) || (o.ownerName ?? "").toLowerCase().includes(q);
+            const matchStage = listStage === "all" || o.stage === listStage;
+            return matchQ && matchStage;
+          })
+          .sort((a, b) => {
+            let av: string | number = 0, bv: string | number = 0;
+            if (sortField === "title") { av = a.title; bv = b.title; }
+            else if (sortField === "value") { av = a.value ?? 0; bv = b.value ?? 0; }
+            else if (sortField === "probability") { av = a.probability; bv = b.probability; }
+            else if (sortField === "expectedCloseDate") { av = a.expectedCloseDate ?? ""; bv = b.expectedCloseDate ?? ""; }
+            else if (sortField === "createdAt") { av = a.createdAt; bv = b.createdAt; }
+            if (av < bv) return sortDir === "asc" ? -1 : 1;
+            if (av > bv) return sortDir === "asc" ? 1 : -1;
+            return 0;
+          });
+
+        return (
+          <div className="space-y-3">
+            {/* Filters */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input className="pl-8 h-8 text-sm" placeholder="Search title, client, owner…"
+                  value={listSearch} onChange={e => setListSearch(e.target.value)} />
+              </div>
+              <Select value={listStage} onValueChange={setListStage}>
+                <SelectTrigger className="h-8 text-sm w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Stages</SelectItem>
+                  {STAGES.map(s => <SelectItem key={s} value={s}>{LABELS[s]}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">{filtered.length} deal{filtered.length !== 1 ? "s" : ""}</span>
+            </div>
+
+            {/* Table */}
+            <div className="rounded-xl border overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 border-b text-xs">
+                      <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort("title")}>
+                        Title <SortIcon field="title" />
+                      </th>
+                      <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Client</th>
+                      <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Stage</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort("value")}>
+                        Value <SortIcon field="value" />
+                      </th>
+                      <th className="text-center px-3 py-2.5 font-semibold text-muted-foreground cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort("probability")}>
+                        Prob% <SortIcon field="probability" />
+                      </th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Weighted</th>
+                      <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Owner</th>
+                      <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort("expectedCloseDate")}>
+                        Close Date <SortIcon field="expectedCloseDate" />
+                      </th>
+                      <th className="text-center px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Days Left</th>
+                      <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort("createdAt")}>
+                        Created <SortIcon field="createdAt" />
+                      </th>
+                      <th className="px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {filtered.map((o, idx) => {
+                      const daysLeft = o.expectedCloseDate ? differenceInDays(new Date(o.expectedCloseDate), new Date()) : null;
+                      const weighted = o.value != null ? Math.round((o.value * o.probability) / 100) : null;
+                      return (
+                        <tr key={o.id}
+                          className={`cursor-pointer transition-colors hover:bg-muted/40 ${idx % 2 === 0 ? "" : "bg-muted/10"}`}
+                          onClick={() => setSelected(o)}>
+                          <td className="px-4 py-3 font-medium max-w-[200px]">
+                            <div className="truncate">{o.title}</div>
+                          </td>
+                          <td className="px-3 py-3 text-muted-foreground max-w-[140px]">
+                            <div className="truncate">{o.clientName ?? "—"}</div>
+                          </td>
+                          <td className="px-3 py-3">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${STAGE_BADGE[o.stage] ?? "bg-muted text-muted-foreground"}`}>
+                              {LABELS[o.stage] ?? o.stage}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-right font-semibold text-primary whitespace-nowrap">
+                            {o.value != null ? `₹${o.value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : "—"}
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="flex flex-col items-center gap-1 min-w-[60px]">
+                              <span className="text-xs font-medium">{o.probability}%</span>
+                              <Progress value={o.probability} className="h-1.5 w-14" indicatorClassName={PROB_COLOR(o.probability)} />
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-right text-muted-foreground whitespace-nowrap">
+                            {weighted != null ? `₹${weighted.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : "—"}
+                          </td>
+                          <td className="px-3 py-3 text-muted-foreground max-w-[120px]">
+                            <div className="truncate">{o.ownerName ?? "—"}</div>
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
+                            {o.expectedCloseDate ? format(new Date(o.expectedCloseDate), "dd MMM yyyy") : "—"}
+                          </td>
+                          <td className="px-3 py-3 text-center whitespace-nowrap">
+                            {daysLeft === null ? <span className="text-muted-foreground">—</span>
+                              : daysLeft < 0 ? <span className="text-red-500 font-medium text-xs">{Math.abs(daysLeft)}d late</span>
+                              : daysLeft < 7 ? <span className="text-amber-500 font-medium text-xs">{daysLeft}d</span>
+                              : <span className="text-muted-foreground text-xs">{daysLeft}d</span>}
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap text-xs text-muted-foreground">
+                            {format(new Date(o.createdAt), "dd MMM yyyy")}
+                          </td>
+                          <td className="px-3 py-3 max-w-[180px]">
+                            <div className="truncate text-xs text-muted-foreground" title={o.notes ?? ""}>{o.notes ?? "—"}</div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filtered.length === 0 && (
+                      <tr><td colSpan={11} className="text-center text-muted-foreground py-10 text-sm">No opportunities found</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })()}
 
       {/* New dialog */}
       <Dialog open={dialog} onOpenChange={setDialog}>
