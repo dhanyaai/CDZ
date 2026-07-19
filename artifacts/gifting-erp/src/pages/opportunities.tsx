@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check, FileText, ExternalLink } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
-import { printSampleOrder, printReturnNote, printCatalogue } from "@/lib/print-utils";
+import { printSampleOrder, printReturnNote, printCatalogue, printQuote } from "@/lib/print-utils";
 
 type Opportunity = {
   id: number; title: string; clientId: number | null; clientName: string | null;
@@ -103,6 +103,7 @@ export function Opportunities() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [printingQuoteId, setPrintingQuoteId] = useState<number | null>(null);
   const [oppEditMode, setOppEditMode] = useState(false);
   const [oppEditForm, setOppEditForm] = useState({ title: "", clientId: "", value: "", probability: "50", expectedCloseDate: "", ownerId: "", notes: "" });
   const [qShowForm, setQShowForm] = useState(false);
@@ -1032,6 +1033,21 @@ export function Opportunities() {
                               <span className="flex-1 truncate text-xs">{q.subject ?? "—"}</span>
                               <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${QUOTE_STATUS[q.status] ?? "bg-zinc-100 text-zinc-700"}`}>{q.status}</span>
                               <span className="text-xs font-semibold">₹{Number(q.totalAmount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                              <button
+                                title="Print quote"
+                                disabled={printingQuoteId === q.id}
+                                className="text-muted-foreground hover:text-foreground disabled:opacity-40"
+                                onClick={async () => {
+                                  setPrintingQuoteId(q.id);
+                                  try {
+                                    const detail = await api<{ quoteNumber: string; clientName: string | null; subject: string | null; status: string; totalAmount: number; gstAmount: number; subtotal: number; discountPct: number; validUntil: string | null; notes: string | null; paymentTerms: string | null; items: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number; imageUrl: string | null }> }>(`/v1/quotes/${q.id}`);
+                                    printQuote({ ...detail, clientName: detail.clientName ?? selected?.clientName ?? null });
+                                  } finally {
+                                    setPrintingQuoteId(null);
+                                  }
+                                }}>
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
                               <a href="/quotes" className="text-muted-foreground hover:text-foreground">
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </a>
