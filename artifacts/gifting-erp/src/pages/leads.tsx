@@ -81,6 +81,10 @@ export function Leads() {
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
   const [customProduct, setCustomProduct] = useState("");
   const [customProductInput, setCustomProductInput] = useState("");
+  const [editMode, setEditMode] = useState(false);
+  const [editProducts, setEditProducts] = useState<string[]>([]);
+  const [editCustomProducts, setEditCustomProducts] = useState<string[]>([]);
+  const [editCustomProductInput, setEditCustomProductInput] = useState("");
 
   const [, navigate] = useLocation();
   const { data: leads, isLoading } = useQuery({ queryKey: ["leads"], queryFn: () => api<Lead[]>("/v1/leads") });
@@ -129,8 +133,14 @@ export function Leads() {
 
   const update = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<Lead> }) =>
-      api(`/v1/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); toast({ title: "Lead updated" }); },
+      api<Lead>(`/v1/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: (updatedLead) => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      setSelected(updatedLead);
+      setEditMode(false);
+      toast({ title: "Lead updated" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to update", description: e.message, variant: "destructive" }),
   });
 
   const convert = useMutation({
@@ -537,18 +547,261 @@ export function Leads() {
       </Dialog>
 
       {/* Lead detail drawer */}
-      <Sheet open={!!selected} onOpenChange={o => !o && setSelected(null)}>
+      <Sheet open={!!selected} onOpenChange={o => { if (!o) { setSelected(null); setEditMode(false); } }}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           {selected && (
             <>
               <SheetHeader className="mb-6">
-                <SheetTitle className="text-xl">{selected.title}</SheetTitle>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge className={`border ${STAGE_COLORS[selected.status]}`}>{STAGE_LABELS[selected.status]}</Badge>
-                  {selected.source && <span className={`px-2 py-0.5 rounded text-xs font-medium ${SOURCE_COLORS[selected.source] ?? "bg-muted text-muted-foreground"}`}>{selected.source}</span>}
+                <div className="flex items-start justify-between gap-2">
+                  <SheetTitle className="text-xl leading-snug">{editMode ? "Edit Lead" : selected.title}</SheetTitle>
+                  {!editMode ? (
+                    <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs px-3 mt-0.5"
+                      onClick={() => {
+                        setEditForm({ ...selected });
+                        setEditProducts((selected.products ?? "").split(",").map(s => s.trim()).filter(Boolean));
+                        setEditCustomProducts((selected.customProducts ?? "").split(",").map(s => s.trim()).filter(Boolean));
+                        setEditCustomProductInput("");
+                        setEditMode(true);
+                      }}>
+                      Edit Lead
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="ghost" className="shrink-0 h-8 text-xs px-3 mt-0.5" onClick={() => setEditMode(false)}>
+                      Cancel
+                    </Button>
+                  )}
                 </div>
+                {!editMode && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge className={`border ${STAGE_COLORS[selected.status]}`}>{STAGE_LABELS[selected.status]}</Badge>
+                    {selected.source && <span className={`px-2 py-0.5 rounded text-xs font-medium ${SOURCE_COLORS[selected.source] ?? "bg-muted text-muted-foreground"}`}>{selected.source}</span>}
+                  </div>
+                )}
               </SheetHeader>
-              <div className="space-y-5">
+
+              {/* ── EDIT MODE ── */}
+              {editMode && (() => {
+                const eBudget = Number(editForm.budget) || 0;
+                const eQty = Number(editForm.qty) || 0;
+                const ePct = Number(editForm.percentage) || 0;
+                const eTotal = eQty * eBudget;
+                const eAfterMargin = eBudget - (eBudget * ePct) / 100;
+                const saveEdit = () => {
+                  update.mutate({
+                    id: selected.id,
+                    data: {
+                      title: editForm.title ?? selected.title,
+                      companyName: editForm.companyName ?? null,
+                      contactName: editForm.contactName ?? null,
+                      email: editForm.email ?? null,
+                      phone: editForm.phone ?? null,
+                      source: editForm.source ?? null,
+                      status: editForm.status ?? selected.status,
+                      ownerId: editForm.ownerId ?? null,
+                      clientId: editForm.clientId ?? null,
+                      qty: editForm.qty ?? null,
+                      budget: editForm.budget ?? null,
+                      percentage: editForm.percentage ?? null,
+                      totalValue: eTotal || null,
+                      branding: editForm.branding ?? null,
+                      deliveryDate: editForm.deliveryDate ?? null,
+                      deliveryTime: editForm.deliveryTime ?? null,
+                      cityOfDelivery: editForm.cityOfDelivery ?? null,
+                      products: editProducts.join(",") || null,
+                      customProducts: editCustomProducts.join(",") || null,
+                      notes: editForm.notes ?? null,
+                    },
+                  });
+                };
+                return (
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Lead Title *</label>
+                      <Input value={editForm.title ?? ""} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} placeholder="Lead title" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Stage</label>
+                        <Select value={editForm.status ?? "__none__"} onValueChange={v => setEditForm(f => ({ ...f, status: v === "__none__" ? undefined : v }))}>
+                          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Stage…" /></SelectTrigger>
+                          <SelectContent position="popper">{STAGES.map(s => <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Source</label>
+                        <Select value={editForm.source ?? "__none__"} onValueChange={v => setEditForm(f => ({ ...f, source: v === "__none__" ? null : v }))}>
+                          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Source…" /></SelectTrigger>
+                          <SelectContent position="popper">{["__none__", "Inbound Call", "Outbound Call", "Instagram", "LinkedIn", "WhatsApp", "BNI", "JCI", "Lions Club", "FTCCI", "Refference", "Others"].map(s => <SelectItem key={s} value={s}>{s === "__none__" ? "— None —" : s}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assigned To</label>
+                        <Select value={editForm.ownerId != null ? String(editForm.ownerId) : "__none__"} onValueChange={v => setEditForm(f => ({ ...f, ownerId: v === "__none__" ? null : Number(v) }))}>
+                          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Assign…" /></SelectTrigger>
+                          <SelectContent position="popper" className="max-h-60">
+                            <SelectItem value="__none__">— Unassigned —</SelectItem>
+                            {users?.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Link to Client</label>
+                        <Select value={editForm.clientId != null ? String(editForm.clientId) : "__none__"} onValueChange={v => setEditForm(f => ({ ...f, clientId: v === "__none__" ? null : Number(v) }))}>
+                          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Client…" /></SelectTrigger>
+                          <SelectContent position="popper" className="max-h-60">
+                            <SelectItem value="__none__">— None —</SelectItem>
+                            {clients?.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.companyName}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Company Name</label>
+                        <Input className="h-8 text-sm" value={editForm.companyName ?? ""} onChange={e => setEditForm(f => ({ ...f, companyName: e.target.value || null }))} placeholder="Company" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Contact Name</label>
+                        <Input className="h-8 text-sm" value={editForm.contactName ?? ""} onChange={e => setEditForm(f => ({ ...f, contactName: e.target.value || null }))} placeholder="POC name" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Phone</label>
+                        <Input className="h-8 text-sm" value={editForm.phone ?? ""} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value || null }))} placeholder="Phone" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Email</label>
+                        <Input className="h-8 text-sm" type="email" value={editForm.email ?? ""} onChange={e => setEditForm(f => ({ ...f, email: e.target.value || null }))} placeholder="Email" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">QTY</label>
+                        <Input className="h-8 text-sm" type="number" value={editForm.qty ?? ""} onChange={e => setEditForm(f => ({ ...f, qty: e.target.value ? Number(e.target.value) : null }))} placeholder="0" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Budget/pc (₹)</label>
+                        <Input className="h-8 text-sm" type="number" value={editForm.budget ?? ""} onChange={e => setEditForm(f => ({ ...f, budget: e.target.value ? Number(e.target.value) : null }))} placeholder="0" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Margin %</label>
+                        <Input className="h-8 text-sm" type="number" value={editForm.percentage ?? ""} onChange={e => setEditForm(f => ({ ...f, percentage: e.target.value ? Number(e.target.value) : null }))} placeholder="0" />
+                      </div>
+                    </div>
+
+                    {(eTotal > 0 || eAfterMargin > 0) && (
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-2.5 grid grid-cols-2 gap-2 text-xs">
+                        <div><span className="text-muted-foreground block">Total</span><span className="font-bold text-primary">₹{eTotal.toLocaleString("en-IN")}</span></div>
+                        <div><span className="text-muted-foreground block">After Margin</span><span className="font-bold text-emerald-600">₹{eAfterMargin.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span></div>
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Branding</label>
+                      <Select value={editForm.branding === true ? "yes" : editForm.branding === false ? "no" : "__none__"} onValueChange={v => setEditForm(f => ({ ...f, branding: v === "__none__" ? null : v === "yes" }))}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Yes / No" /></SelectTrigger>
+                        <SelectContent position="popper">
+                          <SelectItem value="__none__">— Not set —</SelectItem>
+                          <SelectItem value="yes">Yes</SelectItem>
+                          <SelectItem value="no">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Delivery Date</label>
+                        <Input className="h-8 text-sm" type="date" value={editForm.deliveryDate ? editForm.deliveryDate.split("T")[0] : ""} onChange={e => setEditForm(f => ({ ...f, deliveryDate: e.target.value || null }))} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Delivery Time</label>
+                        <Input className="h-8 text-sm" value={editForm.deliveryTime ?? ""} onChange={e => setEditForm(f => ({ ...f, deliveryTime: e.target.value || null }))} placeholder="e.g. 10 days" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">City</label>
+                        <Input className="h-8 text-sm" value={editForm.cityOfDelivery ?? ""} onChange={e => setEditForm(f => ({ ...f, cityOfDelivery: e.target.value || null }))} placeholder="Hyderabad" />
+                      </div>
+                    </div>
+
+                    {/* Products */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Products</label>
+                      <Select value="" onValueChange={p => { if (p && !editProducts.includes(p)) setEditProducts(prev => [...prev, p]); }}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Add from catalogue…" /></SelectTrigger>
+                        <SelectContent position="popper" className="max-h-60">
+                          {productList?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {editProducts.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {editProducts.map(p => (
+                            <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                              #{p}
+                              <button type="button" className="hover:text-destructive" onClick={() => setEditProducts(prev => prev.filter(x => x !== p))}><X className="w-3 h-3" /></button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Custom Products */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Custom Products</label>
+                      <div className="flex gap-2">
+                        <Input className="h-8 text-sm" placeholder="Type & press Enter…" value={editCustomProductInput}
+                          onChange={e => setEditCustomProductInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const name = editCustomProductInput.trim();
+                              if (name && !editCustomProducts.includes(name)) setEditCustomProducts(prev => [...prev, name]);
+                              setEditCustomProductInput("");
+                            }
+                          }} />
+                        <Button type="button" variant="outline" size="icon" className="shrink-0 h-8 w-8"
+                          onClick={() => {
+                            const name = editCustomProductInput.trim();
+                            if (name && !editCustomProducts.includes(name)) setEditCustomProducts(prev => [...prev, name]);
+                            setEditCustomProductInput("");
+                          }}
+                          disabled={!editCustomProductInput.trim()}>
+                          <Plus className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                      {editCustomProducts.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {editCustomProducts.map(p => (
+                            <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-medium">
+                              #{p}
+                              <button type="button" className="hover:text-destructive" onClick={() => setEditCustomProducts(prev => prev.filter(x => x !== p))}><X className="w-3 h-3" /></button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Notes</label>
+                      <Textarea rows={3} value={editForm.notes ?? ""} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value || null }))} placeholder="Additional notes…" />
+                    </div>
+
+                    <Button onClick={saveEdit} disabled={!editForm.title?.trim() || update.isPending} className="w-full">
+                      {update.isPending ? "Saving…" : "Save Changes"}
+                    </Button>
+                  </div>
+                );
+              })()}
+
+              {/* ── READ-ONLY VIEW MODE ── */}
+              {!editMode && <div className="space-y-5">
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {selected.companyName && <div className="flex items-center gap-2 text-muted-foreground"><Building2 className="w-4 h-4 shrink-0" /><span>{selected.companyName}</span></div>}
                   {selected.contactName && <div className="flex items-center gap-2 text-muted-foreground"><Users className="w-4 h-4 shrink-0" /><span>{selected.contactName}</span></div>}
@@ -634,7 +887,7 @@ export function Leads() {
                   </Button>
                   <Button variant="destructive" size="icon" onClick={() => del.mutate(selected.id)} disabled={del.isPending}><Trash2 className="w-4 h-4" /></Button>
                 </div>
-              </div>
+              </div>}
             </>
           )}
         </SheetContent>
