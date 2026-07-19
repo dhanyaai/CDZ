@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check } from "lucide-react";
+import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check, FileText, ExternalLink } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
 import { printSampleOrder, printReturnNote, printCatalogue } from "@/lib/print-utils";
 
@@ -34,6 +34,9 @@ type SampleOrderDetail = SampleOrderSummary & {
   items: { id: number; productId: number; productName: string; quantity: number; returnedQty: number; disposition: "gift" | "invoice" | null; notes: string | null }[];
 };
 type SampleLine = { productId: string; quantity: string };
+type LineItem = { description: string; quantity: number; unitPrice: number; productId?: number; imageUrl?: string | null };
+type OppQuote = { id: number; quoteNumber: string; subject: string | null; status: string; totalAmount: number; opportunityId: number | null; createdAt: string };
+const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
 
 const SAMPLE_STATUS_COLOR: Record<string, string> = {
   Requested: "bg-blue-500/10 text-blue-600 border-blue-500/20",
@@ -100,6 +103,13 @@ export function Opportunities() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [qShowForm, setQShowForm] = useState(false);
+  const [qSubject, setQSubject] = useState("");
+  const [qDiscountPct, setQDiscountPct] = useState("0");
+  const [qValidUntil, setQValidUntil] = useState("");
+  const [qPaymentTerms, setQPaymentTerms] = useState("");
+  const [qNotes, setQNotes] = useState("");
+  const [qItems, setQItems] = useState<LineItem[]>([{ description: "", quantity: 1, unitPrice: 0 }]);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [listSearch, setListSearch] = useState("");
   const [listStage, setListStage] = useState("all");
@@ -115,7 +125,13 @@ export function Opportunities() {
     queryFn: () => api<SampleOrderSummary[]>(`/v1/sample-orders?opportunityId=${selected!.id}`),
     enabled: !!selected && selected.stage === "samples",
   });
-  const { data: products } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products"), enabled: sampleDialog || selected?.stage === "sent_catalogue" });
+  const { data: products } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products"), enabled: sampleDialog || selected?.stage === "sent_catalogue" || selected?.stage === "quotation_sent" });
+  const { data: oppQuotes } = useQuery<OppQuote[], Error, OppQuote[]>({
+    queryKey: ["opp-quotes", selected?.id],
+    queryFn: () => api<OppQuote[]>("/v1/quotes"),
+    select: (all) => all.filter(q => q.opportunityId === selected?.id),
+    enabled: !!selected && selected.stage === "quotation_sent",
+  });
 
   const create = useMutation({
     mutationFn: () => api("/v1/opportunities", {
@@ -145,6 +161,44 @@ export function Opportunities() {
   });
 
   const resetSampleForm = () => { setSampleLines([{ productId: "", quantity: "1" }]); setSampleNotes(""); setSampleCustomer(""); };
+  const resetQuoteForm = () => { setQSubject(""); setQDiscountPct("0"); setQValidUntil(""); setQPaymentTerms(""); setQNotes(""); setQItems([{ description: "", quantity: 1, unitPrice: 0 }]); setQShowForm(false); };
+
+  const createQuote = useMutation({
+    mutationFn: () => {
+      if (!selected) throw new Error("No opportunity selected");
+      if (!selected.clientId) throw new Error("Opportunity has no linked client");
+      const filledItems = qItems.filter(i => i.description.trim());
+      if (filledItems.length === 0) throw new Error("Add at least one line item");
+      return api("/v1/quotes", {
+        method: "POST",
+        body: JSON.stringify({
+          clientId: selected.clientId,
+          opportunityId: selected.id,
+          subject: qSubject.trim() || selected.title,
+          discountPct: Number(qDiscountPct),
+          validUntil: qValidUntil || null,
+          paymentTerms: qPaymentTerms || null,
+          notes: qNotes.trim() || null,
+          items: filledItems.map(i => ({
+            productId: i.productId,
+            description: i.description,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+            imageUrl: i.imageUrl,
+          })),
+        }),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["opp-quotes", selected?.id] });
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      resetQuoteForm();
+      toast({ title: "Quote created" });
+    },
+    onError: (err: unknown) => {
+      toast({ title: "Failed to create quote", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
+    },
+  });
 
   const createSample = useMutation({
     mutationFn: () => api("/v1/sample-orders", {
@@ -811,6 +865,179 @@ export function Opportunities() {
                     )}
                   </div>
                 )}
+
+                {/* ── Quotation Sent: Inline Quote Creation ── */}
+                {selected.stage === "quotation_sent" && (() => {
+                  const linkedQuotes = oppQuotes ?? [];
+                  const qSubtotal = qItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+                  const qAfterDisc = qSubtotal * (1 - Number(qDiscountPct || 0) / 100);
+                  const qGst = qAfterDisc * 0.18;
+                  const qTotal = qAfterDisc + qGst;
+                  const qFilledItems = qItems.filter(i => i.description.trim());
+                  const QUOTE_STATUS: Record<string, string> = {
+                    draft: "bg-zinc-100 text-zinc-700",
+                    sent: "bg-blue-100 text-blue-700",
+                    accepted: "bg-emerald-100 text-emerald-700",
+                    rejected: "bg-red-100 text-red-600",
+                    expired: "bg-amber-100 text-amber-700",
+                  };
+                  return (
+                    <div className="space-y-3" data-testid="section-quotes">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium flex items-center gap-1.5">
+                          <FileText className="w-4 h-4 text-blue-500" />Quotes
+                        </label>
+                        {!qShowForm && (
+                          <Button size="sm" variant="outline" className="h-7 text-xs px-2"
+                            onClick={() => { setQSubject(selected.title); setQShowForm(true); }}>
+                            <Plus className="w-3 h-3 mr-1" />New Quote
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Existing quotes list */}
+                      {linkedQuotes.length === 0 && !qShowForm && (
+                        <p className="text-xs text-muted-foreground border rounded-lg p-3 bg-muted/20">
+                          No quotes yet. Create one to share a formal quotation with the client.
+                        </p>
+                      )}
+                      {linkedQuotes.length > 0 && (
+                        <div className="border rounded-lg divide-y text-sm">
+                          {linkedQuotes.map(q => (
+                            <div key={q.id} className="flex items-center gap-2 px-3 py-2">
+                              <span className="font-mono text-xs font-semibold text-muted-foreground">{q.quoteNumber}</span>
+                              <span className="flex-1 truncate text-xs">{q.subject ?? "—"}</span>
+                              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${QUOTE_STATUS[q.status] ?? "bg-zinc-100 text-zinc-700"}`}>{q.status}</span>
+                              <span className="text-xs font-semibold">₹{Number(q.totalAmount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                              <a href="/quotes" className="text-muted-foreground hover:text-foreground">
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Inline quote form */}
+                      {qShowForm && (
+                        <div className="border rounded-lg p-3 space-y-3 bg-muted/10">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">New Quote</span>
+                            <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={resetQuoteForm}>Cancel</Button>
+                          </div>
+
+                          {!selected.clientId && (
+                            <p className="text-xs text-destructive border border-destructive/30 rounded p-2 bg-destructive/5">
+                              This opportunity has no linked client. Link a client first to create a quote.
+                            </p>
+                          )}
+
+                          <Input
+                            placeholder="Quote subject"
+                            value={qSubject}
+                            onChange={e => setQSubject(e.target.value)}
+                            className="text-sm h-8"
+                          />
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input type="date" value={qValidUntil} onChange={e => setQValidUntil(e.target.value)} className="text-sm h-8" />
+                            <Input type="number" placeholder="Discount %" min="0" max="100" value={qDiscountPct} onChange={e => setQDiscountPct(e.target.value)} className="text-sm h-8" />
+                          </div>
+
+                          <Select value={qPaymentTerms || "__none__"} onValueChange={v => setQPaymentTerms(v === "__none__" ? "" : v)}>
+                            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Payment terms (optional)" /></SelectTrigger>
+                            <SelectContent position="popper">
+                              <SelectItem value="__none__">— No payment terms —</SelectItem>
+                              {PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+
+                          {/* Line items */}
+                          <div className="space-y-2">
+                            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Line Items</div>
+                            {qItems.map((item, i) => (
+                              <div key={i} className="rounded-md border bg-background p-2.5 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="shrink-0 w-8 h-8 rounded overflow-hidden border bg-muted flex items-center justify-center">
+                                    {item.imageUrl
+                                      ? <img src={item.imageUrl} alt={item.description} className="w-full h-full object-cover" />
+                                      : <Package className="w-3.5 h-3.5 text-muted-foreground" />}
+                                  </div>
+                                  <Select
+                                    value={item.productId ? String(item.productId) : "__custom__"}
+                                    onValueChange={v => {
+                                      if (v === "__custom__") {
+                                        setQItems(prev => prev.map((it, idx) => idx === i ? { ...it, productId: undefined, imageUrl: null } : it));
+                                      } else {
+                                        const prod = (products ?? []).find(p => String(p.id) === v);
+                                        if (prod) setQItems(prev => prev.map((it, idx) => idx === i ? { ...it, productId: prod.id, description: prod.name, unitPrice: Number(prod.sellingPrice), imageUrl: prod.imageUrl ?? null } : it));
+                                      }
+                                    }}>
+                                    <SelectTrigger className="flex-1 h-8 text-xs"><SelectValue placeholder="Select product…" /></SelectTrigger>
+                                    <SelectContent position="popper" className="max-h-60">
+                                      <SelectItem value="__custom__">— Custom description —</SelectItem>
+                                      {(products ?? []).map(p => (
+                                        <SelectItem key={p.id} value={String(p.id)}>
+                                          <div className="flex items-center gap-2">
+                                            {p.imageUrl
+                                              ? <img src={p.imageUrl} alt={p.name} className="w-4 h-4 rounded object-cover shrink-0" />
+                                              : <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                                            <span>{p.name}</span>
+                                            <span className="text-muted-foreground ml-auto text-xs">₹{Number(p.sellingPrice).toLocaleString("en-IN")}</span>
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button size="icon" variant="ghost" className="shrink-0 h-8 w-8" onClick={() => setQItems(qItems.filter((_, x) => x !== i))}>
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                                <div className="grid grid-cols-12 gap-1.5">
+                                  <Input className="col-span-6 text-xs h-7" placeholder="Description"
+                                    value={item.description} onChange={e => { const n = [...qItems]; n[i].description = e.target.value; setQItems(n); }} />
+                                  <Input className="col-span-2 text-xs h-7" type="number" placeholder="Qty" min="1"
+                                    value={item.quantity} onChange={e => { const n = [...qItems]; n[i].quantity = Number(e.target.value); setQItems(n); }} />
+                                  <Input className="col-span-4 text-xs h-7" type="number" placeholder="Unit price ₹"
+                                    value={item.unitPrice} onChange={e => { const n = [...qItems]; n[i].unitPrice = Number(e.target.value); setQItems(n); }} />
+                                </div>
+                                {item.quantity > 0 && item.unitPrice > 0 && (
+                                  <div className="text-xs text-right text-muted-foreground">
+                                    Line total: ₹{(item.quantity * item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            <Button variant="outline" size="sm" className="h-7 text-xs"
+                              onClick={() => setQItems([...qItems, { description: "", quantity: 1, unitPrice: 0 }])}>
+                              <Plus className="w-3 h-3 mr-1" />Add line
+                            </Button>
+                          </div>
+
+                          {/* Financial summary */}
+                          {qFilledItems.length > 0 && (
+                            <div className="bg-muted/40 rounded-md p-3 space-y-1 text-xs">
+                              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>₹{qSubtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+                              {Number(qDiscountPct) > 0 && <div className="flex justify-between text-amber-600"><span>Discount ({qDiscountPct}%)</span><span>−₹{(qSubtotal - qAfterDisc).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>}
+                              <div className="flex justify-between text-muted-foreground"><span>GST 18%</span><span>₹{qGst.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+                              <div className="flex justify-between font-bold text-sm pt-1 border-t border-border"><span>Total</span><span>₹{qTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+                            </div>
+                          )}
+
+                          <Textarea placeholder="Notes (optional)" value={qNotes} onChange={e => setQNotes(e.target.value)} rows={2} className="text-sm" />
+
+                          {qFilledItems.length === 0 && <p className="text-xs text-destructive text-center">Add at least one line item with a description</p>}
+                          <Button
+                            onClick={() => createQuote.mutate()}
+                            disabled={!selected.clientId || qFilledItems.length === 0 || createQuote.isPending}
+                            className="w-full h-8 text-sm">
+                            {createQuote.isPending ? "Creating…" : "Create Quote"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <Button variant="destructive" className="w-full" onClick={() => del.mutate(selected.id)} disabled={del.isPending}>
                   <Trash2 className="w-4 h-4 mr-2" />Delete Opportunity
                 </Button>
