@@ -87,10 +87,11 @@ async function getOrderDetail(id: number, companyId: number) {
 }
 
 router.get("/v1/sales-orders", async (req, res): Promise<void> => {
-  const { status, clientId } = req.query as { status?: string; clientId?: string };
+  const { status, clientId, quoteId } = req.query as { status?: string; clientId?: string; quoteId?: string };
   const conditions: SQL[] = [eq(salesOrdersTable.companyId, req.companyId), isNull(salesOrdersTable.deletedAt)];
   if (status) conditions.push(eq(salesOrdersTable.status, status));
   if (clientId) conditions.push(eq(salesOrdersTable.clientId, parseInt(clientId, 10)));
+  if (quoteId) conditions.push(eq(salesOrdersTable.quoteId, parseInt(quoteId, 10)));
 
   const rows = await db
     .select({ order: salesOrdersTable, clientName: clientsTable.companyName })
@@ -104,6 +105,7 @@ router.get("/v1/sales-orders", async (req, res): Promise<void> => {
     orderNumber: r.order.orderNumber,
     clientId: r.order.clientId,
     clientName: r.clientName ?? "Unknown",
+    quoteId: r.order.quoteId ?? null,
     status: r.order.status,
     validTransitions: validTransitions(SO_TRANSITIONS, r.order.status),
     totalAmount: Number(r.order.totalAmount),

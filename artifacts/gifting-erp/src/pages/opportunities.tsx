@@ -13,9 +13,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check, FileText, ExternalLink, ArrowRight } from "lucide-react";
+import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check, FileText, ExternalLink, ArrowRight, Truck, PackageCheck, Navigation } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
-import { printSampleOrder, printReturnNote, printCatalogue, printQuote } from "@/lib/print-utils";
+import { printSampleOrder, printReturnNote, printCatalogue, printQuote, printDeliveryChallan } from "@/lib/print-utils";
 
 type Opportunity = {
   id: number; title: string; clientId: number | null; clientName: string | null;
@@ -36,6 +36,8 @@ type SampleOrderDetail = SampleOrderSummary & {
 type SampleLine = { productId: string; quantity: string };
 type LineItem = { description: string; quantity: number; unitPrice: number; productId?: number; imageUrl?: string | null };
 type OppQuote = { id: number; quoteNumber: string; subject: string | null; status: string; totalAmount: number; opportunityId: number | null; createdAt: string };
+type OppSalesOrder = { id: number; orderNumber: string; clientName: string; quoteId: number | null; status: string; validTransitions: string[]; grandTotal: number; deliveryDate: string | null; poNumber: string | null; createdAt: string };
+type OppShipment = { id: number; shipmentNumber: string; salesOrderId: number; orderNumber: string | null; courierPartner: string; status: string; validTransitions: string[]; trackingNumber: string | null; dispatchDate: string | null; estimatedDelivery: string | null; numberOfBoxes: number | null; totalWeight: number | null; freightCost: number; items: Array<{ id: number; deliveryName: string; address: string; awbNumber: string | null; status: string }>; createdAt: string };
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
 
 const SAMPLE_STATUS_COLOR: Record<string, string> = {
@@ -107,6 +109,9 @@ export function Opportunities() {
   const [advShowForm, setAdvShowForm] = useState(false);
   const [advForm, setAdvForm] = useState({ amount: "", paymentMode: "", referenceNo: "", receiptDate: new Date().toISOString().slice(0, 10), notes: "" });
   const [convertingQuoteId, setConvertingQuoteId] = useState<number | null>(null);
+  const [shipShowForm, setShipShowForm] = useState(false);
+  const [shipForm, setShipForm] = useState({ courierPartner: "", trackingNumber: "", estimatedDelivery: "", numberOfBoxes: "", freightCost: "" });
+  const [advancingShipId, setAdvancingShipId] = useState<number | null>(null);
   const [oppEditMode, setOppEditMode] = useState(false);
   const [oppEditForm, setOppEditForm] = useState({ title: "", clientId: "", value: "", probability: "50", expectedCloseDate: "", ownerId: "", notes: "" });
   const [qShowForm, setQShowForm] = useState(false);
@@ -136,7 +141,7 @@ export function Opportunities() {
     queryKey: ["opp-quotes", selected?.id],
     queryFn: () => api<OppQuote[]>("/v1/quotes"),
     select: (all) => all.filter(q => q.opportunityId === selected?.id),
-    enabled: !!selected && (selected.stage === "quotation_sent" || selected.stage === "received_po"),
+    enabled: !!selected && (selected.stage === "quotation_sent" || selected.stage === "received_po" || selected.stage === "material_supplied"),
   });
 
   type AdvanceReceipt = { id: number; opportunityId: number; amount: number; paymentMode: string | null; referenceNo: string | null; receiptDate: string; notes: string | null; createdAt: string };
@@ -144,6 +149,19 @@ export function Opportunities() {
     queryKey: ["advance-receipts", selected?.id],
     queryFn: () => api<AdvanceReceipt[]>(`/v1/advance-receipts?opportunityId=${selected!.id}`),
     enabled: !!selected && selected.stage === "received_po",
+  });
+
+  const acceptedQuoteForSO = oppQuotes?.find(q => q.status === "accepted") ?? oppQuotes?.[oppQuotes.length - 1];
+  const { data: oppSalesOrders } = useQuery<OppSalesOrder[]>({
+    queryKey: ["opp-sales-orders", selected?.id, acceptedQuoteForSO?.id],
+    queryFn: () => api<OppSalesOrder[]>(`/v1/sales-orders?quoteId=${acceptedQuoteForSO!.id}`),
+    enabled: !!selected && selected.stage === "material_supplied" && !!acceptedQuoteForSO,
+  });
+  const firstSO = oppSalesOrders?.[0];
+  const { data: oppShipments, refetch: refetchShipments } = useQuery<OppShipment[]>({
+    queryKey: ["opp-shipments", firstSO?.id],
+    queryFn: () => api<OppShipment[]>(`/v1/shipments?salesOrderId=${firstSO!.id}`),
+    enabled: !!firstSO,
   });
 
   const create = useMutation({
@@ -271,6 +289,35 @@ export function Opportunities() {
   const deleteAdvanceReceipt = useMutation({
     mutationFn: (id: number) => api(`/v1/advance-receipts/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["advance-receipts", selected?.id] }); },
+  });
+
+  const createShipment = useMutation({
+    mutationFn: (soId: number) => api<OppShipment>("/v1/shipments", {
+      method: "POST",
+      body: JSON.stringify({
+        salesOrderId: soId,
+        courierPartner: shipForm.courierPartner.trim(),
+        trackingNumber: shipForm.trackingNumber.trim() || undefined,
+        estimatedDelivery: shipForm.estimatedDelivery || undefined,
+        numberOfBoxes: shipForm.numberOfBoxes ? parseInt(shipForm.numberOfBoxes, 10) : undefined,
+        freightCost: shipForm.freightCost ? parseFloat(shipForm.freightCost) : undefined,
+      }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["opp-shipments"] });
+      setShipShowForm(false);
+      setShipForm({ courierPartner: "", trackingNumber: "", estimatedDelivery: "", numberOfBoxes: "", freightCost: "" });
+      toast({ title: "Shipment created" });
+    },
+  });
+
+  const advanceShipmentStatus = useMutation({
+    mutationFn: ({ shipId, status }: { shipId: number; status: string }) =>
+      api<OppShipment>(`/v1/shipments/${shipId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    onMutate: ({ shipId }) => setAdvancingShipId(shipId),
+    onSettled: () => setAdvancingShipId(null),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["opp-shipments"] }); toast({ title: "Shipment status updated" }); },
+    onError: () => toast({ title: "Could not update status", variant: "destructive" }),
   });
 
   const createSample = useMutation({
@@ -1382,6 +1429,184 @@ export function Opportunities() {
                           </div>
                         )}
                       </div>
+                    </div>
+                  );
+                })()}
+
+                {selected.stage === "material_supplied" && (() => {
+                  const SO_STATUS_COLOR: Record<string, string> = {
+                    Draft: "bg-zinc-100 text-zinc-700",
+                    Confirmed: "bg-blue-100 text-blue-700",
+                    "In Production": "bg-amber-100 text-amber-700",
+                    Shipped: "bg-indigo-100 text-indigo-700",
+                    Delivered: "bg-emerald-100 text-emerald-700",
+                    Cancelled: "bg-red-100 text-red-700",
+                  };
+                  const SHIP_STATUS_COLOR: Record<string, string> = {
+                    Created: "bg-zinc-100 text-zinc-700",
+                    "Label Generated": "bg-blue-100 text-blue-700",
+                    "In Transit": "bg-amber-100 text-amber-800",
+                    Delivered: "bg-emerald-100 text-emerald-700",
+                    Returned: "bg-red-100 text-red-700",
+                  };
+                  const shipments = oppShipments ?? [];
+                  return (
+                    <div className="space-y-4" data-testid="section-material-supplied">
+                      {/* Linked Sales Order */}
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                          <PackageCheck className="w-3.5 h-3.5" />Sales Order
+                        </div>
+                        {!firstSO ? (
+                          <p className="text-xs text-muted-foreground text-center py-3 border rounded-lg">
+                            No Sales Order found — convert a quote first from the Received PO stage
+                          </p>
+                        ) : (
+                          <div className="border rounded-lg p-3 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-xs font-bold text-primary">{firstSO.orderNumber}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${SO_STATUS_COLOR[firstSO.status] ?? "bg-muted text-muted-foreground"}`}>{firstSO.status}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-bold">₹{firstSO.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                              <a href="/sales-orders" className="text-muted-foreground hover:text-foreground p-1">
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
+                            {firstSO.deliveryDate && (
+                              <div className="text-xs text-muted-foreground">
+                                Delivery: {new Date(firstSO.deliveryDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                              </div>
+                            )}
+                            {firstSO.poNumber && <div className="text-xs text-muted-foreground">PO: {firstSO.poNumber}</div>}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Shipments */}
+                      {firstSO && (
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                              <Truck className="w-3.5 h-3.5" />Shipments
+                              {shipments.length > 0 && <span className="text-foreground font-bold">{shipments.length}</span>}
+                            </div>
+                            <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => setShipShowForm(v => !v)}>
+                              {shipShowForm ? "Cancel" : <><Plus className="w-3 h-3 mr-1" />Create</>}
+                            </Button>
+                          </div>
+
+                          {shipShowForm && (
+                            <div className="border rounded-lg p-3 space-y-2.5 bg-muted/10 mb-3">
+                              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">New Shipment</div>
+                              <Input
+                                placeholder="Courier Partner *"
+                                value={shipForm.courierPartner}
+                                onChange={e => setShipForm(f => ({ ...f, courierPartner: e.target.value }))}
+                                className="text-sm h-8"
+                              />
+                              <Input
+                                placeholder="Tracking Number (optional)"
+                                value={shipForm.trackingNumber}
+                                onChange={e => setShipForm(f => ({ ...f, trackingNumber: e.target.value }))}
+                                className="text-sm h-8"
+                              />
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <p className="text-xs text-muted-foreground mb-1">Est. Delivery</p>
+                                  <Input
+                                    type="date"
+                                    value={shipForm.estimatedDelivery}
+                                    onChange={e => setShipForm(f => ({ ...f, estimatedDelivery: e.target.value }))}
+                                    className="text-sm h-8"
+                                  />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground mb-1">No. of Boxes</p>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    placeholder="e.g. 12"
+                                    value={shipForm.numberOfBoxes}
+                                    onChange={e => setShipForm(f => ({ ...f, numberOfBoxes: e.target.value }))}
+                                    className="text-sm h-8"
+                                  />
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                className="w-full h-8 text-sm"
+                                disabled={!shipForm.courierPartner.trim() || createShipment.isPending}
+                                onClick={() => createShipment.mutate(firstSO.id)}>
+                                {createShipment.isPending ? "Creating…" : "Create Shipment"}
+                              </Button>
+                            </div>
+                          )}
+
+                          {shipments.length === 0 && !shipShowForm ? (
+                            <p className="text-xs text-muted-foreground text-center py-3 border rounded-lg">No shipments yet — create one above</p>
+                          ) : shipments.length > 0 && (
+                            <div className="space-y-2">
+                              {shipments.map(sh => {
+                                const nextStatus = sh.validTransitions[0] ?? null;
+                                const isAdvancing = advancingShipId === sh.id;
+                                return (
+                                  <div key={sh.id} className="border rounded-lg p-3 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <Truck className="w-3.5 h-3.5 text-muted-foreground" />
+                                        <span className="font-mono text-xs font-bold">{sh.shipmentNumber}</span>
+                                      </div>
+                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${SHIP_STATUS_COLOR[sh.status] ?? "bg-muted text-muted-foreground"}`}>{sh.status}</span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground space-y-0.5">
+                                      <div><span className="font-medium">Courier:</span> {sh.courierPartner}</div>
+                                      {sh.trackingNumber && <div><span className="font-medium">Tracking:</span> <span className="font-mono">{sh.trackingNumber}</span></div>}
+                                      {sh.numberOfBoxes && <div><span className="font-medium">Boxes:</span> {sh.numberOfBoxes}</div>}
+                                      {sh.dispatchDate && <div><span className="font-medium">Dispatched:</span> {new Date(sh.dispatchDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</div>}
+                                      {sh.estimatedDelivery && <div><span className="font-medium">Est. Delivery:</span> {new Date(sh.estimatedDelivery).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</div>}
+                                    </div>
+                                    <div className="flex items-center gap-2 pt-1">
+                                      {nextStatus && (
+                                        <Button
+                                          size="sm"
+                                          className="flex-1 h-7 text-xs"
+                                          disabled={isAdvancing}
+                                          onClick={() => advanceShipmentStatus.mutate({ shipId: sh.id, status: nextStatus })}>
+                                          {isAdvancing ? "Updating…" : (
+                                            nextStatus === "In Transit" ? <><Navigation className="w-3 h-3 mr-1" />Mark In Transit</> :
+                                            nextStatus === "Label Generated" ? <><Check className="w-3 h-3 mr-1" />Generate Label</> :
+                                            nextStatus === "Delivered" ? <><PackageCheck className="w-3 h-3 mr-1" />Mark Delivered</> :
+                                            nextStatus
+                                          )}
+                                        </Button>
+                                      )}
+                                      <button
+                                        title="Print Delivery Challan"
+                                        className="text-muted-foreground hover:text-foreground p-1.5 border rounded"
+                                        onClick={() => printDeliveryChallan({
+                                          shipmentNumber: sh.shipmentNumber,
+                                          salesOrderId: sh.salesOrderId,
+                                          orderNumber: sh.orderNumber,
+                                          courierPartner: sh.courierPartner,
+                                          trackingNumber: sh.trackingNumber,
+                                          dispatchDate: sh.dispatchDate,
+                                          estimatedDelivery: sh.estimatedDelivery,
+                                          numberOfBoxes: sh.numberOfBoxes,
+                                          totalWeight: sh.totalWeight ?? undefined,
+                                          freightCost: sh.freightCost,
+                                          items: sh.items,
+                                        })}>
+                                        <Printer className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
