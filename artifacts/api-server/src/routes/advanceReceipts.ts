@@ -1,21 +1,50 @@
 import { Router } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, advanceReceiptsTable } from "@workspace/db";
+import { db, advanceReceiptsTable, opportunitiesTable, clientsTable } from "@workspace/db";
 
 const router = Router();
 
+function serializeReceipt(
+  r: typeof advanceReceiptsTable.$inferSelect,
+  opportunityTitle: string | null,
+  clientName: string | null,
+) {
+  return {
+    id: r.id,
+    opportunityId: r.opportunityId,
+    opportunityTitle: opportunityTitle ?? null,
+    clientName: clientName ?? null,
+    amount: Number(r.amount),
+    paymentMode: r.paymentMode ?? null,
+    referenceNo: r.referenceNo ?? null,
+    receiptDate: r.receiptDate.toISOString(),
+    notes: r.notes ?? null,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
 router.get("/v1/advance-receipts", async (req, res): Promise<void> => {
   const { opportunityId } = req.query as { opportunityId?: string };
-  if (!opportunityId) { res.status(400).json({ error: "opportunityId is required" }); return; }
-  const rows = await db.select().from(advanceReceiptsTable)
-    .where(and(eq(advanceReceiptsTable.opportunityId, parseInt(opportunityId, 10)), eq(advanceReceiptsTable.companyId, req.companyId)))
+
+  const query = db
+    .select({
+      receipt: advanceReceiptsTable,
+      opportunityTitle: opportunitiesTable.title,
+      clientName: clientsTable.companyName,
+    })
+    .from(advanceReceiptsTable)
+    .leftJoin(opportunitiesTable, eq(advanceReceiptsTable.opportunityId, opportunitiesTable.id))
+    .leftJoin(clientsTable, eq(opportunitiesTable.clientId, clientsTable.id))
     .orderBy(desc(advanceReceiptsTable.receiptDate));
-  res.json(rows.map(r => ({
-    id: r.id, opportunityId: r.opportunityId, amount: Number(r.amount),
-    paymentMode: r.paymentMode ?? null, referenceNo: r.referenceNo ?? null,
-    receiptDate: r.receiptDate.toISOString(), notes: r.notes ?? null,
-    createdAt: r.createdAt.toISOString(),
-  })));
+
+  const rows = opportunityId
+    ? await query.where(and(
+        eq(advanceReceiptsTable.opportunityId, parseInt(opportunityId, 10)),
+        eq(advanceReceiptsTable.companyId, req.companyId),
+      ))
+    : await query.where(eq(advanceReceiptsTable.companyId, req.companyId));
+
+  res.json(rows.map(r => serializeReceipt(r.receipt, r.opportunityTitle, r.clientName)));
 });
 
 router.post("/v1/advance-receipts", async (req, res): Promise<void> => {
@@ -28,12 +57,15 @@ router.post("/v1/advance-receipts", async (req, res): Promise<void> => {
     paymentMode: paymentMode ?? null, referenceNo: referenceNo ?? null,
     receiptDate: new Date(receiptDate), notes: notes ?? null,
   }).returning();
-  res.status(201).json({
-    id: row.id, opportunityId: row.opportunityId, amount: Number(row.amount),
-    paymentMode: row.paymentMode ?? null, referenceNo: row.referenceNo ?? null,
-    receiptDate: row.receiptDate.toISOString(), notes: row.notes ?? null,
-    createdAt: row.createdAt.toISOString(),
-  });
+
+  const [joined] = await db
+    .select({ receipt: advanceReceiptsTable, opportunityTitle: opportunitiesTable.title, clientName: clientsTable.companyName })
+    .from(advanceReceiptsTable)
+    .leftJoin(opportunitiesTable, eq(advanceReceiptsTable.opportunityId, opportunitiesTable.id))
+    .leftJoin(clientsTable, eq(opportunitiesTable.clientId, clientsTable.id))
+    .where(eq(advanceReceiptsTable.id, row.id));
+
+  res.status(201).json(serializeReceipt(joined.receipt, joined.opportunityTitle, joined.clientName));
 });
 
 router.delete("/v1/advance-receipts/:id", async (req, res): Promise<void> => {

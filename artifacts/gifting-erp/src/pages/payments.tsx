@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useListPayments, useCreatePayment, useListInvoices, getListPaymentsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -14,9 +15,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, CreditCard, IndianRupee, Banknote, TrendingUp } from "lucide-react";
+import { Plus, CreditCard, IndianRupee, Banknote, TrendingUp, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { api } from "@/lib/api";
 
 const PAYMENT_MODES = ["UPI", "NEFT", "RTGS", "IMPS", "Cash", "Cheque", "Bank Transfer"] as const;
 
@@ -32,12 +34,35 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+type AdvanceReceipt = {
+  id: number;
+  opportunityId: number;
+  opportunityTitle: string | null;
+  clientName: string | null;
+  amount: number;
+  paymentMode: string | null;
+  referenceNo: string | null;
+  receiptDate: string;
+  notes: string | null;
+  createdAt: string;
+};
+
+type UnifiedEntry =
+  | { kind: "invoice"; id: number; invoiceId: number; clientName: string | null; amount: number; type: string; paymentMode: string | null; referenceNo: string | null; paymentDate: string; notes: string | null; invoiceNumber: string | null }
+  | { kind: "advance"; id: number; opportunityId: number; opportunityTitle: string | null; clientName: string | null; amount: number; paymentMode: string | null; referenceNo: string | null; receiptDate: string; notes: string | null };
+
 export function Payments() {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [invoiceFilter, setInvoiceFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "invoice" | "advance">("all");
 
-  const { data: payments, isLoading } = useListPayments({ invoiceId: invoiceFilter === "all" ? undefined : Number(invoiceFilter) });
+  const { data: payments, isLoading: loadingPayments } = useListPayments();
   const { data: invoices } = useListInvoices();
+  const { data: advanceReceipts, isLoading: loadingAdvance } = useQuery<AdvanceReceipt[]>({
+    queryKey: ["advance-receipts-all"],
+    queryFn: () => api<AdvanceReceipt[]>("/v1/advance-receipts"),
+  });
+
+  const isLoading = loadingPayments || loadingAdvance;
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -65,9 +90,53 @@ export function Payments() {
     createPayment.mutate({ data });
   };
 
-  const totalCollected = payments?.reduce((s, p) => s + Number(p.amount ?? 0), 0) ?? 0;
-  const paymentCount = payments?.length ?? 0;
-  const avgPayment = paymentCount > 0 ? totalCollected / paymentCount : 0;
+  const getInvoiceInfo = (invoiceId: number) => invoices?.find((inv) => inv.id === invoiceId);
+
+  // Build unified list
+  const invoiceEntries: UnifiedEntry[] = (payments ?? []).map(p => ({
+    kind: "invoice",
+    id: p.id,
+    invoiceId: p.invoiceId,
+    clientName: getInvoiceInfo(p.invoiceId)?.clientName ?? null,
+    amount: Number(p.amount ?? 0),
+    type: p.type,
+    paymentMode: p.paymentMode ?? null,
+    referenceNo: p.referenceNo ?? null,
+    paymentDate: p.paymentDate,
+    notes: p.notes ?? null,
+    invoiceNumber: getInvoiceInfo(p.invoiceId)?.invoiceNumber ?? null,
+  }));
+
+  const advanceEntries: UnifiedEntry[] = (advanceReceipts ?? []).map(r => ({
+    kind: "advance",
+    id: r.id,
+    opportunityId: r.opportunityId,
+    opportunityTitle: r.opportunityTitle,
+    clientName: r.clientName,
+    amount: r.amount,
+    paymentMode: r.paymentMode,
+    referenceNo: r.referenceNo,
+    receiptDate: r.receiptDate,
+    notes: r.notes,
+  }));
+
+  const allEntries: UnifiedEntry[] = [
+    ...invoiceEntries,
+    ...advanceEntries,
+  ].sort((a, b) => {
+    const aDate = a.kind === "invoice" ? a.paymentDate : a.receiptDate;
+    const bDate = b.kind === "invoice" ? b.paymentDate : b.receiptDate;
+    return new Date(bDate).getTime() - new Date(aDate).getTime();
+  });
+
+  const filtered = allEntries.filter(e =>
+    sourceFilter === "all" ? true :
+    sourceFilter === "invoice" ? e.kind === "invoice" :
+    e.kind === "advance"
+  );
+
+  const totalCollected = filtered.reduce((s, e) => s + e.amount, 0);
+  const totalAdvance = advanceEntries.reduce((s, e) => s + e.amount, 0);
 
   const getTypeBadge = (type: string) => {
     switch (type) {
@@ -91,8 +160,6 @@ export function Payments() {
     };
     return <Badge variant="outline" className={`text-xs ${colors[mode] ?? ""}`}>{mode}</Badge>;
   };
-
-  const getInvoiceInfo = (invoiceId: number) => invoices?.find((inv) => inv.id === invoiceId);
 
   return (
     <div className="space-y-6">
@@ -122,37 +189,34 @@ export function Payments() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Transactions</p>
-              <p className="text-xl font-bold">{paymentCount}</p>
+              <p className="text-xl font-bold">{filtered.length}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-5 h-5 text-amber-600" />
+            <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Avg. per Transaction</p>
-              <p className="text-xl font-bold">
-                ₹{avgPayment.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              <p className="text-xs text-muted-foreground">Advance Collected</p>
+              <p className="text-xl font-bold text-indigo-700 dark:text-indigo-400">
+                ₹{totalAdvance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
               </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="flex gap-4">
-        <Select value={invoiceFilter} onValueChange={setInvoiceFilter}>
-          <SelectTrigger className="w-[300px]">
-            <SelectValue placeholder="Filter by invoice" />
+      <div className="flex gap-3">
+        <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as typeof sourceFilter)}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="Filter by type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Invoices</SelectItem>
-            {invoices?.map((inv) => (
-              <SelectItem key={inv.id} value={inv.id.toString()}>
-                {inv.invoiceNumber} — {inv.clientName}
-              </SelectItem>
-            ))}
+            <SelectItem value="all">All Entries</SelectItem>
+            <SelectItem value="invoice">Invoice Payments</SelectItem>
+            <SelectItem value="advance">Advance Receipts</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -162,51 +226,81 @@ export function Payments() {
           <TableHeader>
             <TableRow>
               <TableHead>Receipt #</TableHead>
-              <TableHead>Invoice #</TableHead>
+              <TableHead>Source</TableHead>
               <TableHead>Client</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Mode</TableHead>
               <TableHead>UTR / Ref #</TableHead>
-              <TableHead>Payment Date</TableHead>
+              <TableHead>Date</TableHead>
               <TableHead>Notes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow><TableCell colSpan={9}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
-            ) : payments?.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                 <Banknote className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                No payments recorded
+                No payment entries found
               </TableCell></TableRow>
             ) : (
-              payments?.map((payment) => {
-                const invoice = getInvoiceInfo(payment.invoiceId);
-                return (
-                  <TableRow key={payment.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-muted-foreground" />
-                        REC-{payment.id.toString().padStart(4, "0")}
-                      </div>
-                    </TableCell>
-                    <TableCell>{invoice?.invoiceNumber || `INV-${payment.invoiceId}`}</TableCell>
-                    <TableCell>{invoice?.clientName || "—"}</TableCell>
-                    <TableCell className="text-right font-bold text-green-700 dark:text-green-400">
-                      +₹{Number(payment.amount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                    </TableCell>
-                    <TableCell>{getTypeBadge(payment.type)}</TableCell>
-                    <TableCell>{getModeBadge(payment.paymentMode ?? null)}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {payment.referenceNo || "—"}
-                    </TableCell>
-                    <TableCell>{format(new Date(payment.paymentDate), "MMM d, yyyy")}</TableCell>
-                    <TableCell className="text-muted-foreground max-w-[180px] truncate" title={payment.notes ?? ""}>
-                      {payment.notes || "—"}
-                    </TableCell>
-                  </TableRow>
-                );
+              filtered.map((entry) => {
+                if (entry.kind === "invoice") {
+                  return (
+                    <TableRow key={`inv-${entry.id}`}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="w-4 h-4 text-muted-foreground" />
+                          REC-{entry.id.toString().padStart(4, "0")}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-xs">
+                          <div className="font-medium text-muted-foreground">Invoice</div>
+                          <div className="font-mono">{entry.invoiceNumber ?? `INV-${entry.invoiceId}`}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{entry.clientName ?? "—"}</TableCell>
+                      <TableCell className="text-right font-bold text-green-700 dark:text-green-400">
+                        +₹{entry.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell>{getTypeBadge(entry.type)}</TableCell>
+                      <TableCell>{getModeBadge(entry.paymentMode)}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{entry.referenceNo ?? "—"}</TableCell>
+                      <TableCell>{format(new Date(entry.paymentDate), "MMM d, yyyy")}</TableCell>
+                      <TableCell className="text-muted-foreground max-w-[160px] truncate" title={entry.notes ?? ""}>{entry.notes ?? "—"}</TableCell>
+                    </TableRow>
+                  );
+                } else {
+                  return (
+                    <TableRow key={`adv-${entry.id}`} className="bg-indigo-50/40 dark:bg-indigo-950/20">
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-indigo-500" />
+                          ADV-{entry.id.toString().padStart(4, "0")}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-xs">
+                          <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-200 text-[10px] mb-0.5">Advance</Badge>
+                          <div className="text-muted-foreground truncate max-w-[140px]" title={entry.opportunityTitle ?? ""}>{entry.opportunityTitle ?? "—"}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{entry.clientName ?? "—"}</TableCell>
+                      <TableCell className="text-right font-bold text-indigo-700 dark:text-indigo-400">
+                        +₹{entry.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-200">Advance</Badge>
+                      </TableCell>
+                      <TableCell>{getModeBadge(entry.paymentMode)}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{entry.referenceNo ?? "—"}</TableCell>
+                      <TableCell>{format(new Date(entry.receiptDate), "MMM d, yyyy")}</TableCell>
+                      <TableCell className="text-muted-foreground max-w-[160px] truncate" title={entry.notes ?? ""}>{entry.notes ?? "—"}</TableCell>
+                    </TableRow>
+                  );
+                }
               })
             )}
           </TableBody>
@@ -216,7 +310,7 @@ export function Payments() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
+            <DialogTitle>Record Invoice Payment</DialogTitle>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
