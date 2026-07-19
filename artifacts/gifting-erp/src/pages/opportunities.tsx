@@ -13,9 +13,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check, FileText, ExternalLink, ArrowRight, Truck, PackageCheck, Navigation } from "lucide-react";
+import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check, FileText, ExternalLink, ArrowRight, Truck, PackageCheck, Navigation, XCircle, ClipboardList } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
-import { printSampleOrder, printReturnNote, printCatalogue, printQuote, printDeliveryChallan } from "@/lib/print-utils";
+import { useLocation } from "wouter";
+import { printSampleOrder, printReturnNote, printCatalogue, printQuote, printDeliveryChallan, printSalesOrder } from "@/lib/print-utils";
 
 type Opportunity = {
   id: number; title: string; clientId: number | null; clientName: string | null;
@@ -87,6 +88,7 @@ const BLANK_FORM = { title: "", clientId: "", leadId: "", value: "", probability
 export function Opportunities() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [dialog, setDialog] = useState(false);
   const [selected, setSelected] = useState<Opportunity | null>(null);
   const [form, setForm] = useState({ ...BLANK_FORM });
@@ -155,7 +157,7 @@ export function Opportunities() {
   const { data: oppSalesOrders } = useQuery<OppSalesOrder[]>({
     queryKey: ["opp-sales-orders", selected?.id, acceptedQuoteForSO?.id],
     queryFn: () => api<OppSalesOrder[]>(`/v1/sales-orders?quoteId=${acceptedQuoteForSO!.id}`),
-    enabled: !!selected && selected.stage === "material_supplied" && !!acceptedQuoteForSO,
+    enabled: !!selected && (selected.stage === "material_supplied" || selected.stage === "received_po") && !!acceptedQuoteForSO,
   });
   const firstSO = oppSalesOrders?.[0];
   const { data: oppShipments, refetch: refetchShipments } = useQuery<OppShipment[]>({
@@ -289,6 +291,17 @@ export function Opportunities() {
   const deleteAdvanceReceipt = useMutation({
     mutationFn: (id: number) => api(`/v1/advance-receipts/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["advance-receipts", selected?.id] }); },
+  });
+
+  const updateSOStatus = useMutation({
+    mutationFn: ({ soId, status }: { soId: number; status: string }) =>
+      api(`/v1/sales-orders/${soId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    onSuccess: (_data, { status }) => {
+      qc.invalidateQueries({ queryKey: ["opp-sales-orders"] });
+      qc.invalidateQueries({ queryKey: ["sales-orders"] });
+      toast({ title: status === "Confirmed" ? "Sales Order confirmed" : "Sales Order cancelled" });
+    },
+    onError: () => toast({ title: "Could not update Sales Order", variant: "destructive" }),
   });
 
   const createShipment = useMutation({
@@ -1282,6 +1295,15 @@ export function Opportunities() {
                   const receipts = advanceReceipts ?? [];
                   const totalAdvance = receipts.reduce((s, r) => s + r.amount, 0);
                   const PAYMENT_MODES = ["Cash", "Bank Transfer", "Cheque", "UPI", "NEFT/RTGS", "Other"];
+                  const linkedSO = firstSO ?? null;
+                  const SO_STATUS_COLOR: Record<string, string> = {
+                    Draft: "bg-zinc-100 text-zinc-700",
+                    Confirmed: "bg-blue-100 text-blue-700",
+                    "In Production": "bg-amber-100 text-amber-700",
+                    Shipped: "bg-indigo-100 text-indigo-700",
+                    Delivered: "bg-emerald-100 text-emerald-700",
+                    Cancelled: "bg-red-100 text-red-700",
+                  };
                   return (
                     <div className="space-y-4" data-testid="section-received-po">
                       {/* Confirmed Quote */}
@@ -1295,12 +1317,15 @@ export function Opportunities() {
                           <div className="border rounded-lg p-3 space-y-2">
                             <div className="flex items-center justify-between">
                               <span className="font-mono text-xs font-bold text-primary">{latestQuote.quoteNumber}</span>
-                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                latestQuote.status === "accepted" ? "bg-emerald-100 text-emerald-700" :
-                                latestQuote.status === "sent" ? "bg-blue-100 text-blue-700" :
-                                latestQuote.status === "draft" ? "bg-zinc-100 text-zinc-700" :
-                                "bg-amber-100 text-amber-700"
-                              }`}>{latestQuote.status}</span>
+                              <div className="flex items-center gap-1.5">
+                                {linkedSO && <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700 flex items-center gap-1"><Check className="w-2.5 h-2.5" />Converted</span>}
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                  latestQuote.status === "accepted" ? "bg-emerald-100 text-emerald-700" :
+                                  latestQuote.status === "sent" ? "bg-blue-100 text-blue-700" :
+                                  latestQuote.status === "draft" ? "bg-zinc-100 text-zinc-700" :
+                                  "bg-amber-100 text-amber-700"
+                                }`}>{latestQuote.status}</span>
+                              </div>
                             </div>
                             {latestQuote.subject && <p className="text-xs text-muted-foreground truncate">{latestQuote.subject}</p>}
                             <div className="flex items-center justify-between">
@@ -1324,7 +1349,7 @@ export function Opportunities() {
                                 </a>
                               </div>
                             </div>
-                            {latestQuote.status !== "accepted" && (
+                            {!linkedSO && latestQuote.status !== "accepted" && (
                               <Button
                                 size="sm"
                                 className="w-full h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -1333,7 +1358,7 @@ export function Opportunities() {
                                 {convertQuote.isPending ? "Creating…" : <><Check className="w-3 h-3 mr-1" />Mark Accepted &amp; Convert to Sales Order</>}
                               </Button>
                             )}
-                            {latestQuote.status === "accepted" && (
+                            {!linkedSO && latestQuote.status === "accepted" && (
                               <Button
                                 size="sm"
                                 className="w-full h-7 text-xs"
@@ -1345,6 +1370,94 @@ export function Opportunities() {
                           </div>
                         )}
                       </div>
+
+                      {/* Linked Sales Order — shown after conversion */}
+                      {linkedSO && (
+                        <div>
+                          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                            <PackageCheck className="w-3.5 h-3.5" />Sales Order
+                          </div>
+                          <div className="border rounded-lg p-3 space-y-3">
+                            {/* Header row */}
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-xs font-bold text-primary">{linkedSO.orderNumber}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${SO_STATUS_COLOR[linkedSO.status] ?? "bg-muted text-muted-foreground"}`}>{linkedSO.status}</span>
+                            </div>
+                            {/* Amount + print */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-bold">₹{linkedSO.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  title="Print Sales Order"
+                                  className="text-muted-foreground hover:text-foreground p-1"
+                                  onClick={async () => {
+                                    const detail = await api<{ id: number; orderNumber: string; clientName: string; status: string; totalAmount: number; discountPct: number; gstAmount: number; grandTotal: number; paymentTerms: string | null; deliveryDate: string | null; poNumber: string | null; occasion: string | null; notes: string | null; createdAt: string; items: Array<{ id: number; productName: string; productId: number | null; quantity: number; unitPrice: number; totalPrice: number }> }>(`/v1/sales-orders/${linkedSO.id}`);
+                                    printSalesOrder({
+                                      orderNumber: detail.orderNumber,
+                                      clientName: detail.clientName,
+                                      status: detail.status,
+                                      totalAmount: detail.totalAmount,
+                                      discountPct: detail.discountPct,
+                                      gstAmount: detail.gstAmount,
+                                      grandTotal: detail.grandTotal,
+                                      paymentTerms: detail.paymentTerms,
+                                      deliveryDate: detail.deliveryDate,
+                                      poNumber: detail.poNumber,
+                                      occasion: detail.occasion,
+                                      notes: detail.notes,
+                                      createdAt: detail.createdAt,
+                                      items: detail.items.map(i => ({ id: i.id, productName: i.productName, quantity: i.quantity, unitPrice: i.unitPrice, totalPrice: i.totalPrice })),
+                                    });
+                                  }}>
+                                  <Printer className="w-3.5 h-3.5" />
+                                </button>
+                                <a href="/sales-orders" className="text-muted-foreground hover:text-foreground p-1">
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                            </div>
+                            {linkedSO.deliveryDate && (
+                              <p className="text-xs text-muted-foreground">Delivery: {new Date(linkedSO.deliveryDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
+                            )}
+
+                            {/* Draft actions */}
+                            {linkedSO.status === "Draft" && (
+                              <div className="grid grid-cols-2 gap-2 pt-1">
+                                <Button
+                                  size="sm"
+                                  className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  disabled={updateSOStatus.isPending}
+                                  onClick={() => updateSOStatus.mutate({ soId: linkedSO.id, status: "Confirmed" })}>
+                                  {updateSOStatus.isPending ? "…" : <><Check className="w-3 h-3 mr-1" />Confirm SO</>}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs border-red-200 text-red-600 hover:bg-red-50"
+                                  disabled={updateSOStatus.isPending}
+                                  onClick={() => updateSOStatus.mutate({ soId: linkedSO.id, status: "Cancelled" })}>
+                                  <XCircle className="w-3 h-3 mr-1" />Cancel SO
+                                </Button>
+                              </div>
+                            )}
+
+                            {/* Confirmed — Process button */}
+                            {linkedSO.status === "Confirmed" && (
+                              <Button
+                                size="sm"
+                                className="w-full h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                                onClick={() => navigate(`/order-processing/${linkedSO.id}`)}>
+                                <ClipboardList className="w-3 h-3 mr-1" />Process — Fill Order Form
+                              </Button>
+                            )}
+
+                            {/* Cancelled notice */}
+                            {linkedSO.status === "Cancelled" && (
+                              <p className="text-xs text-red-600 text-center py-1">This sales order was cancelled.</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Advance Receipts */}
                       <div>
