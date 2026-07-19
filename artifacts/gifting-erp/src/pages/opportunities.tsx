@@ -1328,18 +1328,18 @@ export function Opportunities() {
                               <Button
                                 size="sm"
                                 className="w-full h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-                                disabled={convertQuote.isPending && convertingQuoteId === latestQuote.id}
+                                disabled={convertQuote.isPending}
                                 onClick={() => { setConvertingQuoteId(latestQuote.id); convertQuote.mutate(latestQuote.id); }}>
-                                <Check className="w-3 h-3 mr-1" />Mark Accepted &amp; Convert to Sales Order
+                                {convertQuote.isPending ? "Creating…" : <><Check className="w-3 h-3 mr-1" />Mark Accepted &amp; Convert to Sales Order</>}
                               </Button>
                             )}
                             {latestQuote.status === "accepted" && (
                               <Button
                                 size="sm"
                                 className="w-full h-7 text-xs"
-                                disabled={convertQuote.isPending && convertingQuoteId === latestQuote.id}
+                                disabled={convertQuote.isPending}
                                 onClick={() => { setConvertingQuoteId(latestQuote.id); convertQuote.mutate(latestQuote.id); }}>
-                                <ArrowRight className="w-3 h-3 mr-1" />Convert to Sales Order
+                                {convertQuote.isPending ? "Creating…" : <><ArrowRight className="w-3 h-3 mr-1" />Convert to Sales Order</>}
                               </Button>
                             )}
                           </div>

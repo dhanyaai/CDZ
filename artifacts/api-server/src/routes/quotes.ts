@@ -152,6 +152,15 @@ router.post("/v1/quotes/:id/convert", async (req, res): Promise<void> => {
   if (!quote) { res.status(404).json({ error: "Quote not found" }); return; }
   if (quote.status !== "accepted") { res.status(400).json({ error: "Quote must be accepted before converting" }); return; }
 
+  // Idempotency guard — if an SO already exists for this quote, return it instead of creating another
+  const [existingSO] = await db.select({ id: salesOrdersTable.id, orderNumber: salesOrdersTable.orderNumber })
+    .from(salesOrdersTable)
+    .where(and(eq(salesOrdersTable.quoteId, id), eq(salesOrdersTable.companyId, req.companyId)));
+  if (existingSO) {
+    res.json({ salesOrderId: existingSO.id, orderNumber: existingSO.orderNumber, quoteId: id, message: "Sales order already exists for this quote" });
+    return;
+  }
+
   const items = await db.select().from(quoteItemsTable).where(eq(quoteItemsTable.quoteId, id));
 
   const [settings] = await db.select({ soPrefix: companySettingsTable.soPrefix, fyStartMonth: companySettingsTable.fyStartMonth })
