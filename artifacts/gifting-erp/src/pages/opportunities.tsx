@@ -103,6 +103,8 @@ export function Opportunities() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [oppEditMode, setOppEditMode] = useState(false);
+  const [oppEditForm, setOppEditForm] = useState({ title: "", clientId: "", value: "", probability: "50", expectedCloseDate: "", ownerId: "", notes: "" });
   const [qShowForm, setQShowForm] = useState(false);
   const [qSubject, setQSubject] = useState("");
   const [qDiscountPct, setQDiscountPct] = useState("0");
@@ -152,7 +154,27 @@ export function Opportunities() {
   const update = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<Opportunity> }) =>
       api(`/v1/opportunities/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["opportunities"] }); toast({ title: "Updated" }); },
+    onSuccess: (_result, { id, data }) => {
+      qc.invalidateQueries({ queryKey: ["opportunities"] });
+      setSelected(prev => {
+        if (!prev || prev.id !== id) return prev;
+        const merged = { ...prev, ...data } as Opportunity;
+        if (data.clientId !== undefined) {
+          merged.clientName = data.clientId != null
+            ? (clients?.find(c => c.id === (data.clientId as number))?.companyName ?? prev.clientName)
+            : null;
+        }
+        if (data.ownerId !== undefined) {
+          merged.ownerName = data.ownerId != null
+            ? (users?.find(u => u.id === (data.ownerId as number))?.name ?? prev.ownerName)
+            : null;
+        }
+        return merged;
+      });
+      setOppEditMode(false);
+      toast({ title: "Updated" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to update", description: e.message, variant: "destructive" }),
   });
 
   const del = useMutation({
@@ -588,15 +610,116 @@ export function Opportunities() {
       </Dialog>
 
       {/* Detail drawer */}
-      <Sheet open={!!selected} onOpenChange={o => !o && setSelected(null)}>
+      <Sheet open={!!selected} onOpenChange={o => { if (!o) { setSelected(null); setOppEditMode(false); } }}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           {selected && (
             <>
               <SheetHeader className="mb-6">
-                <SheetTitle className="text-xl">{selected.title}</SheetTitle>
-                {selected.clientName && <p className="text-sm text-muted-foreground flex items-center gap-1"><Building2 className="w-4 h-4" />{selected.clientName}</p>}
+                <div className="flex items-start justify-between gap-2">
+                  <SheetTitle className="text-xl leading-snug">{oppEditMode ? "Edit Opportunity" : selected.title}</SheetTitle>
+                  {!oppEditMode ? (
+                    <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs px-3 mt-0.5"
+                      onClick={() => {
+                        setOppEditForm({
+                          title: selected.title,
+                          clientId: selected.clientId != null ? String(selected.clientId) : "",
+                          value: selected.value != null ? String(selected.value) : "",
+                          probability: String(selected.probability),
+                          expectedCloseDate: selected.expectedCloseDate ? selected.expectedCloseDate.split("T")[0] : "",
+                          ownerId: selected.ownerId != null ? String(selected.ownerId) : "",
+                          notes: selected.notes ?? "",
+                        });
+                        setOppEditMode(true);
+                      }}>
+                      Edit
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="ghost" className="shrink-0 h-8 text-xs px-3 mt-0.5" onClick={() => setOppEditMode(false)}>
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+                {!oppEditMode && selected.clientName && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-1"><Building2 className="w-4 h-4" />{selected.clientName}</p>
+                )}
               </SheetHeader>
-              <div className="space-y-5">
+
+              {/* ── EDIT MODE ── */}
+              {oppEditMode && (
+                <div className="space-y-4 mb-6">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Title *</label>
+                    <Input value={oppEditForm.title} onChange={e => setOppEditForm(f => ({ ...f, title: e.target.value }))} placeholder="Opportunity title" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Client</label>
+                    <Select value={oppEditForm.clientId || "__none__"} onValueChange={v => setOppEditForm(f => ({ ...f, clientId: v === "__none__" ? "" : v }))}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Link to client…" /></SelectTrigger>
+                      <SelectContent position="popper" className="max-h-60">
+                        <SelectItem value="__none__">— No client —</SelectItem>
+                        {clients?.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.companyName}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    {!oppEditForm.clientId && (
+                      <p className="text-xs text-amber-600">A linked client is required to create quotes.</p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Deal Value (₹)</label>
+                      <Input className="h-8 text-sm" type="number" value={oppEditForm.value} onChange={e => setOppEditForm(f => ({ ...f, value: e.target.value }))} placeholder="0" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Probability %</label>
+                      <Input className="h-8 text-sm" type="number" min="0" max="100" value={oppEditForm.probability} onChange={e => setOppEditForm(f => ({ ...f, probability: e.target.value }))} placeholder="50" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Expected Close</label>
+                      <Input className="h-8 text-sm" type="date" value={oppEditForm.expectedCloseDate} onChange={e => setOppEditForm(f => ({ ...f, expectedCloseDate: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assigned To</label>
+                      <Select value={oppEditForm.ownerId || "__none__"} onValueChange={v => setOppEditForm(f => ({ ...f, ownerId: v === "__none__" ? "" : v }))}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Assign…" /></SelectTrigger>
+                        <SelectContent position="popper" className="max-h-60">
+                          <SelectItem value="__none__">— Unassigned —</SelectItem>
+                          {users?.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Notes</label>
+                    <Textarea rows={3} value={oppEditForm.notes} onChange={e => setOppEditForm(f => ({ ...f, notes: e.target.value }))} placeholder="Notes…" />
+                  </div>
+
+                  <Button
+                    className="w-full"
+                    disabled={!oppEditForm.title.trim() || update.isPending}
+                    onClick={() => update.mutate({
+                      id: selected.id,
+                      data: {
+                        title: oppEditForm.title.trim(),
+                        clientId: oppEditForm.clientId ? Number(oppEditForm.clientId) : null,
+                        value: oppEditForm.value ? Number(oppEditForm.value) : null,
+                        probability: Number(oppEditForm.probability) || 50,
+                        expectedCloseDate: oppEditForm.expectedCloseDate || null,
+                        ownerId: oppEditForm.ownerId ? Number(oppEditForm.ownerId) : null,
+                        notes: oppEditForm.notes.trim() || null,
+                      },
+                    })}>
+                    {update.isPending ? "Saving…" : "Save Changes"}
+                  </Button>
+                </div>
+              )}
+
+              {!oppEditMode && <div className="space-y-5">
                 {selected.ownerName && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <UserCircle className="w-4 h-4" /><span>Assigned to <strong>{selected.ownerName}</strong></span>
@@ -1041,7 +1164,7 @@ export function Opportunities() {
                 <Button variant="destructive" className="w-full" onClick={() => del.mutate(selected.id)} disabled={del.isPending}>
                   <Trash2 className="w-4 h-4 mr-2" />Delete Opportunity
                 </Button>
-              </div>
+              </div>}
             </>
           )}
         </SheetContent>
