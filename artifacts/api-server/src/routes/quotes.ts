@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, quotesTable, quoteItemsTable, clientsTable } from "@workspace/db";
+import { db, quotesTable, quoteItemsTable, clientsTable, salesOrdersTable, salesOrderItemsTable, companySettingsTable } from "@workspace/db";
+import { nextDocNumber } from "../lib/numberSequence";
 
 const router = Router();
 
@@ -145,11 +146,59 @@ router.delete("/v1/quotes/:id", async (req, res): Promise<void> => {
 
 router.post("/v1/quotes/:id/convert", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
+
   const [quote] = await db.select().from(quotesTable)
     .where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId)));
   if (!quote) { res.status(404).json({ error: "Quote not found" }); return; }
-  if (quote.status !== "accepted") { res.status(400).json({ error: "Quote must be accepted to convert" }); return; }
-  res.json({ message: "Conversion queued", quoteId: id });
+  if (quote.status !== "accepted") { res.status(400).json({ error: "Quote must be accepted before converting" }); return; }
+
+  const items = await db.select().from(quoteItemsTable).where(eq(quoteItemsTable.quoteId, id));
+
+  const [settings] = await db.select({ soPrefix: companySettingsTable.soPrefix, fyStartMonth: companySettingsTable.fyStartMonth })
+    .from(companySettingsTable).where(eq(companySettingsTable.companyId, req.companyId));
+  const prefix = settings?.soPrefix ?? "SO";
+  const fyStartMonth = settings?.fyStartMonth ?? 4;
+
+  const so = await db.transaction(async (tx) => {
+    const orderNumber = await nextDocNumber(tx, req.companyId, "SO", prefix, fyStartMonth);
+    const [order] = await tx.insert(salesOrdersTable).values({
+      companyId: req.companyId,
+      orderNumber,
+      clientId: quote.clientId,
+      quoteId: quote.id,
+      status: "Draft",
+      totalAmount: quote.subtotal,
+      discountPct: quote.discountPct,
+      gstAmount: quote.gstAmount,
+      grandTotal: quote.totalAmount,
+      paymentTerms: quote.paymentTerms ?? null,
+      notes: quote.notes ?? null,
+    }).returning();
+
+    if (items.length > 0) {
+      await tx.insert(salesOrderItemsTable).values(
+        items.map((item) => ({
+          salesOrderId: order.id,
+          productId: item.productId ?? null,
+          productName: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.lineTotal,
+        }))
+      );
+    }
+
+    await tx.update(quotesTable).set({ status: "accepted" }).where(eq(quotesTable.id, id));
+
+    return order;
+  });
+
+  res.status(201).json({
+    salesOrderId: so.id,
+    orderNumber: so.orderNumber,
+    quoteId: id,
+    message: "Sales order created from quote",
+  });
 });
 
 export default router;

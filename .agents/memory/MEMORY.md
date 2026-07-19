@@ -4,5 +4,7 @@
 - [Phase 2 state machine](phase2-state-machine.md) — SO/PO/GRN transition maps, stock reservation, gapless numbers; key design decisions
 - [Radix Select in scrollable dialogs](radix-select-popper.md) — SelectContent inside max-h/overflow-y-auto dialogs needs position="popper" or options render at top of screen
 - [number_sequences schema](number-sequences-schema.md) — real columns are company_id, doc_type, fy_label, last_number; NOT prefix/next_number/padding
+- [nextDocNumber calling convention](next-doc-number.md) — first arg is txOrDb (pass tx inside transactions, db outside); signature: (txOrDb, companyId, docType, prefix, fyStartMonth)
+- [advance receipts pattern](advance-receipts.md) — pre-invoice advance payments live in advance_receipts table (opportunityId, no invoiceId); separate from payments table which requires invoiceId NOT NULL
 - [DO deployment](do-deployment.md) — app/DB ids, sslmode-strip TLS rule, temp firewall whitelist workflow, deploy_on_push enabled, stale DO_DATABASE_URL secret
 - [Drizzle baseline](drizzle-baseline.md) — making migrate() work on push-created DBs: idempotent replay + journal insert; always column-diff vs 0000 snapshot after

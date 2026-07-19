@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check, FileText, ExternalLink } from "lucide-react";
+import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check, FileText, ExternalLink, ArrowRight } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
 import { printSampleOrder, printReturnNote, printCatalogue, printQuote } from "@/lib/print-utils";
 
@@ -104,6 +104,9 @@ export function Opportunities() {
   const [shareCopied, setShareCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [printingQuoteId, setPrintingQuoteId] = useState<number | null>(null);
+  const [advShowForm, setAdvShowForm] = useState(false);
+  const [advForm, setAdvForm] = useState({ amount: "", paymentMode: "", referenceNo: "", receiptDate: new Date().toISOString().slice(0, 10), notes: "" });
+  const [convertingQuoteId, setConvertingQuoteId] = useState<number | null>(null);
   const [oppEditMode, setOppEditMode] = useState(false);
   const [oppEditForm, setOppEditForm] = useState({ title: "", clientId: "", value: "", probability: "50", expectedCloseDate: "", ownerId: "", notes: "" });
   const [qShowForm, setQShowForm] = useState(false);
@@ -133,7 +136,14 @@ export function Opportunities() {
     queryKey: ["opp-quotes", selected?.id],
     queryFn: () => api<OppQuote[]>("/v1/quotes"),
     select: (all) => all.filter(q => q.opportunityId === selected?.id),
-    enabled: !!selected && selected.stage === "quotation_sent",
+    enabled: !!selected && (selected.stage === "quotation_sent" || selected.stage === "received_po"),
+  });
+
+  type AdvanceReceipt = { id: number; opportunityId: number; amount: number; paymentMode: string | null; referenceNo: string | null; receiptDate: string; notes: string | null; createdAt: string };
+  const { data: advanceReceipts } = useQuery<AdvanceReceipt[]>({
+    queryKey: ["advance-receipts", selected?.id],
+    queryFn: () => api<AdvanceReceipt[]>(`/v1/advance-receipts?opportunityId=${selected!.id}`),
+    enabled: !!selected && selected.stage === "received_po",
   });
 
   const create = useMutation({
@@ -221,6 +231,46 @@ export function Opportunities() {
     onError: (err: unknown) => {
       toast({ title: "Failed to create quote", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
     },
+  });
+
+  const convertQuote = useMutation({
+    mutationFn: async (quoteId: number) => {
+      await api(`/v1/quotes/${quoteId}`, { method: "PATCH", body: JSON.stringify({ status: "accepted" }) });
+      return api<{ salesOrderId: number; orderNumber: string }>(`/v1/quotes/${quoteId}/convert`, { method: "POST" });
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["opp-quotes", selected?.id] });
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      toast({ title: "Sales Order Created", description: `${data.orderNumber} created from quote` });
+    },
+    onError: (err: unknown) => {
+      toast({ title: "Conversion failed", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
+    },
+  });
+
+  const createAdvanceReceipt = useMutation({
+    mutationFn: () => api("/v1/advance-receipts", {
+      method: "POST",
+      body: JSON.stringify({
+        opportunityId: selected!.id,
+        amount: Number(advForm.amount),
+        paymentMode: advForm.paymentMode || null,
+        referenceNo: advForm.referenceNo || null,
+        receiptDate: advForm.receiptDate,
+        notes: advForm.notes || null,
+      }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["advance-receipts", selected?.id] });
+      setAdvShowForm(false);
+      setAdvForm({ amount: "", paymentMode: "", referenceNo: "", receiptDate: new Date().toISOString().slice(0, 10), notes: "" });
+      toast({ title: "Advance receipt recorded" });
+    },
+  });
+
+  const deleteAdvanceReceipt = useMutation({
+    mutationFn: (id: number) => api(`/v1/advance-receipts/${id}`, { method: "DELETE" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["advance-receipts", selected?.id] }); },
   });
 
   const createSample = useMutation({
@@ -1173,6 +1223,165 @@ export function Opportunities() {
                           </Button>
                         </div>
                       )}
+                    </div>
+                  );
+                })()}
+
+                {/* ── Received PO / Advance: Confirmed Quote + Advance Receipts ── */}
+                {selected.stage === "received_po" && (() => {
+                  const quotes = oppQuotes ?? [];
+                  const acceptedQuote = quotes.find(q => q.status === "accepted");
+                  const latestQuote = acceptedQuote ?? quotes[quotes.length - 1];
+                  const receipts = advanceReceipts ?? [];
+                  const totalAdvance = receipts.reduce((s, r) => s + r.amount, 0);
+                  const PAYMENT_MODES = ["Cash", "Bank Transfer", "Cheque", "UPI", "NEFT/RTGS", "Other"];
+                  return (
+                    <div className="space-y-4" data-testid="section-received-po">
+                      {/* Confirmed Quote */}
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5" />Confirmed Quote
+                        </div>
+                        {!latestQuote ? (
+                          <p className="text-xs text-muted-foreground text-center py-3 border rounded-lg">No quotes linked to this opportunity</p>
+                        ) : (
+                          <div className="border rounded-lg p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-xs font-bold text-primary">{latestQuote.quoteNumber}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                latestQuote.status === "accepted" ? "bg-emerald-100 text-emerald-700" :
+                                latestQuote.status === "sent" ? "bg-blue-100 text-blue-700" :
+                                latestQuote.status === "draft" ? "bg-zinc-100 text-zinc-700" :
+                                "bg-amber-100 text-amber-700"
+                              }`}>{latestQuote.status}</span>
+                            </div>
+                            {latestQuote.subject && <p className="text-xs text-muted-foreground truncate">{latestQuote.subject}</p>}
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-bold">₹{Number(latestQuote.totalAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  title="Print quote"
+                                  disabled={printingQuoteId === latestQuote.id}
+                                  className="text-muted-foreground hover:text-foreground disabled:opacity-40 p-1"
+                                  onClick={async () => {
+                                    setPrintingQuoteId(latestQuote.id);
+                                    try {
+                                      const detail = await api<{ quoteNumber: string; clientName: string | null; status: string; totalAmount: number; gstAmount: number; subtotal: number; discountPct: number; validUntil: string | null; notes: string | null; items: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number; imageUrl: string | null }> }>(`/v1/quotes/${latestQuote.id}`);
+                                      printQuote({ ...detail, clientName: detail.clientName ?? selected.clientName ?? null });
+                                    } finally { setPrintingQuoteId(null); }
+                                  }}>
+                                  <Printer className="w-3.5 h-3.5" />
+                                </button>
+                                <a href="/quotes" className="text-muted-foreground hover:text-foreground p-1">
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                            </div>
+                            {latestQuote.status !== "accepted" && (
+                              <Button
+                                size="sm"
+                                className="w-full h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                                disabled={convertQuote.isPending && convertingQuoteId === latestQuote.id}
+                                onClick={() => { setConvertingQuoteId(latestQuote.id); convertQuote.mutate(latestQuote.id); }}>
+                                <Check className="w-3 h-3 mr-1" />Mark Accepted &amp; Convert to Sales Order
+                              </Button>
+                            )}
+                            {latestQuote.status === "accepted" && (
+                              <Button
+                                size="sm"
+                                className="w-full h-7 text-xs"
+                                disabled={convertQuote.isPending && convertingQuoteId === latestQuote.id}
+                                onClick={() => { setConvertingQuoteId(latestQuote.id); convertQuote.mutate(latestQuote.id); }}>
+                                <ArrowRight className="w-3 h-3 mr-1" />Convert to Sales Order
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Advance Receipts */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                            <IndianRupee className="w-3.5 h-3.5" />Advance Receipts
+                            {receipts.length > 0 && (
+                              <span className="ml-1 text-xs font-bold text-emerald-700">₹{totalAdvance.toLocaleString("en-IN", { minimumFractionDigits: 0 })} total</span>
+                            )}
+                          </div>
+                          <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => setAdvShowForm(v => !v)}>
+                            {advShowForm ? "Cancel" : <><Plus className="w-3 h-3 mr-1" />Add</>}
+                          </Button>
+                        </div>
+
+                        {advShowForm && (
+                          <div className="border rounded-lg p-3 space-y-2.5 bg-muted/10 mb-2">
+                            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">New Advance Receipt</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input
+                                type="number"
+                                placeholder="Amount (₹)"
+                                value={advForm.amount}
+                                onChange={e => setAdvForm(f => ({ ...f, amount: e.target.value }))}
+                                className="text-sm h-8"
+                              />
+                              <Input
+                                type="date"
+                                value={advForm.receiptDate}
+                                onChange={e => setAdvForm(f => ({ ...f, receiptDate: e.target.value }))}
+                                className="text-sm h-8"
+                              />
+                            </div>
+                            <Select value={advForm.paymentMode || "__none__"} onValueChange={v => setAdvForm(f => ({ ...f, paymentMode: v === "__none__" ? "" : v }))}>
+                              <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Payment mode (optional)" /></SelectTrigger>
+                              <SelectContent position="popper">
+                                <SelectItem value="__none__">— Mode —</SelectItem>
+                                {PAYMENT_MODES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              placeholder="Reference / cheque no. (optional)"
+                              value={advForm.referenceNo}
+                              onChange={e => setAdvForm(f => ({ ...f, referenceNo: e.target.value }))}
+                              className="text-sm h-8"
+                            />
+                            <Input
+                              placeholder="Notes (optional)"
+                              value={advForm.notes}
+                              onChange={e => setAdvForm(f => ({ ...f, notes: e.target.value }))}
+                              className="text-sm h-8"
+                            />
+                            <Button
+                              size="sm"
+                              className="w-full h-8 text-sm"
+                              disabled={!advForm.amount || !advForm.receiptDate || createAdvanceReceipt.isPending}
+                              onClick={() => createAdvanceReceipt.mutate()}>
+                              {createAdvanceReceipt.isPending ? "Saving…" : "Record Advance Receipt"}
+                            </Button>
+                          </div>
+                        )}
+
+                        {receipts.length === 0 && !advShowForm ? (
+                          <p className="text-xs text-muted-foreground text-center py-3 border rounded-lg">No advance receipts recorded yet</p>
+                        ) : receipts.length > 0 && (
+                          <div className="border rounded-lg divide-y text-sm">
+                            {receipts.map(r => (
+                              <div key={r.id} className="flex items-center gap-2 px-3 py-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold text-emerald-700">₹{Number(r.amount).toLocaleString("en-IN", { minimumFractionDigits: 0 })}</div>
+                                  <div className="text-xs text-muted-foreground">{new Date(r.receiptDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}{r.paymentMode ? ` · ${r.paymentMode}` : ""}{r.referenceNo ? ` · ${r.referenceNo}` : ""}</div>
+                                  {r.notes && <div className="text-xs text-muted-foreground truncate">{r.notes}</div>}
+                                </div>
+                                <button
+                                  className="text-muted-foreground hover:text-destructive shrink-0 p-1"
+                                  onClick={() => deleteAdvanceReceipt.mutate(r.id)}
+                                  title="Delete receipt">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}

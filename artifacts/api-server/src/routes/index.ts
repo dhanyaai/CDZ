@@ -33,6 +33,7 @@ import auditLogsRouter from "./auditLogs";
 import reportsRouter from "./reports";
 import servicesRouter from "./services";
 import catalogueSharesRouter from "./catalogueShares";
+import advanceReceiptsRouter from "./advanceReceipts";
 
 const router: IRouter = Router();
 
@@ -70,5 +71,6 @@ router.use(auditLogsRouter);
 router.use(reportsRouter);
 router.use(servicesRouter);
 router.use(catalogueSharesRouter);
+router.use(advanceReceiptsRouter);
 
 export default router;
