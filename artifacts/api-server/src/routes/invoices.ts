@@ -57,10 +57,11 @@ function serializeInvoice(
 }
 
 router.get("/v1/invoices", async (req, res): Promise<void> => {
-  const { status, clientId } = req.query as { status?: string; clientId?: string };
+  const { status, clientId, salesOrderId } = req.query as { status?: string; clientId?: string; salesOrderId?: string };
   const conditions: SQL[] = [eq(invoicesTable.companyId, req.companyId), isNull(invoicesTable.deletedAt)];
   if (status) conditions.push(eq(invoicesTable.status, status));
   if (clientId) conditions.push(eq(invoicesTable.clientId, parseInt(clientId, 10)));
+  if (salesOrderId) conditions.push(eq(invoicesTable.salesOrderId, parseInt(salesOrderId, 10)));
 
   const rows = await db
     .select({

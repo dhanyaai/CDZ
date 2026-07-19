@@ -110,6 +110,8 @@ export function Opportunities() {
   const [printingQuoteId, setPrintingQuoteId] = useState<number | null>(null);
   const [advShowForm, setAdvShowForm] = useState(false);
   const [advForm, setAdvForm] = useState({ amount: "", paymentMode: "", referenceNo: "", receiptDate: new Date().toISOString().slice(0, 10), notes: "" });
+  const [pmtShowForm, setPmtShowForm] = useState(false);
+  const [pmtForm, setPmtForm] = useState({ amount: "", paymentMode: "", referenceNo: "", paymentDate: new Date().toISOString().slice(0, 10), notes: "" });
   const [convertingQuoteId, setConvertingQuoteId] = useState<number | null>(null);
   const [shipShowForm, setShipShowForm] = useState(false);
   const [shipForm, setShipForm] = useState({ courierPartner: "", trackingNumber: "", estimatedDelivery: "", numberOfBoxes: "", freightCost: "" });
@@ -143,9 +145,11 @@ export function Opportunities() {
     queryKey: ["opp-quotes", selected?.id],
     queryFn: () => api<OppQuote[]>("/v1/quotes"),
     select: (all) => all.filter(q => q.opportunityId === selected?.id),
-    enabled: !!selected && (selected.stage === "quotation_sent" || selected.stage === "received_po" || selected.stage === "material_supplied"),
+    enabled: !!selected && (selected.stage === "quotation_sent" || selected.stage === "received_po" || selected.stage === "material_supplied" || selected.stage === "received_payments"),
   });
 
+  type OppInvoice = { id: number; invoiceNumber: string; salesOrderId: number | null; orderNumber: string | null; clientName: string; grandTotal: number; gstAmount: number; totalAmount: number; status: string; validTransitions: string[]; dueDate: string | null; paymentTerms: string | null; createdAt: string };
+  type OppPayment = { id: number; invoiceId: number; amount: number; type: string; paymentMode: string | null; referenceNo: string | null; paymentDate: string; notes: string | null; createdAt: string };
   type AdvanceReceipt = { id: number; opportunityId: number; amount: number; paymentMode: string | null; referenceNo: string | null; receiptDate: string; notes: string | null; createdAt: string };
   const { data: advanceReceipts } = useQuery<AdvanceReceipt[]>({
     queryKey: ["advance-receipts", selected?.id],
@@ -157,9 +161,20 @@ export function Opportunities() {
   const { data: oppSalesOrders } = useQuery<OppSalesOrder[]>({
     queryKey: ["opp-sales-orders", selected?.id, acceptedQuoteForSO?.id],
     queryFn: () => api<OppSalesOrder[]>(`/v1/sales-orders?quoteId=${acceptedQuoteForSO!.id}`),
-    enabled: !!selected && (selected.stage === "material_supplied" || selected.stage === "received_po") && !!acceptedQuoteForSO,
+    enabled: !!selected && (selected.stage === "material_supplied" || selected.stage === "received_po" || selected.stage === "received_payments") && !!acceptedQuoteForSO,
   });
   const firstSO = oppSalesOrders?.[0];
+  const { data: oppInvoices } = useQuery<OppInvoice[]>({
+    queryKey: ["opp-invoice", firstSO?.id],
+    queryFn: () => api<OppInvoice[]>(`/v1/invoices?salesOrderId=${firstSO!.id}`),
+    enabled: !!firstSO && selected?.stage === "received_payments",
+  });
+  const oppInvoice = oppInvoices?.[0] ?? null;
+  const { data: oppPayments, refetch: refetchPayments } = useQuery<OppPayment[]>({
+    queryKey: ["opp-payments", oppInvoice?.id],
+    queryFn: () => api<OppPayment[]>(`/v1/payments?invoiceId=${oppInvoice!.id}`),
+    enabled: !!oppInvoice,
+  });
   const { data: oppShipments, refetch: refetchShipments } = useQuery<OppShipment[]>({
     queryKey: ["opp-shipments", firstSO?.id],
     queryFn: () => api<OppShipment[]>(`/v1/shipments?salesOrderId=${firstSO!.id}`),
@@ -291,6 +306,19 @@ export function Opportunities() {
   const deleteAdvanceReceipt = useMutation({
     mutationFn: (id: number) => api(`/v1/advance-receipts/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["advance-receipts", selected?.id] }); },
+  });
+
+  const recordInvoicePayment = useMutation({
+    mutationFn: ({ invoiceId, amount, paymentMode, referenceNo, paymentDate, notes }: { invoiceId: number; amount: number; paymentMode: string; referenceNo: string; paymentDate: string; notes: string }) =>
+      api("/v1/payments", { method: "POST", body: JSON.stringify({ invoiceId, amount, type: "Invoice Payment", paymentMode: paymentMode || null, referenceNo: referenceNo || null, paymentDate, notes: notes || null }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["opp-invoice"] });
+      qc.invalidateQueries({ queryKey: ["opp-payments"] });
+      setPmtShowForm(false);
+      setPmtForm({ amount: "", paymentMode: "", referenceNo: "", paymentDate: new Date().toISOString().slice(0, 10), notes: "" });
+      toast({ title: "Payment recorded" });
+    },
+    onError: () => toast({ title: "Could not record payment", variant: "destructive" }),
   });
 
   const updateSOStatus = useMutation({
@@ -1716,6 +1744,194 @@ export function Opportunities() {
                                   </div>
                                 );
                               })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* ── Received Complete Payments ── */}
+                {selected.stage === "received_payments" && (() => {
+                  const PAYMENT_MODES = ["Cash", "Bank Transfer", "Cheque", "UPI", "NEFT/RTGS", "Other"];
+                  const payments = oppPayments ?? [];
+                  const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
+                  const balance = oppInvoice ? oppInvoice.grandTotal - totalPaid : 0;
+                  const invoiceStatusColor: Record<string, string> = {
+                    Draft: "bg-zinc-100 text-zinc-700",
+                    Issued: "bg-blue-100 text-blue-700",
+                    "Partially Paid": "bg-amber-100 text-amber-700",
+                    Paid: "bg-emerald-100 text-emerald-700",
+                    Cancelled: "bg-red-100 text-red-700",
+                  };
+                  return (
+                    <div className="space-y-4" data-testid="section-received-payments">
+
+                      {/* Linked SO card (compact) */}
+                      {firstSO && (
+                        <div>
+                          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                            <PackageCheck className="w-3.5 h-3.5" />Sales Order
+                          </div>
+                          <div className="border rounded-lg p-3 flex items-center justify-between">
+                            <div>
+                              <span className="font-mono text-xs font-bold text-primary">{firstSO.orderNumber}</span>
+                              <p className="text-sm font-bold mt-0.5">₹{firstSO.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+                            </div>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              firstSO.status === "Confirmed" ? "bg-blue-100 text-blue-700" :
+                              firstSO.status === "Delivered" ? "bg-emerald-100 text-emerald-700" :
+                              "bg-zinc-100 text-zinc-700"
+                            }`}>{firstSO.status}</span>
+                          </div>
+                        </div>
+                      )}
+                      {!firstSO && (
+                        <p className="text-xs text-muted-foreground text-center py-3 border rounded-lg">No Sales Order linked to this opportunity yet.</p>
+                      )}
+
+                      {/* Invoice & Payments section */}
+                      {firstSO && (
+                        <div>
+                          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                            <FileText className="w-3.5 h-3.5" />Invoice &amp; Payments
+                          </div>
+
+                          {!oppInvoice ? (
+                            <p className="text-xs text-muted-foreground text-center py-3 border rounded-lg border-dashed">
+                              No invoice generated yet. Go to <a href="/invoices" className="underline text-primary">Invoices</a> to generate one from the Sales Order.
+                            </p>
+                          ) : (
+                            <div className="border rounded-lg p-3 space-y-3">
+                              {/* Invoice header */}
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono text-xs font-bold text-primary">{oppInvoice.invoiceNumber}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${invoiceStatusColor[oppInvoice.status] ?? "bg-muted text-muted-foreground"}`}>{oppInvoice.status}</span>
+                              </div>
+
+                              {/* Amount summary */}
+                              <div className="grid grid-cols-3 gap-1 text-center">
+                                <div className="bg-muted/50 rounded p-1.5">
+                                  <p className="text-xs text-muted-foreground">Total</p>
+                                  <p className="text-xs font-bold">₹{oppInvoice.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+                                </div>
+                                <div className="bg-emerald-50 rounded p-1.5">
+                                  <p className="text-xs text-muted-foreground">Paid</p>
+                                  <p className="text-xs font-bold text-emerald-700">₹{totalPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+                                </div>
+                                <div className={`rounded p-1.5 ${balance > 0 ? "bg-red-50" : "bg-emerald-50"}`}>
+                                  <p className="text-xs text-muted-foreground">Balance</p>
+                                  <p className={`text-xs font-bold ${balance > 0 ? "text-red-600" : "text-emerald-700"}`}>₹{Math.max(0, balance).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+                                </div>
+                              </div>
+
+                              {oppInvoice.dueDate && (
+                                <p className="text-xs text-muted-foreground">Due: {new Date(oppInvoice.dueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
+                              )}
+
+                              {/* Fully paid banner */}
+                              {oppInvoice.status === "Paid" && (
+                                <div className="flex items-center justify-center gap-1.5 py-1.5 bg-emerald-50 rounded-md">
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span className="text-xs font-semibold text-emerald-700">Fully Paid</span>
+                                </div>
+                              )}
+
+                              {/* Record payment toggle — only when not fully paid */}
+                              {oppInvoice.status !== "Paid" && oppInvoice.status !== "Cancelled" && (
+                                <Button
+                                  size="sm"
+                                  className="w-full h-7 text-xs"
+                                  variant={pmtShowForm ? "outline" : "default"}
+                                  onClick={() => setPmtShowForm(v => !v)}>
+                                  {pmtShowForm ? "Cancel" : <><Plus className="w-3 h-3 mr-1" />Record Payment</>}
+                                </Button>
+                              )}
+
+                              {/* Payment form */}
+                              {pmtShowForm && oppInvoice.status !== "Paid" && (
+                                <div className="space-y-2 border-t pt-3">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="text-xs text-muted-foreground">Amount (₹) *</label>
+                                      <Input
+                                        type="number" min="0" step="0.01"
+                                        placeholder={balance > 0 ? balance.toFixed(2) : "0.00"}
+                                        className="h-7 text-xs mt-0.5"
+                                        value={pmtForm.amount}
+                                        onChange={e => setPmtForm(f => ({ ...f, amount: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs text-muted-foreground">Date *</label>
+                                      <Input
+                                        type="date"
+                                        className="h-7 text-xs mt-0.5"
+                                        value={pmtForm.paymentDate}
+                                        onChange={e => setPmtForm(f => ({ ...f, paymentDate: e.target.value }))} />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-muted-foreground">Payment Mode</label>
+                                    <select
+                                      className="w-full h-7 mt-0.5 text-xs border rounded-md px-2 bg-background"
+                                      value={pmtForm.paymentMode}
+                                      onChange={e => setPmtForm(f => ({ ...f, paymentMode: e.target.value }))}>
+                                      <option value="">— Select —</option>
+                                      {PAYMENT_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-muted-foreground">Reference / Txn No.</label>
+                                    <Input
+                                      placeholder="UTR, cheque no., etc."
+                                      className="h-7 text-xs mt-0.5"
+                                      value={pmtForm.referenceNo}
+                                      onChange={e => setPmtForm(f => ({ ...f, referenceNo: e.target.value }))} />
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-muted-foreground">Notes</label>
+                                    <Input
+                                      placeholder="Optional"
+                                      className="h-7 text-xs mt-0.5"
+                                      value={pmtForm.notes}
+                                      onChange={e => setPmtForm(f => ({ ...f, notes: e.target.value }))} />
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    className="w-full h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    disabled={recordInvoicePayment.isPending || !pmtForm.amount || !pmtForm.paymentDate}
+                                    onClick={() => {
+                                      if (!oppInvoice) return;
+                                      recordInvoicePayment.mutate({
+                                        invoiceId: oppInvoice.id,
+                                        amount: Number(pmtForm.amount),
+                                        paymentMode: pmtForm.paymentMode,
+                                        referenceNo: pmtForm.referenceNo,
+                                        paymentDate: pmtForm.paymentDate,
+                                        notes: pmtForm.notes,
+                                      });
+                                    }}>
+                                    {recordInvoicePayment.isPending ? "Saving…" : <><Check className="w-3 h-3 mr-1" />Save Payment</>}
+                                  </Button>
+                                </div>
+                              )}
+
+                              {/* Payments history */}
+                              {payments.length > 0 && (
+                                <div className="border-t pt-2 space-y-1.5">
+                                  <p className="text-xs font-semibold text-muted-foreground">Payment History</p>
+                                  {payments.map(p => (
+                                    <div key={p.id} className="flex items-center justify-between py-1 border-b last:border-0">
+                                      <div>
+                                        <p className="text-xs font-medium">₹{p.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+                                        <p className="text-xs text-muted-foreground">{new Date(p.paymentDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}{p.paymentMode ? ` · ${p.paymentMode}` : ""}</p>
+                                      </div>
+                                      {p.referenceNo && <span className="text-xs text-muted-foreground font-mono truncate max-w-[80px]">{p.referenceNo}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
