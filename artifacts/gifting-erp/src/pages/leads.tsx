@@ -13,8 +13,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, LayoutList, Columns3, UserPlus, FileSpreadsheet, X } from "lucide-react";
+import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, LayoutList, Columns3, UserPlus, FileSpreadsheet, X, History, Briefcase, FileText, ShoppingCart, Truck, Receipt, Activity } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+type LeadHistory = {
+  opportunities: { id: number; title: string; stage: string; value: number | null; createdAt: string }[];
+  quotes: { id: number; quoteNumber: string; subject: string | null; status: string; totalAmount: number; opportunityId: number | null; createdAt: string }[];
+  salesOrders: { id: number; orderNumber: string; status: string; grandTotal: number; quoteId: number | null; createdAt: string }[];
+  shipments: { id: number; shipmentNumber: string; status: string; courierPartner: string; dispatchDate: string | null; salesOrderId: number; createdAt: string }[];
+  invoices: { id: number; invoiceNumber: string; status: string; grandTotal: number; salesOrderId: number; createdAt: string }[];
+  activities: { id: number; type: string; subject: string; dueDate: string | null; completedAt: string | null; createdAt: string }[];
+};
 
 type Lead = {
   id: number; title: string; clientId: number | null; companyName: string | null;
@@ -87,12 +96,20 @@ export function Leads() {
   const [editProducts, setEditProducts] = useState<string[]>([]);
   const [editCustomProducts, setEditCustomProducts] = useState<string[]>([]);
   const [editCustomProductInput, setEditCustomProductInput] = useState("");
+  const [detailTab, setDetailTab] = useState<"details" | "history">("details");
 
   const [, navigate] = useLocation();
   const { data: leads, isLoading } = useQuery({ queryKey: ["leads"], queryFn: () => api<Lead[]>("/v1/leads") });
   const { data: clients } = useListClients();
   const { data: productList } = useListProducts();
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/v1/users") });
+
+  const selectedId = selected?.id ?? null;
+  const { data: history, isLoading: historyLoading } = useQuery({
+    queryKey: ["lead-history", selectedId],
+    queryFn: () => api<LeadHistory>(`/v1/leads/${selectedId}/history`),
+    enabled: selectedId != null && detailTab === "history",
+  });
 
   const budgetNum = Number(form.budget) || 0;
   const qtyNum = Number(form.qty) || 0;
@@ -281,7 +298,7 @@ export function Leads() {
                 <TableRow
                   key={lead.id}
                   className="cursor-pointer hover:bg-muted/40 transition-colors"
-                  onClick={() => { setSelected(lead); setEditForm({ ...lead }); }}
+                  onClick={() => { setSelected(lead); setEditForm({ ...lead }); setDetailTab("details"); }}
                 >
                   <TableCell className="font-medium max-w-[260px]">
                     <div className="truncate">{lead.title}</div>
@@ -337,7 +354,7 @@ export function Leads() {
               <div className="flex-1 p-2 space-y-2 overflow-y-auto">
                 {items.map(lead => (
                   <div key={lead.id} className="p-2.5 border rounded-lg bg-card text-xs space-y-1.5 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
-                    data-testid={`lead-${lead.id}`} onClick={() => { setSelected(lead); setEditForm({ ...lead }); }}>
+                    data-testid={`lead-${lead.id}`} onClick={() => { setSelected(lead); setEditForm({ ...lead }); setDetailTab("details"); }}>
                     <div className="font-medium leading-tight">{lead.title}</div>
                     {lead.companyName && <div className="flex items-center gap-1 text-muted-foreground"><Building2 className="w-3 h-3 shrink-0" />{lead.companyName}</div>}
                     <div className="flex items-center justify-between pt-0.5">
@@ -799,6 +816,179 @@ export function Leads() {
 
               {/* ── READ-ONLY VIEW MODE ── */}
               {!editMode && <div className="space-y-5">
+                {/* Tab strip */}
+                <div className="flex border-b">
+                  <button
+                    onClick={() => setDetailTab("details")}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${detailTab === "details" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <FileText className="w-3.5 h-3.5" />Details
+                  </button>
+                  <button
+                    onClick={() => setDetailTab("history")}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${detailTab === "history" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <History className="w-3.5 h-3.5" />History
+                  </button>
+                </div>
+
+                {/* ── HISTORY TAB ── */}
+                {detailTab === "history" && (
+                  <div className="space-y-4">
+                    {historyLoading && <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>}
+                    {!historyLoading && history && (() => {
+                      const totalCount = history.opportunities.length + history.quotes.length + history.salesOrders.length + history.shipments.length + history.invoices.length + history.activities.length;
+                      if (totalCount === 0) return (
+                        <div className="text-center py-10 text-muted-foreground">
+                          <History className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">No linked records yet</p>
+                        </div>
+                      );
+                      const statusColor = (s: string) => {
+                        const sl = s.toLowerCase();
+                        if (["won", "confirmed", "delivered", "paid", "sent"].includes(sl)) return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+                        if (["lost", "cancelled", "overdue"].includes(sl)) return "bg-red-500/10 text-red-400 border-red-500/20";
+                        if (["draft", "preparing"].includes(sl)) return "bg-slate-500/10 text-slate-400 border-slate-500/20";
+                        return "bg-blue-500/10 text-blue-400 border-blue-500/20";
+                      };
+                      return (
+                        <div className="space-y-4">
+                          {/* Opportunities */}
+                          {history.opportunities.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                <Briefcase className="w-3.5 h-3.5" />Opportunities ({history.opportunities.length})
+                              </div>
+                              <div className="space-y-1.5">
+                                {history.opportunities.map(o => (
+                                  <div key={o.id} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2 text-sm">
+                                    <div>
+                                      <div className="font-medium">{o.title}</div>
+                                      <div className="text-xs text-muted-foreground capitalize">{o.stage} · {new Date(o.createdAt).toLocaleDateString("en-IN")}</div>
+                                    </div>
+                                    {o.value != null && <div className="text-xs font-semibold text-primary shrink-0">₹{o.value.toLocaleString("en-IN")}</div>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Quotes */}
+                          {history.quotes.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                <FileText className="w-3.5 h-3.5" />Sales Quotes ({history.quotes.length})
+                              </div>
+                              <div className="space-y-1.5">
+                                {history.quotes.map(q => (
+                                  <div key={q.id} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2 text-sm">
+                                    <div>
+                                      <div className="font-medium">{q.quoteNumber}{q.subject ? ` — ${q.subject}` : ""}</div>
+                                      <div className="text-xs text-muted-foreground">{new Date(q.createdAt).toLocaleDateString("en-IN")}</div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className={`px-1.5 py-0.5 rounded text-xs border ${statusColor(q.status)}`}>{q.status}</span>
+                                      <span className="text-xs font-semibold text-primary">₹{q.totalAmount.toLocaleString("en-IN")}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Sales Orders */}
+                          {history.salesOrders.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                <ShoppingCart className="w-3.5 h-3.5" />Sales Orders ({history.salesOrders.length})
+                              </div>
+                              <div className="space-y-1.5">
+                                {history.salesOrders.map(so => (
+                                  <div key={so.id} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2 text-sm">
+                                    <div>
+                                      <div className="font-medium">{so.orderNumber}</div>
+                                      <div className="text-xs text-muted-foreground">{new Date(so.createdAt).toLocaleDateString("en-IN")}</div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className={`px-1.5 py-0.5 rounded text-xs border ${statusColor(so.status)}`}>{so.status}</span>
+                                      <span className="text-xs font-semibold text-primary">₹{so.grandTotal.toLocaleString("en-IN")}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Invoices */}
+                          {history.invoices.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                <Receipt className="w-3.5 h-3.5" />Invoices ({history.invoices.length})
+                              </div>
+                              <div className="space-y-1.5">
+                                {history.invoices.map(inv => (
+                                  <div key={inv.id} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2 text-sm">
+                                    <div>
+                                      <div className="font-medium">{inv.invoiceNumber}</div>
+                                      <div className="text-xs text-muted-foreground">{new Date(inv.createdAt).toLocaleDateString("en-IN")}</div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className={`px-1.5 py-0.5 rounded text-xs border ${statusColor(inv.status)}`}>{inv.status}</span>
+                                      <span className="text-xs font-semibold text-primary">₹{inv.grandTotal.toLocaleString("en-IN")}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Shipments */}
+                          {history.shipments.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                <Truck className="w-3.5 h-3.5" />Dispatches ({history.shipments.length})
+                              </div>
+                              <div className="space-y-1.5">
+                                {history.shipments.map(sh => (
+                                  <div key={sh.id} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2 text-sm">
+                                    <div>
+                                      <div className="font-medium">{sh.shipmentNumber}</div>
+                                      <div className="text-xs text-muted-foreground">{sh.courierPartner}{sh.dispatchDate ? ` · ${new Date(sh.dispatchDate).toLocaleDateString("en-IN")}` : ""}</div>
+                                    </div>
+                                    <span className={`px-1.5 py-0.5 rounded text-xs border shrink-0 ${statusColor(sh.status)}`}>{sh.status}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Activities */}
+                          {history.activities.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                <Activity className="w-3.5 h-3.5" />Activities ({history.activities.length})
+                              </div>
+                              <div className="space-y-1.5">
+                                {history.activities.map(act => (
+                                  <div key={act.id} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2 text-sm">
+                                    <div>
+                                      <div className="font-medium">{act.subject}</div>
+                                      <div className="text-xs text-muted-foreground capitalize">{act.type}{act.dueDate ? ` · Due ${new Date(act.dueDate).toLocaleDateString("en-IN")}` : ""}</div>
+                                    </div>
+                                    <span className={`px-1.5 py-0.5 rounded text-xs border shrink-0 ${act.completedAt ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-slate-500/10 text-slate-400 border-slate-500/20"}`}>{act.completedAt ? "Done" : "Pending"}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* ── DETAILS TAB ── */}
+                {detailTab === "details" && <>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {selected.companyName && <div className="flex items-center gap-2 text-muted-foreground"><Building2 className="w-4 h-4 shrink-0" /><span>{selected.companyName}</span></div>}
                   {selected.contactName && <div className="flex items-center gap-2 text-muted-foreground"><Users className="w-4 h-4 shrink-0" /><span>{selected.contactName}</span></div>}
@@ -884,6 +1074,7 @@ export function Leads() {
                   </Button>
                   <Button variant="destructive" size="icon" onClick={() => del.mutate(selected.id)} disabled={del.isPending}><Trash2 className="w-4 h-4" /></Button>
                 </div>
+                </>}
               </div>}
             </>
           )}

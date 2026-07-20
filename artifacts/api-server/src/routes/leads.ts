@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { eq, sql, and } from "drizzle-orm";
-import { db, leadsTable, opportunitiesTable, clientsTable, usersTable } from "@workspace/db";
+import { eq, sql, and, inArray } from "drizzle-orm";
+import { db, leadsTable, opportunitiesTable, clientsTable, usersTable, quotesTable, salesOrdersTable, shipmentsTable, invoicesTable, activitiesTable } from "@workspace/db";
 
 const router = Router();
 
@@ -181,6 +181,71 @@ router.delete("/v1/opportunities/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   await db.delete(opportunitiesTable).where(and(eq(opportunitiesTable.id, id), eq(opportunitiesTable.companyId, req.companyId)));
   res.sendStatus(204);
+});
+
+router.get("/v1/leads/:id/history", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
+    .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
+  if (!lead) { res.status(404).json({ error: "Not found" }); return; }
+
+  const [opportunities, activities] = await Promise.all([
+    db.select({
+      id: opportunitiesTable.id, title: opportunitiesTable.title,
+      stage: opportunitiesTable.stage, value: opportunitiesTable.value,
+      createdAt: opportunitiesTable.createdAt,
+    }).from(opportunitiesTable).where(eq(opportunitiesTable.leadId, id)),
+    db.select({
+      id: activitiesTable.id, type: activitiesTable.type,
+      subject: activitiesTable.subject, dueDate: activitiesTable.dueDate,
+      completedAt: activitiesTable.completedAt, createdAt: activitiesTable.createdAt,
+    }).from(activitiesTable).where(eq(activitiesTable.leadId, id)),
+  ]);
+
+  const oppIds = opportunities.map(o => o.id);
+  const quotes = oppIds.length
+    ? await db.select({
+        id: quotesTable.id, quoteNumber: quotesTable.quoteNumber,
+        subject: quotesTable.subject, status: quotesTable.status,
+        totalAmount: quotesTable.totalAmount, opportunityId: quotesTable.opportunityId,
+        createdAt: quotesTable.createdAt,
+      }).from(quotesTable).where(inArray(quotesTable.opportunityId, oppIds))
+    : [];
+
+  const quoteIds = quotes.map(q => q.id);
+  const salesOrders = quoteIds.length
+    ? await db.select({
+        id: salesOrdersTable.id, orderNumber: salesOrdersTable.orderNumber,
+        status: salesOrdersTable.status, grandTotal: salesOrdersTable.grandTotal,
+        quoteId: salesOrdersTable.quoteId, createdAt: salesOrdersTable.createdAt,
+      }).from(salesOrdersTable).where(inArray(salesOrdersTable.quoteId, quoteIds))
+    : [];
+
+  const soIds = salesOrders.map(s => s.id);
+  const [shipments, invoices] = soIds.length
+    ? await Promise.all([
+        db.select({
+          id: shipmentsTable.id, shipmentNumber: shipmentsTable.shipmentNumber,
+          status: shipmentsTable.status, courierPartner: shipmentsTable.courierPartner,
+          dispatchDate: shipmentsTable.dispatchDate, salesOrderId: shipmentsTable.salesOrderId,
+          createdAt: shipmentsTable.createdAt,
+        }).from(shipmentsTable).where(inArray(shipmentsTable.salesOrderId, soIds)),
+        db.select({
+          id: invoicesTable.id, invoiceNumber: invoicesTable.invoiceNumber,
+          status: invoicesTable.status, grandTotal: invoicesTable.grandTotal,
+          salesOrderId: invoicesTable.salesOrderId, createdAt: invoicesTable.createdAt,
+        }).from(invoicesTable).where(inArray(invoicesTable.salesOrderId, soIds)),
+      ])
+    : [[], []];
+
+  res.json({
+    opportunities: opportunities.map(o => ({ ...o, value: o.value ? Number(o.value) : null, createdAt: o.createdAt.toISOString() })),
+    quotes: quotes.map(q => ({ ...q, totalAmount: Number(q.totalAmount), createdAt: q.createdAt.toISOString() })),
+    salesOrders: salesOrders.map(s => ({ ...s, grandTotal: Number(s.grandTotal), createdAt: s.createdAt.toISOString() })),
+    shipments: shipments.map(s => ({ ...s, dispatchDate: s.dispatchDate?.toISOString() ?? null, createdAt: s.createdAt.toISOString() })),
+    invoices: invoices.map(i => ({ ...i, grandTotal: Number(i.grandTotal), createdAt: i.createdAt.toISOString() })),
+    activities: activities.map(a => ({ ...a, dueDate: a.dueDate?.toISOString() ?? null, completedAt: a.completedAt?.toISOString() ?? null, createdAt: a.createdAt.toISOString() })),
+  });
 });
 
 export default router;
