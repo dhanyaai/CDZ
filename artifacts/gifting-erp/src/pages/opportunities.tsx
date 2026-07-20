@@ -57,7 +57,7 @@ const STAGES = [
 ];
 const LABELS: Record<string, string> = {
   enquiry: "Enquiry",
-  sent_catalogue: "Sent Catalogue",
+  sent_catalogue: "Send Catalogue",
   samples: "Samples",
   negotiation: "Negotiation",
   shortlisted: "Shortlisted Products",
