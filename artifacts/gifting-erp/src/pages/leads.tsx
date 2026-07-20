@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, LayoutList, Columns3, UserPlus, FileSpreadsheet, X, History, Briefcase, FileText, ShoppingCart, Truck, Receipt, Activity } from "lucide-react";
+import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, UserPlus, FileSpreadsheet, X, History, Briefcase, FileText, ShoppingCart, Truck, Receipt, Activity } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type LeadHistory = {
@@ -41,22 +41,6 @@ type Lead = {
 };
 type User = { id: number; name: string; role: string };
 
-const STAGES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost", "converted"];
-const STAGE_LABELS: Record<string, string> = { new: "New", contacted: "Contacted", qualified: "Qualified", proposal: "Proposal", negotiation: "Negotiation", won: "Won", lost: "Lost", converted: "Converted" };
-const STAGE_COLORS: Record<string, string> = {
-  new: "bg-slate-500/10 text-slate-400 border-slate-500/20",
-  contacted: "bg-sky-500/10 text-sky-400 border-sky-500/20",
-  qualified: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  proposal: "bg-violet-500/10 text-violet-400 border-violet-500/20",
-  negotiation: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  won: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  lost: "bg-red-500/10 text-red-400 border-red-500/20",
-  converted: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
-};
-const STAGE_HEADER: Record<string, string> = {
-  new: "border-t-slate-400", contacted: "border-t-sky-400", qualified: "border-t-blue-400", proposal: "border-t-violet-400",
-  negotiation: "border-t-amber-400", won: "border-t-emerald-400", lost: "border-t-red-400", converted: "border-t-indigo-400",
-};
 const SOURCE_COLORS: Record<string, string> = {
   "Inbound Call": "bg-sky-500/10 text-sky-400", "Outbound Call": "bg-orange-500/10 text-orange-400",
   Instagram: "bg-pink-500/10 text-pink-400", LinkedIn: "bg-blue-500/10 text-blue-400",
@@ -85,7 +69,6 @@ export function Leads() {
   const [selected, setSelected] = useState<Lead | null>(null);
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("all");
-  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [form, setForm] = useState({ ...BLANK_FORM });
   const [editForm, setEditForm] = useState<Partial<Lead>>({});
   const [followUpForm, setFollowUpForm] = useState({ subject: "", dueDate: "", description: "" });
@@ -200,7 +183,6 @@ export function Leads() {
     return matchSearch && matchSource;
   });
 
-  const byStatus = (status: string) => filtered.filter(l => l.status === status);
   const totalLeads = (leads ?? []).length;
   const wonCount = (leads ?? []).filter(l => l.status === "won").length;
   const activeCount = (leads ?? []).filter(l => !["won", "lost"].includes(l.status)).length;
@@ -255,120 +237,67 @@ export function Leads() {
             {sources.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
-        <div className="flex items-center border rounded-lg overflow-hidden shrink-0">
-          <button
-            className={`px-3 py-2 flex items-center gap-1.5 text-sm transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-            onClick={() => setViewMode("kanban")}
-            title="Kanban view"
-          >
-            <Columns3 className="w-4 h-4" />
-            <span className="hidden sm:inline">Kanban</span>
-          </button>
-          <button
-            className={`px-3 py-2 flex items-center gap-1.5 text-sm transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-            onClick={() => setViewMode("list")}
-            title="List view"
-          >
-            <LayoutList className="w-4 h-4" />
-            <span className="hidden sm:inline">List</span>
-          </button>
-        </div>
       </div>
 
-      {viewMode === "list" && (
-        <div className="border rounded-xl overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="w-[260px]">Lead</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>POC Contact</TableHead>
-                <TableHead>Stage</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Owner</TableHead>
+      <div className="border rounded-xl overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="w-[260px]">Lead</TableHead>
+              <TableHead>Company</TableHead>
+              <TableHead>POC Contact</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Owner</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">No leads match your filters.</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No leads match your filters.</TableCell>
-                </TableRow>
-              )}
-              {filtered.map(lead => (
-                <TableRow
-                  key={lead.id}
-                  className="cursor-pointer hover:bg-muted/40 transition-colors"
-                  onClick={() => { setSelected(lead); setEditForm({ ...lead }); setDetailTab("details"); }}
-                >
-                  <TableCell className="font-medium max-w-[260px]">
-                    <div className="truncate">{lead.title}</div>
-                    {lead.email && <div className="text-xs text-muted-foreground truncate">{lead.email}</div>}
-                  </TableCell>
-                  <TableCell>
-                    {lead.companyName ? (
-                      <div className="flex items-center gap-1.5 text-sm">
-                        <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        {lead.companyName}
-                      </div>
-                    ) : <span className="text-muted-foreground/50 text-xs">—</span>}
-                  </TableCell>
-                  <TableCell>
-                    {lead.contactName ? (
-                      <div className="text-sm">
-                        <div>{lead.contactName}</div>
-                        {lead.phone && <div className="text-xs text-muted-foreground">{lead.phone}</div>}
-                      </div>
-                    ) : <span className="text-muted-foreground/50 text-xs">—</span>}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={`border text-xs ${STAGE_COLORS[lead.status] ?? ""}`}>{STAGE_LABELS[lead.status] ?? lead.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {lead.source
-                      ? <span className={`px-2 py-0.5 rounded text-xs font-medium ${SOURCE_COLORS[lead.source] ?? "bg-muted text-muted-foreground"}`}>{lead.source}</span>
-                      : <span className="text-muted-foreground/50 text-xs">—</span>}
-                  </TableCell>
-                  <TableCell>
-                    {lead.ownerName
-                      ? <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">{initials(lead.ownerName)}</span><span className="text-sm truncate max-w-[80px]">{lead.ownerName}</span></div>
-                      : <span className="text-muted-foreground/50 text-xs">—</span>}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {viewMode === "kanban" && <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-        {STAGES.map(stage => {
-          const items = byStatus(stage);
-          return (
-            <div key={stage} className={`flex flex-col min-h-[300px] rounded-xl border border-t-2 bg-card/50 ${STAGE_HEADER[stage]}`}>
-              <div className="p-3 border-b border-border/50">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-semibold">{STAGE_LABELS[stage]}</span>
-                  <Badge variant="secondary" className="text-xs">{items.length}</Badge>
-                </div>
-              </div>
-              <div className="flex-1 p-2 space-y-2 overflow-y-auto">
-                {items.map(lead => (
-                  <div key={lead.id} className="p-2.5 border rounded-lg bg-card text-xs space-y-1.5 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
-                    data-testid={`lead-${lead.id}`} onClick={() => { setSelected(lead); setEditForm({ ...lead }); setDetailTab("details"); }}>
-                    <div className="font-medium leading-tight">{lead.title}</div>
-                    {lead.companyName && <div className="flex items-center gap-1 text-muted-foreground"><Building2 className="w-3 h-3 shrink-0" />{lead.companyName}</div>}
-                    <div className="flex items-center justify-between pt-0.5">
-                      {lead.source && <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${SOURCE_COLORS[lead.source] ?? "bg-muted text-muted-foreground"}`}>{lead.source}</span>}
-                      {lead.ownerName && <span className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[9px] font-bold ml-auto" title={lead.ownerName}>{initials(lead.ownerName)}</span>}
+            )}
+            {filtered.map(lead => (
+              <TableRow
+                key={lead.id}
+                className="cursor-pointer hover:bg-muted/40 transition-colors"
+                onClick={() => { setSelected(lead); setEditForm({ ...lead }); setDetailTab("details"); }}
+              >
+                <TableCell className="font-medium max-w-[260px]">
+                  <div className="truncate">{lead.title}</div>
+                  {lead.email && <div className="text-xs text-muted-foreground truncate">{lead.email}</div>}
+                </TableCell>
+                <TableCell>
+                  {lead.companyName ? (
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      {lead.companyName}
                     </div>
-                  </div>
-                ))}
-                {items.length === 0 && <div className="text-center text-muted-foreground/50 text-xs py-6">No leads</div>}
-              </div>
-            </div>
-          );
-        })}
-      </div>}
+                  ) : <span className="text-muted-foreground/50 text-xs">—</span>}
+                </TableCell>
+                <TableCell>
+                  {lead.contactName ? (
+                    <div className="text-sm">
+                      <div>{lead.contactName}</div>
+                      {lead.phone && <div className="text-xs text-muted-foreground">{lead.phone}</div>}
+                    </div>
+                  ) : <span className="text-muted-foreground/50 text-xs">—</span>}
+                </TableCell>
+                <TableCell>
+                  {lead.source
+                    ? <span className={`px-2 py-0.5 rounded text-xs font-medium ${SOURCE_COLORS[lead.source] ?? "bg-muted text-muted-foreground"}`}>{lead.source}</span>
+                    : <span className="text-muted-foreground/50 text-xs">—</span>}
+                </TableCell>
+                <TableCell>
+                  {lead.ownerName
+                    ? <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">{initials(lead.ownerName)}</span><span className="text-sm truncate max-w-[80px]">{lead.ownerName}</span></div>
+                    : <span className="text-muted-foreground/50 text-xs">—</span>}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
 
       {/* New lead dialog */}
       <Dialog open={dialog} onOpenChange={setDialog}>
@@ -588,7 +517,6 @@ export function Leads() {
                 </div>
                 {!editMode && (
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge className={`border ${STAGE_COLORS[selected.status]}`}>{STAGE_LABELS[selected.status]}</Badge>
                     {selected.source && <span className={`px-2 py-0.5 rounded text-xs font-medium ${SOURCE_COLORS[selected.source] ?? "bg-muted text-muted-foreground"}`}>{selected.source}</span>}
                   </div>
                 )}
@@ -635,21 +563,12 @@ export function Leads() {
                       <Input value={editForm.title ?? ""} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} placeholder="Lead title" />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Stage</label>
-                        <Select value={editForm.status ?? "__none__"} onValueChange={v => setEditForm(f => ({ ...f, status: v === "__none__" ? undefined : v }))}>
-                          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Stage…" /></SelectTrigger>
-                          <SelectContent position="popper">{STAGES.map(s => <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>)}</SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Source</label>
-                        <Select value={editForm.source ?? "__none__"} onValueChange={v => setEditForm(f => ({ ...f, source: v === "__none__" ? null : v }))}>
-                          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Source…" /></SelectTrigger>
-                          <SelectContent position="popper">{["__none__", "Inbound Call", "Outbound Call", "Instagram", "LinkedIn", "WhatsApp", "BNI", "JCI", "Lions Club", "FTCCI", "Refference", "Others"].map(s => <SelectItem key={s} value={s}>{s === "__none__" ? "— None —" : s}</SelectItem>)}</SelectContent>
-                        </Select>
-                      </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Source</label>
+                      <Select value={editForm.source ?? "__none__"} onValueChange={v => setEditForm(f => ({ ...f, source: v === "__none__" ? null : v }))}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Source…" /></SelectTrigger>
+                        <SelectContent position="popper">{["__none__", "Inbound Call", "Outbound Call", "Instagram", "LinkedIn", "WhatsApp", "BNI", "JCI", "Lions Club", "FTCCI", "Refference", "Others"].map(s => <SelectItem key={s} value={s}>{s === "__none__" ? "— None —" : s}</SelectItem>)}</SelectContent>
+                      </Select>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -1018,13 +937,6 @@ export function Leads() {
                   </div>
                 )}
                 {selected.notes && <div className="bg-muted/40 rounded-lg p-3"><div className="text-xs font-medium text-muted-foreground mb-1">Notes</div><p className="text-sm whitespace-pre-wrap">{selected.notes}</p></div>}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Stage</label>
-                  <Select value={editForm.status ?? selected.status} onValueChange={v => { setEditForm(f => ({ ...f, status: v })); update.mutate({ id: selected.id, data: { status: v } }); }}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{STAGES.filter(s => s !== "converted").map(s => <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
                 <div className="space-y-2">
                   <Button variant="outline" size="sm" className="w-full" onClick={() => setShowFollowUpForm(!showFollowUpForm)}>
                     <CalendarClock className="w-4 h-4 mr-2" />{showFollowUpForm ? "Cancel" : "Schedule Follow-up"}
