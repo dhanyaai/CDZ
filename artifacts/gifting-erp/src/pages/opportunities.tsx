@@ -82,6 +82,20 @@ const STAGE_HEADER: Record<string, string> = {
   lost: "border-t-red-400",
 };
 const PROB_COLOR = (p: number) => { if (p >= 75) return "bg-emerald-500"; if (p >= 50) return "bg-amber-500"; if (p >= 25) return "bg-blue-500"; return "bg-slate-500"; };
+const STAGE_BADGE: Record<string, string> = {
+  enquiry: "bg-slate-100 text-slate-700 border-slate-300",
+  sent_catalogue: "bg-blue-100 text-blue-700 border-blue-300",
+  samples: "bg-violet-100 text-violet-700 border-violet-300",
+  negotiation: "bg-orange-100 text-orange-700 border-orange-300",
+  shortlisted: "bg-amber-100 text-amber-700 border-amber-300",
+  quotation_sent: "bg-emerald-100 text-emerald-700 border-emerald-300",
+  final_negotiation: "bg-cyan-100 text-cyan-700 border-cyan-300",
+  received_po: "bg-indigo-100 text-indigo-700 border-indigo-300",
+  material_supplied: "bg-green-100 text-green-700 border-green-300",
+  received_payments: "bg-teal-100 text-teal-700 border-teal-300",
+  lost: "bg-red-100 text-red-700 border-red-300",
+};
+const MAIN_FLOW = STAGES.filter(s => s !== "lost");
 
 const BLANK_FORM = { title: "", clientId: "", leadId: "", value: "", probability: "50", expectedCloseDate: "", ownerId: "", notes: "" };
 
@@ -884,13 +898,60 @@ export function Opportunities() {
                   </div>
                 )}
                 {selected.notes && <div className="bg-muted/40 rounded-lg p-3"><div className="text-xs font-medium text-muted-foreground mb-1">Notes</div><p className="text-sm whitespace-pre-wrap">{selected.notes}</p></div>}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Stage</label>
-                  <Select value={selected.stage} onValueChange={v => { update.mutate({ id: selected.id, data: { stage: v } }); setSelected({ ...selected, stage: v }); }}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{STAGES.map(s => <SelectItem key={s} value={s}>{LABELS[s]}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
+                {(() => {
+                  const idx = MAIN_FLOW.indexOf(selected.stage);
+                  const nextStage = idx >= 0 && idx < MAIN_FLOW.length - 1 ? MAIN_FLOW[idx + 1] : null;
+                  const prevStage = idx > 0 ? MAIN_FLOW[idx - 1] : null;
+                  const moveToStage = (s: string) => { update.mutate({ id: selected.id, data: { stage: s } }); setSelected({ ...selected, stage: s }); };
+                  return (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Stage</label>
+                      {/* Current stage badge */}
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${STAGE_BADGE[selected.stage] ?? "bg-muted text-muted-foreground border-border"}`}>
+                          {LABELS[selected.stage]}
+                        </span>
+                        {selected.stage === "lost" && (
+                          <button
+                            className="text-xs text-muted-foreground hover:text-foreground underline"
+                            onClick={() => moveToStage("enquiry")}>
+                            Reopen
+                          </button>
+                        )}
+                      </div>
+                      {/* Advance button */}
+                      {nextStage && selected.stage !== "lost" && (
+                        <Button
+                          className="w-full"
+                          size="sm"
+                          disabled={update.isPending}
+                          onClick={() => moveToStage(nextStage)}>
+                          <ArrowRight className="w-3.5 h-3.5 mr-1.5" />
+                          Move to {LABELS[nextStage]}
+                        </Button>
+                      )}
+                      {/* Back + Mark as Lost row */}
+                      {selected.stage !== "lost" && (
+                        <div className="flex items-center justify-between pt-0.5">
+                          {prevStage ? (
+                            <button
+                              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 disabled:opacity-40"
+                              disabled={update.isPending}
+                              onClick={() => moveToStage(prevStage)}>
+                              ← {LABELS[prevStage]}
+                            </button>
+                          ) : <span />}
+                          <button
+                            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
+                            disabled={update.isPending}
+                            onClick={() => moveToStage("lost")}>
+                            Mark as Lost
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {selected.stage === "sent_catalogue" && (
                   <div className="space-y-3 border rounded-xl p-4 bg-blue-50/40">
                     <div className="flex items-center gap-2">
