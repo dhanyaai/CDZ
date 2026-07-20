@@ -409,8 +409,8 @@ export function Leads() {
               </div>
             </div>
 
-            {/* Row 3: Source | QTY | Budget per piece | Total | Margin | After Margin */}
-            <div className="grid grid-cols-6 gap-3">
+            {/* Row 3: Source | QTY | Budget per piece | Total | Margin */}
+            <div className="grid grid-cols-5 gap-3">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Source</label>
                 <Select value={form.source || "__none__"} onValueChange={v => setForm({ ...form, source: v === "__none__" ? "" : v })}>
@@ -433,10 +433,6 @@ export function Leads() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Margin (%)</label>
                 <Input placeholder="0" type="number" value={form.percentage} onChange={e => setForm({ ...form, percentage: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">After Margin (₹)</label>
-                <Input readOnly value={computedTotal ? afterMargin.toLocaleString("en-IN", { maximumFractionDigits: 0 }) : ""} placeholder="Auto" className="bg-muted/50 text-emerald-600 font-medium" />
               </div>
             </div>
 
@@ -697,10 +693,9 @@ export function Leads() {
                       </div>
                     </div>
 
-                    {(eTotal > 0 || eAfterMargin > 0) && (
-                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-2.5 grid grid-cols-2 gap-2 text-xs">
+                    {eTotal > 0 && (
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-2.5 text-xs">
                         <div><span className="text-muted-foreground block">Total</span><span className="font-bold text-primary">₹{eTotal.toLocaleString("en-IN")}</span></div>
-                        <div><span className="text-muted-foreground block">After Margin</span><span className="font-bold text-emerald-600">₹{eAfterMargin.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span></div>
                       </div>
                     )}
 
