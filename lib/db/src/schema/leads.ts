@@ -48,5 +48,18 @@ export const opportunitiesTable = pgTable("opportunities", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
+export const leadItemsTable = pgTable("lead_items", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").notNull().references(() => leadsTable.id, { onDelete: "cascade" }),
+  slNo: integer("sl_no").notNull().default(1),
+  productName: text("product_name"),
+  customProduct: text("custom_product"),
+  qty: integer("qty"),
+  budget: numeric("budget", { precision: 12, scale: 2 }),
+  margin: numeric("margin", { precision: 5, scale: 2 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Lead = typeof leadsTable.$inferSelect;
 export type Opportunity = typeof opportunitiesTable.$inferSelect;
+export type LeadItem = typeof leadItemsTable.$inferSelect;

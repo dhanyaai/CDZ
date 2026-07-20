@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { eq, sql, and, inArray } from "drizzle-orm";
-import { db, leadsTable, opportunitiesTable, clientsTable, usersTable, quotesTable, salesOrdersTable, shipmentsTable, invoicesTable, activitiesTable } from "@workspace/db";
+import { eq, sql, and, inArray, asc } from "drizzle-orm";
+import { db, leadsTable, leadItemsTable, opportunitiesTable, clientsTable, usersTable, quotesTable, salesOrdersTable, shipmentsTable, invoicesTable, activitiesTable } from "@workspace/db";
 
 const router = Router();
 
@@ -87,6 +87,52 @@ router.patch("/v1/leads/:id", async (req, res): Promise<void> => {
 router.delete("/v1/leads/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   await db.delete(leadsTable).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
+  res.sendStatus(204);
+});
+
+router.get("/v1/leads/:id/items", async (req, res): Promise<void> => {
+  const leadId = parseInt(req.params.id as string, 10);
+  const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
+    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.companyId, req.companyId)));
+  if (!lead) { res.status(404).json({ error: "Not found" }); return; }
+  const items = await db.select().from(leadItemsTable)
+    .where(eq(leadItemsTable.leadId, leadId))
+    .orderBy(asc(leadItemsTable.slNo), asc(leadItemsTable.id));
+  res.json(items.map(i => ({
+    ...i,
+    budget: i.budget ? Number(i.budget) : null,
+    margin: i.margin ? Number(i.margin) : null,
+    createdAt: i.createdAt.toISOString(),
+  })));
+});
+
+router.post("/v1/leads/:id/items", async (req, res): Promise<void> => {
+  const leadId = parseInt(req.params.id as string, 10);
+  const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
+    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.companyId, req.companyId)));
+  if (!lead) { res.status(404).json({ error: "Not found" }); return; }
+  const { slNo, productName, customProduct, qty, budget, margin } = req.body ?? {};
+  const [item] = await db.insert(leadItemsTable).values({
+    leadId, slNo: slNo ?? 1,
+    productName: productName || null, customProduct: customProduct || null,
+    qty: qty ?? null, budget: budget ?? null, margin: margin ?? null,
+  }).returning();
+  res.status(201).json({ ...item, budget: item.budget ? Number(item.budget) : null, margin: item.margin ? Number(item.margin) : null, createdAt: item.createdAt.toISOString() });
+});
+
+router.delete("/v1/leads/:id/items", async (req, res): Promise<void> => {
+  const leadId = parseInt(req.params.id as string, 10);
+  const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
+    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.companyId, req.companyId)));
+  if (!lead) { res.status(404).json({ error: "Not found" }); return; }
+  await db.delete(leadItemsTable).where(eq(leadItemsTable.leadId, leadId));
+  res.sendStatus(204);
+});
+
+router.delete("/v1/leads/:id/items/:itemId", async (req, res): Promise<void> => {
+  const leadId = parseInt(req.params.id as string, 10);
+  const itemId = parseInt(req.params.itemId as string, 10);
+  await db.delete(leadItemsTable).where(and(eq(leadItemsTable.id, itemId), eq(leadItemsTable.leadId, leadId)));
   res.sendStatus(204);
 });
 

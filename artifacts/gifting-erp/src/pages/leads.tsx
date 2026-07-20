@@ -16,6 +16,15 @@ import { useLocation } from "wouter";
 import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, UserPlus, FileSpreadsheet, X, History, Briefcase, FileText, ShoppingCart, Truck, Receipt, Activity } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+type LeadItem = {
+  id: number; leadId: number; slNo: number;
+  productName: string | null; customProduct: string | null;
+  qty: number | null; budget: number | null; margin: number | null;
+  createdAt: string;
+};
+type FormItem = { tempId: string; productName: string; customProduct: string; qty: string; budget: string; margin: string; };
+const blankItem = (): FormItem => ({ tempId: Math.random().toString(36).slice(2), productName: "", customProduct: "", qty: "", budget: "", margin: "" });
+
 type LeadHistory = {
   opportunities: { id: number; title: string; stage: string; value: number | null; createdAt: string }[];
   quotes: { id: number; quoteNumber: string; subject: string | null; status: string; totalAmount: number; opportunityId: number | null; createdAt: string }[];
@@ -57,9 +66,8 @@ function initials(name: string | null) {
 
 const BLANK_FORM = {
   title: "", clientId: "", companyName: "", contactName: "", email: "", phone: "", source: "",
-  qty: "", budget: "", products: [] as string[], customProducts: [] as string[],
   leadDate: "", deliveryTime: "", deliveryDate: "", cityOfDelivery: "",
-  branding: "", percentage: "", ownerId: "", notes: "",
+  branding: "", ownerId: "", notes: "",
 };
 
 export function Leads() {
@@ -70,15 +78,12 @@ export function Leads() {
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [form, setForm] = useState({ ...BLANK_FORM });
+  const [formItems, setFormItems] = useState<FormItem[]>([blankItem()]);
   const [editForm, setEditForm] = useState<Partial<Lead>>({});
+  const [editItems, setEditItems] = useState<FormItem[]>([]);
   const [followUpForm, setFollowUpForm] = useState({ subject: "", dueDate: "", description: "" });
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
-  const [customProduct, setCustomProduct] = useState("");
-  const [customProductInput, setCustomProductInput] = useState("");
   const [editMode, setEditMode] = useState(false);
-  const [editProducts, setEditProducts] = useState<string[]>([]);
-  const [editCustomProducts, setEditCustomProducts] = useState<string[]>([]);
-  const [editCustomProductInput, setEditCustomProductInput] = useState("");
   const [detailTab, setDetailTab] = useState<"details" | "history">("details");
 
   const [, navigate] = useLocation();
@@ -93,51 +98,76 @@ export function Leads() {
     queryFn: () => api<LeadHistory>(`/v1/leads/${selectedId}/history`),
     enabled: selectedId != null && detailTab === "history",
   });
+  const { data: leadItems, isLoading: itemsLoading } = useQuery({
+    queryKey: ["lead-items", selectedId],
+    queryFn: () => api<LeadItem[]>(`/v1/leads/${selectedId}/items`),
+    enabled: selectedId != null,
+  });
 
-  const budgetNum = Number(form.budget) || 0;
-  const qtyNum = Number(form.qty) || 0;
-  const pctNum = Number(form.percentage) || 0;
-  const computedTotal = qtyNum * budgetNum;
-  const afterMargin = budgetNum - (budgetNum * pctNum) / 100;
-
-  const addCustomProduct = () => {
-    const name = customProduct.replace(/,/g, " ").trim();
-    if (name && !form.products.includes(name)) setForm({ ...form, products: [...form.products, name] });
-    setCustomProduct("");
-  };
+  const formTotal = formItems.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.budget) || 0), 0);
 
   const create = useMutation({
-    mutationFn: () => api<Lead>("/v1/leads", {
-      method: "POST", body: JSON.stringify({
-        title: form.title,
-        clientId: form.clientId ? Number(form.clientId) : null,
-        companyName: form.companyName || null,
-        contactName: form.contactName || null,
-        email: form.email || null, phone: form.phone || null,
-        source: form.source || null,
-        qty: form.qty ? Number(form.qty) : null,
-        budget: form.budget ? Number(form.budget) : null,
-        products: form.products.length ? form.products.join(",") : null,
-        customProducts: form.customProducts.length ? form.customProducts.join(",") : null,
-        leadDate: form.leadDate ? new Date(form.leadDate).toISOString() : null,
-        deliveryTime: form.deliveryTime || null,
-        deliveryDate: form.deliveryDate ? new Date(form.deliveryDate).toISOString() : null,
-        cityOfDelivery: form.cityOfDelivery || null,
-        branding: form.branding === "yes" ? true : form.branding === "no" ? false : null,
-        percentage: form.percentage ? Number(form.percentage) : null,
-        totalValue: form.budget ? computedTotal : null,
-        ownerId: form.ownerId ? Number(form.ownerId) : null,
-        notes: form.notes || null,
-      }),
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); setDialog(false); setForm({ ...BLANK_FORM }); setCustomProduct(""); setCustomProductInput(""); toast({ title: "Lead created" }); },
+    mutationFn: async () => {
+      const lead = await api<Lead>("/v1/leads", {
+        method: "POST", body: JSON.stringify({
+          title: form.title,
+          clientId: form.clientId ? Number(form.clientId) : null,
+          companyName: form.companyName || null,
+          contactName: form.contactName || null,
+          email: form.email || null, phone: form.phone || null,
+          source: form.source || null,
+          leadDate: form.leadDate ? new Date(form.leadDate).toISOString() : null,
+          deliveryTime: form.deliveryTime || null,
+          deliveryDate: form.deliveryDate ? new Date(form.deliveryDate).toISOString() : null,
+          cityOfDelivery: form.cityOfDelivery || null,
+          branding: form.branding === "yes" ? true : form.branding === "no" ? false : null,
+          totalValue: formTotal || null,
+          ownerId: form.ownerId ? Number(form.ownerId) : null,
+          notes: form.notes || null,
+        }),
+      });
+      const validItems = formItems.filter(i => i.productName || i.customProduct || i.qty || i.budget || i.margin);
+      for (let idx = 0; idx < validItems.length; idx++) {
+        const item = validItems[idx];
+        await api(`/v1/leads/${lead.id}/items`, {
+          method: "POST", body: JSON.stringify({
+            slNo: idx + 1,
+            productName: item.productName || null,
+            customProduct: item.customProduct || null,
+            qty: item.qty ? Number(item.qty) : null,
+            budget: item.budget ? Number(item.budget) : null,
+            margin: item.margin ? Number(item.margin) : null,
+          }),
+        });
+      }
+      return lead;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); setDialog(false); setForm({ ...BLANK_FORM }); setFormItems([blankItem()]); toast({ title: "Lead created" }); },
   });
 
   const update = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Lead> }) =>
-      api<Lead>(`/v1/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    mutationFn: async ({ id, data, items }: { id: number; data: Partial<Lead>; items: FormItem[] }) => {
+      const lead = await api<Lead>(`/v1/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+      await api(`/v1/leads/${id}/items`, { method: "DELETE" });
+      const validItems = items.filter(i => i.productName || i.customProduct || i.qty || i.budget || i.margin);
+      for (let idx = 0; idx < validItems.length; idx++) {
+        const item = validItems[idx];
+        await api(`/v1/leads/${id}/items`, {
+          method: "POST", body: JSON.stringify({
+            slNo: idx + 1,
+            productName: item.productName || null,
+            customProduct: item.customProduct || null,
+            qty: item.qty ? Number(item.qty) : null,
+            budget: item.budget ? Number(item.budget) : null,
+            margin: item.margin ? Number(item.margin) : null,
+          }),
+        });
+      }
+      return lead;
+    },
     onSuccess: (updatedLead) => {
       qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["lead-items", updatedLead.id] });
       setSelected(updatedLead);
       setEditMode(false);
       toast({ title: "Lead updated" });
@@ -357,8 +387,8 @@ export function Leads() {
               </div>
             </div>
 
-            {/* Row 3: Source | QTY | Budget per piece | Total | Margin */}
-            <div className="grid grid-cols-5 gap-3">
+            {/* Row 3: Source + Branding */}
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Source</label>
                 <Select value={form.source || "__none__"} onValueChange={v => setForm({ ...form, source: v === "__none__" ? "" : v })}>
@@ -367,26 +397,6 @@ export function Leads() {
                 </Select>
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">QTY</label>
-                <Input placeholder="0" type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Budget per piece (₹)</label>
-                <Input placeholder="0" type="number" value={form.budget} onChange={e => setForm({ ...form, budget: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Total (₹)</label>
-                <Input readOnly value={form.budget ? computedTotal.toLocaleString("en-IN") : ""} placeholder="Auto" className="bg-muted/50 text-primary font-medium" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Margin (%)</label>
-                <Input placeholder="0" type="number" value={form.percentage} onChange={e => setForm({ ...form, percentage: e.target.value })} />
-              </div>
-            </div>
-
-            {/* Row 3b: Branding */}
-            <div className="flex items-end gap-3">
-              <div className="space-y-1 w-40">
                 <label className="text-sm font-medium">Branding</label>
                 <Select value={form.branding || "__none__"} onValueChange={v => setForm({ ...form, branding: v === "__none__" ? "" : v })}>
                   <SelectTrigger className="text-xs"><SelectValue placeholder="Yes / No" /></SelectTrigger>
@@ -399,70 +409,77 @@ export function Leads() {
               </div>
             </div>
 
-            {/* Row 4: Products | Custom Products */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
+            {/* Products table */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
                 <label className="text-sm font-medium">Products</label>
-                <Select value="" onValueChange={p => { if (p && !form.products.includes(p)) setForm({ ...form, products: [...form.products, p] }); }}>
-                  <SelectTrigger><SelectValue placeholder="Add from catalogue…" /></SelectTrigger>
-                  <SelectContent position="popper" className="max-h-60">
-                    {productList?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {form.products.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {form.products.map(p => (
-                      <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                        #{p}
-                        <button type="button" className="hover:text-destructive" onClick={() => setForm({ ...form, products: form.products.filter(x => x !== p) })}>
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <Button type="button" variant="outline" size="sm" className="h-7 text-xs px-2"
+                  onClick={() => setFormItems(prev => [...prev, blankItem()])}>
+                  <Plus className="w-3.5 h-3.5 mr-1" />Add Row
+                </Button>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Custom Products</label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Type a custom product & press Enter…"
-                    value={customProductInput}
-                    onChange={e => setCustomProductInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        const name = customProductInput.trim();
-                        if (name && !form.customProducts.includes(name))
-                          setForm({ ...form, customProducts: [...form.customProducts, name] });
-                        setCustomProductInput("");
-                      }
-                    }}
-                  />
-                  <Button type="button" variant="outline" size="icon" className="shrink-0"
-                    onClick={() => {
-                      const name = customProductInput.trim();
-                      if (name && !form.customProducts.includes(name))
-                        setForm({ ...form, customProducts: [...form.customProducts, name] });
-                      setCustomProductInput("");
-                    }}
-                    disabled={!customProductInput.trim()}>
-                    <Plus className="w-4 h-4" />
-                  </Button>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-10">Sl No</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Products</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Custom Products</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-20">Qty</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Budget (₹)</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-24">Margin (%)</th>
+                      <th className="w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {formItems.map((item, idx) => (
+                      <tr key={item.tempId} className="border-t">
+                        <td className="px-3 py-1.5 text-xs text-muted-foreground">{idx + 1}</td>
+                        <td className="px-2 py-1.5">
+                          <Select value={item.productName || "__none__"} onValueChange={v => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, productName: v === "__none__" ? "" : v } : i))}>
+                            <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
+                            <SelectContent position="popper" className="max-h-60">
+                              <SelectItem value="__none__">— None —</SelectItem>
+                              {productList?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input className="h-7 text-xs" placeholder="Custom product" value={item.customProduct}
+                            onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, customProduct: e.target.value } : i))} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input className="h-7 text-xs" type="number" placeholder="0" value={item.qty}
+                            onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, qty: e.target.value } : i))} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input className="h-7 text-xs" type="number" placeholder="0" value={item.budget}
+                            onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, budget: e.target.value } : i))} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input className="h-7 text-xs" type="number" placeholder="0" value={item.margin}
+                            onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, margin: e.target.value } : i))} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <button type="button" onClick={() => setFormItems(prev => prev.filter(i => i.tempId !== item.tempId))}
+                            className="text-muted-foreground hover:text-destructive transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {formItems.length === 0 && (
+                      <tr><td colSpan={7} className="text-center py-4 text-xs text-muted-foreground">No products yet — click "Add Row"</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {formTotal > 0 && (
+                <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 text-sm flex items-center justify-between">
+                  <span className="text-muted-foreground">Total</span>
+                  <span className="font-bold text-primary">₹{formTotal.toLocaleString("en-IN")}</span>
                 </div>
-                {form.customProducts.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {form.customProducts.map(p => (
-                      <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-medium">
-                        #{p}
-                        <button type="button" className="hover:text-destructive" onClick={() => setForm({ ...form, customProducts: form.customProducts.filter(x => x !== p) })}>
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
             </div>
 
             {/* Row 5: Delivery Date | Delivery Time | City Of Delivery */}
@@ -502,9 +519,14 @@ export function Leads() {
                     <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs px-3 mt-0.5"
                       onClick={() => {
                         setEditForm({ ...selected });
-                        setEditProducts((selected.products ?? "").split(",").map(s => s.trim()).filter(Boolean));
-                        setEditCustomProducts((selected.customProducts ?? "").split(",").map(s => s.trim()).filter(Boolean));
-                        setEditCustomProductInput("");
+                        setEditItems((leadItems ?? []).map(item => ({
+                          tempId: String(item.id),
+                          productName: item.productName ?? "",
+                          customProduct: item.customProduct ?? "",
+                          qty: item.qty != null ? String(item.qty) : "",
+                          budget: item.budget != null ? String(item.budget) : "",
+                          margin: item.margin != null ? String(item.margin) : "",
+                        })));
                         setEditMode(true);
                       }}>
                       Edit Lead
@@ -524,11 +546,7 @@ export function Leads() {
 
               {/* ── EDIT MODE ── */}
               {editMode && (() => {
-                const eBudget = Number(editForm.budget) || 0;
-                const eQty = Number(editForm.qty) || 0;
-                const ePct = Number(editForm.percentage) || 0;
-                const eTotal = eQty * eBudget;
-                const eAfterMargin = eBudget - (eBudget * ePct) / 100;
+                const editTotal = editItems.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.budget) || 0), 0);
                 const saveEdit = () => {
                   update.mutate({
                     id: selected.id,
@@ -542,18 +560,14 @@ export function Leads() {
                       status: editForm.status ?? selected.status,
                       ownerId: editForm.ownerId ?? null,
                       clientId: editForm.clientId ?? null,
-                      qty: editForm.qty ?? null,
-                      budget: editForm.budget ?? null,
-                      percentage: editForm.percentage ?? null,
-                      totalValue: eTotal || null,
+                      totalValue: editTotal || null,
                       branding: editForm.branding ?? null,
                       deliveryDate: editForm.deliveryDate ?? null,
                       deliveryTime: editForm.deliveryTime ?? null,
                       cityOfDelivery: editForm.cityOfDelivery ?? null,
-                      products: editProducts.join(",") || null,
-                      customProducts: editCustomProducts.join(",") || null,
                       notes: editForm.notes ?? null,
                     },
+                    items: editItems,
                   });
                 };
                 return (
@@ -616,27 +630,6 @@ export function Leads() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">QTY</label>
-                        <Input className="h-8 text-sm" type="number" value={editForm.qty ?? ""} onChange={e => setEditForm(f => ({ ...f, qty: e.target.value ? Number(e.target.value) : null }))} placeholder="0" />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Budget/pc (₹)</label>
-                        <Input className="h-8 text-sm" type="number" value={editForm.budget ?? ""} onChange={e => setEditForm(f => ({ ...f, budget: e.target.value ? Number(e.target.value) : null }))} placeholder="0" />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Margin %</label>
-                        <Input className="h-8 text-sm" type="number" value={editForm.percentage ?? ""} onChange={e => setEditForm(f => ({ ...f, percentage: e.target.value ? Number(e.target.value) : null }))} placeholder="0" />
-                      </div>
-                    </div>
-
-                    {eTotal > 0 && (
-                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-2.5 text-xs">
-                        <div><span className="text-muted-foreground block">Total</span><span className="font-bold text-primary">₹{eTotal.toLocaleString("en-IN")}</span></div>
-                      </div>
-                    )}
-
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Branding</label>
                       <Select value={editForm.branding === true ? "yes" : editForm.branding === false ? "no" : "__none__"} onValueChange={v => setEditForm(f => ({ ...f, branding: v === "__none__" ? null : v === "yes" }))}>
@@ -664,59 +657,75 @@ export function Leads() {
                       </div>
                     </div>
 
-                    {/* Products */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Products</label>
-                      <Select value="" onValueChange={p => { if (p && !editProducts.includes(p)) setEditProducts(prev => [...prev, p]); }}>
-                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Add from catalogue…" /></SelectTrigger>
-                        <SelectContent position="popper" className="max-h-60">
-                          {productList?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      {editProducts.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {editProducts.map(p => (
-                            <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                              #{p}
-                              <button type="button" className="hover:text-destructive" onClick={() => setEditProducts(prev => prev.filter(x => x !== p))}><X className="w-3 h-3" /></button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Custom Products */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Custom Products</label>
-                      <div className="flex gap-2">
-                        <Input className="h-8 text-sm" placeholder="Type & press Enter…" value={editCustomProductInput}
-                          onChange={e => setEditCustomProductInput(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const name = editCustomProductInput.trim();
-                              if (name && !editCustomProducts.includes(name)) setEditCustomProducts(prev => [...prev, name]);
-                              setEditCustomProductInput("");
-                            }
-                          }} />
-                        <Button type="button" variant="outline" size="icon" className="shrink-0 h-8 w-8"
-                          onClick={() => {
-                            const name = editCustomProductInput.trim();
-                            if (name && !editCustomProducts.includes(name)) setEditCustomProducts(prev => [...prev, name]);
-                            setEditCustomProductInput("");
-                          }}
-                          disabled={!editCustomProductInput.trim()}>
-                          <Plus className="w-3.5 h-3.5" />
+                    {/* Products table */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Products</label>
+                        <Button type="button" variant="outline" size="sm" className="h-6 text-xs px-2"
+                          onClick={() => setEditItems(prev => [...prev, blankItem()])}>
+                          <Plus className="w-3 h-3 mr-1" />Add Row
                         </Button>
                       </div>
-                      {editCustomProducts.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {editCustomProducts.map(p => (
-                            <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-medium">
-                              #{p}
-                              <button type="button" className="hover:text-destructive" onClick={() => setEditCustomProducts(prev => prev.filter(x => x !== p))}><X className="w-3 h-3" /></button>
-                            </span>
-                          ))}
+                      <div className="border rounded-lg overflow-auto">
+                        <table className="w-full text-xs min-w-[460px]">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-8">#</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Product</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Custom</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-14">Qty</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-20">Budget</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-16">Margin%</th>
+                              <th className="w-6"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {editItems.map((item, idx) => (
+                              <tr key={item.tempId} className="border-t">
+                                <td className="px-2 py-1 text-muted-foreground">{idx + 1}</td>
+                                <td className="px-1 py-1">
+                                  <Select value={item.productName || "__none__"} onValueChange={v => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, productName: v === "__none__" ? "" : v } : i))}>
+                                    <SelectTrigger className="h-6 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
+                                    <SelectContent position="popper" className="max-h-52">
+                                      <SelectItem value="__none__">— None —</SelectItem>
+                                      {productList?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <td className="px-1 py-1">
+                                  <Input className="h-6 text-xs" placeholder="Custom…" value={item.customProduct}
+                                    onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, customProduct: e.target.value } : i))} />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <Input className="h-6 text-xs" type="number" placeholder="0" value={item.qty}
+                                    onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, qty: e.target.value } : i))} />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <Input className="h-6 text-xs" type="number" placeholder="0" value={item.budget}
+                                    onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, budget: e.target.value } : i))} />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <Input className="h-6 text-xs" type="number" placeholder="0" value={item.margin}
+                                    onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, margin: e.target.value } : i))} />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <button type="button" onClick={() => setEditItems(prev => prev.filter(i => i.tempId !== item.tempId))}
+                                    className="text-muted-foreground hover:text-destructive transition-colors">
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                            {editItems.length === 0 && (
+                              <tr><td colSpan={7} className="text-center py-3 text-xs text-muted-foreground">No products — click "Add Row"</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                      {editTotal > 0 && (
+                        <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 text-xs flex items-center justify-between">
+                          <span className="text-muted-foreground">Total</span>
+                          <span className="font-bold text-primary">₹{editTotal.toLocaleString("en-IN")}</span>
                         </div>
                       )}
                     </div>
@@ -915,24 +924,50 @@ export function Leads() {
                   {selected.phone && <div className="flex items-center gap-2 text-muted-foreground"><Phone className="w-4 h-4 shrink-0" /><span>{selected.phone}</span></div>}
                   {selected.ownerName && <div className="flex items-center gap-2 text-muted-foreground col-span-2"><UserCircle className="w-4 h-4 shrink-0" /><span>Assigned to <strong>{selected.ownerName}</strong></span></div>}
                 </div>
-                {(selected.qty != null || selected.budget != null || selected.deliveryTime || selected.deliveryDate || selected.branding != null || selected.percentage != null) && (
+                {(selected.deliveryTime || selected.deliveryDate || selected.branding != null) && (
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-muted/40 rounded-lg p-3">
-                    {selected.qty != null && <div><span className="text-xs text-muted-foreground block">Qty</span>{selected.qty.toLocaleString("en-IN")}</div>}
-                    {selected.budget != null && <div><span className="text-xs text-muted-foreground block">Budget</span>₹{selected.budget.toLocaleString("en-IN")}</div>}
                     {selected.branding != null && <div><span className="text-xs text-muted-foreground block">Branding</span>{selected.branding ? "Yes" : "No"}</div>}
-                    {selected.percentage != null && <div><span className="text-xs text-muted-foreground block">Percentage</span>{selected.percentage}%</div>}
                     {selected.deliveryTime && <div><span className="text-xs text-muted-foreground block">Delivery Time</span>{selected.deliveryTime}</div>}
                     {selected.deliveryDate && <div><span className="text-xs text-muted-foreground block">Delivery Date</span>{new Date(selected.deliveryDate).toLocaleDateString("en-IN")}</div>}
                   </div>
                 )}
-                {selected.products && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {selected.products.split(",").map(p => <span key={p} className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">#{p.trim()}</span>)}
+
+                {/* Products items table */}
+                {!itemsLoading && (leadItems ?? []).length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Products</div>
+                    <div className="border rounded-lg overflow-auto">
+                      <table className="w-full text-xs min-w-[400px]">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-8">#</th>
+                            <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Product</th>
+                            <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Custom</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-muted-foreground w-14">Qty</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-muted-foreground w-20">Budget</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-muted-foreground w-16">Margin</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(leadItems ?? []).map((item, idx) => (
+                            <tr key={item.id} className="border-t">
+                              <td className="px-2 py-1.5 text-muted-foreground">{idx + 1}</td>
+                              <td className="px-2 py-1.5">{item.productName ?? <span className="text-muted-foreground/50">—</span>}</td>
+                              <td className="px-2 py-1.5">{item.customProduct ?? <span className="text-muted-foreground/50">—</span>}</td>
+                              <td className="px-2 py-1.5 text-right">{item.qty ?? "—"}</td>
+                              <td className="px-2 py-1.5 text-right">{item.budget != null ? `₹${item.budget.toLocaleString("en-IN")}` : "—"}</td>
+                              <td className="px-2 py-1.5 text-right">{item.margin != null ? `${item.margin}%` : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
+
                 {selected.totalValue != null && (
                   <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
-                    <div className="text-xs text-muted-foreground mb-0.5">Total Value (Budget + {selected.percentage ?? 0}%)</div>
+                    <div className="text-xs text-muted-foreground mb-0.5">Total Value</div>
                     <div className="text-2xl font-bold text-primary">₹{selected.totalValue.toLocaleString("en-IN")}</div>
                   </div>
                 )}
