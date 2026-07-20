@@ -67,6 +67,7 @@ function initials(name: string | null) {
 const BLANK_FORM = {
   title: "", clientId: "", companyName: "", contactName: "", email: "", phone: "", source: "",
   leadDate: "", deliveryTime: "", deliveryDate: "", cityOfDelivery: "",
+  totalQty: "", totalBudgetPerPiece: "", margin: "",
   branding: "", ownerId: "", notes: "",
 };
 
@@ -121,6 +122,9 @@ export function Leads() {
           deliveryDate: form.deliveryDate ? new Date(form.deliveryDate).toISOString() : null,
           cityOfDelivery: form.cityOfDelivery || null,
           branding: form.branding === "yes" ? true : form.branding === "no" ? false : null,
+          qty: form.totalQty ? Number(form.totalQty) : null,
+          budget: form.totalBudgetPerPiece ? Number(form.totalBudgetPerPiece) : null,
+          percentage: form.margin ? Number(form.margin) : null,
           totalValue: formTotal || null,
           ownerId: form.ownerId ? Number(form.ownerId) : null,
           notes: form.notes || null,
@@ -384,6 +388,22 @@ export function Leads() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">POC Email</label>
                 <Input placeholder="Email address" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              </div>
+            </div>
+
+            {/* Total QTY / Total Budget per Piece / Margin */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Total QTY</label>
+                <Input type="number" placeholder="0" value={form.totalQty} onChange={e => setForm({ ...form, totalQty: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Total Budget / Piece (₹)</label>
+                <Input type="number" placeholder="0" value={form.totalBudgetPerPiece} onChange={e => setForm({ ...form, totalBudgetPerPiece: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Margin (%)</label>
+                <Input type="number" placeholder="0" value={form.margin} onChange={e => setForm({ ...form, margin: e.target.value })} />
               </div>
             </div>
 
