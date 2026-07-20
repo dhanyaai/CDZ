@@ -6,6 +6,8 @@ export const catalogueSharesTable = pgTable("catalogue_shares", {
   token: text("token").notNull().unique(),
   companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "cascade" }),
   companyName: text("company_name").notNull(),
+  opportunityId: integer("opportunity_id"),
+  clientId: integer("client_id"),
   opportunityTitle: text("opportunity_title").notNull(),
   clientName: text("client_name"),
   catalogueType: text("catalogue_type").notNull(),

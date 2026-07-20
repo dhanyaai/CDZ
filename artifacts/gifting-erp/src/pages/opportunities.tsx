@@ -1049,6 +1049,8 @@ export function Opportunities() {
                                 clientName: selected.clientName ?? selected.title,
                                 catalogueType: catalogueType === "Custom" ? catalogueCustomType.trim() : catalogueType,
                                 productIds: Array.from(catalogueSelected),
+                                opportunityId: selected.id,
+                                clientId: selected.clientId ?? null,
                               }),
                             });
                             const { token } = res as { token: string };

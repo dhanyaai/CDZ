@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { eq, and, inArray } from "drizzle-orm";
-import { db, catalogueSharesTable, companiesTable, productsTable } from "@workspace/db";
+import { db, catalogueSharesTable, companiesTable, productsTable, sampleOrdersTable, sampleOrderItemsTable, opportunitiesTable } from "@workspace/db";
 import crypto from "crypto";
 
 const router = Router();
 
 router.post("/v1/catalogue-shares", async (req, res): Promise<void> => {
-  const { opportunityTitle, clientName, catalogueType, productIds } = req.body ?? {};
+  const { opportunityTitle, clientName, catalogueType, productIds, opportunityId, clientId } = req.body ?? {};
   if (!opportunityTitle || !catalogueType || !Array.isArray(productIds) || productIds.length === 0) {
     res.status(400).json({ error: "opportunityTitle, catalogueType and productIds are required" });
     return;
@@ -21,6 +21,8 @@ router.post("/v1/catalogue-shares", async (req, res): Promise<void> => {
     token,
     companyId: req.companyId,
     companyName: company.name,
+    opportunityId: opportunityId ? Number(opportunityId) : null,
+    clientId: clientId ? Number(clientId) : null,
     opportunityTitle,
     clientName: clientName ?? null,
     catalogueType,
@@ -53,6 +55,8 @@ router.get("/v1/public/catalogue/:token", async (req, res): Promise<void> => {
   res.json({
     token: share.token,
     companyName: share.companyName,
+    opportunityId: share.opportunityId ?? null,
+    clientId: share.clientId ?? null,
     opportunityTitle: share.opportunityTitle,
     clientName: share.clientName,
     catalogueType: share.catalogueType,
@@ -60,6 +64,63 @@ router.get("/v1/public/catalogue/:token", async (req, res): Promise<void> => {
     createdAt: share.createdAt.toISOString(),
     products: products.map(p => ({ ...p, sellingPrice: Number(p.sellingPrice) })),
   });
+});
+
+// POST /v1/public/catalogue/:token/request-samples
+// Public endpoint — no auth required. Customer selects products; we create a sample order.
+router.post("/v1/public/catalogue/:token/request-samples", async (req, res): Promise<void> => {
+  const { token } = req.params as { token: string };
+  const { productIds } = req.body ?? {};
+
+  if (!Array.isArray(productIds) || productIds.length === 0) {
+    res.status(400).json({ error: "productIds[] is required" });
+    return;
+  }
+
+  const [share] = await db.select().from(catalogueSharesTable).where(eq(catalogueSharesTable.token, token));
+  if (!share) { res.status(404).json({ error: "Catalogue not found" }); return; }
+  if (share.expiresAt && share.expiresAt < new Date()) { res.status(410).json({ error: "This catalogue link has expired" }); return; }
+
+  // Validate all product IDs belong to this company's catalogue share
+  const validIds: number[] = JSON.parse(share.productIds);
+  const selectedIds: number[] = (productIds as number[]).filter(id => validIds.includes(id));
+  if (selectedIds.length === 0) {
+    res.status(400).json({ error: "No valid products selected" });
+    return;
+  }
+
+  // Create the sample order
+  const [order] = await db.insert(sampleOrdersTable).values({
+    companyId: share.companyId,
+    sampleNumber: "",
+    clientId: share.clientId ?? null,
+    opportunityId: share.opportunityId ?? null,
+    customerName: share.clientName ?? share.opportunityTitle,
+    status: "Requested",
+    notes: `Auto-created from catalogue link: ${share.opportunityTitle}`,
+  }).returning({ id: sampleOrdersTable.id });
+
+  // Patch sample number
+  await db.update(sampleOrdersTable)
+    .set({ sampleNumber: `SMPL-${String(order.id).padStart(5, "0")}` })
+    .where(eq(sampleOrdersTable.id, order.id));
+
+  // Insert items (qty=1 each)
+  await db.insert(sampleOrderItemsTable).values(
+    selectedIds.map(pid => ({ sampleOrderId: order.id, productId: pid, quantity: 1 }))
+  );
+
+  // Bump opportunity stage to "samples" if linked
+  if (share.opportunityId) {
+    await db.update(opportunitiesTable)
+      .set({ stage: "samples", updatedAt: new Date() })
+      .where(and(
+        eq(opportunitiesTable.id, share.opportunityId),
+        eq(opportunitiesTable.companyId, share.companyId),
+      ));
+  }
+
+  res.json({ success: true, sampleOrderId: order.id, sampleNumber: `SMPL-${String(order.id).padStart(5, "0")}` });
 });
 
 export default router;
