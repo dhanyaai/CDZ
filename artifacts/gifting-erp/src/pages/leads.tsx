@@ -32,19 +32,21 @@ type Lead = {
 };
 type User = { id: number; name: string; role: string };
 
-const STAGES = ["new", "qualified", "proposal", "negotiation", "won", "lost"];
-const STAGE_LABELS: Record<string, string> = { new: "New", qualified: "Qualified", proposal: "Proposal", negotiation: "Negotiation", won: "Won", lost: "Lost" };
+const STAGES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost", "converted"];
+const STAGE_LABELS: Record<string, string> = { new: "New", contacted: "Contacted", qualified: "Qualified", proposal: "Proposal", negotiation: "Negotiation", won: "Won", lost: "Lost", converted: "Converted" };
 const STAGE_COLORS: Record<string, string> = {
   new: "bg-slate-500/10 text-slate-400 border-slate-500/20",
+  contacted: "bg-sky-500/10 text-sky-400 border-sky-500/20",
   qualified: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   proposal: "bg-violet-500/10 text-violet-400 border-violet-500/20",
   negotiation: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   won: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
   lost: "bg-red-500/10 text-red-400 border-red-500/20",
+  converted: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
 };
 const STAGE_HEADER: Record<string, string> = {
-  new: "border-t-slate-400", qualified: "border-t-blue-400", proposal: "border-t-violet-400",
-  negotiation: "border-t-amber-400", won: "border-t-emerald-400", lost: "border-t-red-400",
+  new: "border-t-slate-400", contacted: "border-t-sky-400", qualified: "border-t-blue-400", proposal: "border-t-violet-400",
+  negotiation: "border-t-amber-400", won: "border-t-emerald-400", lost: "border-t-red-400", converted: "border-t-indigo-400",
 };
 const SOURCE_COLORS: Record<string, string> = {
   "Inbound Call": "bg-sky-500/10 text-sky-400", "Outbound Call": "bg-orange-500/10 text-orange-400",
@@ -321,7 +323,7 @@ export function Leads() {
         </div>
       )}
 
-      {viewMode === "kanban" && <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      {viewMode === "kanban" && <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         {STAGES.map(stage => {
           const items = byStatus(stage);
           return (
@@ -830,7 +832,7 @@ export function Leads() {
                   <label className="text-sm font-medium">Stage</label>
                   <Select value={editForm.status ?? selected.status} onValueChange={v => { setEditForm(f => ({ ...f, status: v })); update.mutate({ id: selected.id, data: { status: v } }); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{STAGES.map(s => <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>)}</SelectContent>
+                    <SelectContent>{STAGES.filter(s => s !== "converted").map(s => <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
