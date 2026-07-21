@@ -1,12 +1,13 @@
 import { useState, useRef } from "react";
 import { useListProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useListVendors, getListProductsQueryKey } from "@workspace/api-client-react";
 import { api } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search, Plus, Edit, Trash2, Settings2, Package, AlertTriangle, IndianRupee, TrendingUp, Upload, X, Download, FileUp } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Settings2, Package, AlertTriangle, IndianRupee, TrendingUp, Upload, X, Download, FileUp, Truck, Star } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { ProductManager } from "@/components/product-manager";
@@ -64,6 +65,178 @@ function productTypeLabel(val: string | null | undefined) {
   return PRODUCT_TYPES.find(t => t.value === val)?.label ?? val ?? "—";
 }
 
+type VendorMapping = {
+  id: number;
+  vendorId: number;
+  vendorName: string;
+  unitPrice: number;
+  leadTimeDays: number;
+  isPreferred: boolean;
+};
+
+function VendorMapSheet({ product, vendors, onClose, addForm, setAddForm, toast, queryClient }: {
+  product: { id: number; name: string } | null;
+  vendors: { id: number; name: string }[];
+  onClose: () => void;
+  addForm: { vendorId: string; unitPrice: string; leadTimeDays: string; isPreferred: boolean };
+  setAddForm: React.Dispatch<React.SetStateAction<{ vendorId: string; unitPrice: string; leadTimeDays: string; isPreferred: boolean }>>;
+  toast: ReturnType<typeof useToast>["toast"];
+  queryClient: ReturnType<typeof useQueryClient>;
+}) {
+  const qk = ["product-vendors", product?.id];
+
+  const { data: mappings = [], isLoading } = useQuery<VendorMapping[]>({
+    queryKey: qk,
+    enabled: !!product,
+    queryFn: () => api<VendorMapping[]>(`/v1/products/${product!.id}/vendors`),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (body: object) =>
+      api(`/v1/products/${product!.id}/vendors`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk });
+      setAddForm({ vendorId: "", unitPrice: "", leadTimeDays: "7", isPreferred: false });
+      toast({ title: "Vendor added" });
+    },
+    onError: () => toast({ title: "Failed to add vendor", variant: "destructive" }),
+  });
+
+  const preferMutation = useMutation({
+    mutationFn: ({ mappingId, isPreferred }: { mappingId: number; isPreferred: boolean }) =>
+      api(`/v1/products/${product!.id}/vendors/${mappingId}`, { method: "PATCH", body: JSON.stringify({ isPreferred }) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (mappingId: number) =>
+      api(`/v1/products/${product!.id}/vendors/${mappingId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk });
+      toast({ title: "Vendor removed" });
+    },
+  });
+
+  const handleAdd = () => {
+    if (!addForm.vendorId || !addForm.unitPrice) {
+      toast({ title: "Select a vendor and enter unit price", variant: "destructive" }); return;
+    }
+    addMutation.mutate({
+      vendorId: Number(addForm.vendorId),
+      unitPrice: Number(addForm.unitPrice),
+      leadTimeDays: Number(addForm.leadTimeDays) || 7,
+      isPreferred: addForm.isPreferred,
+    });
+  };
+
+  const alreadyMapped = new Set(mappings.map(m => m.vendorId));
+
+  return (
+    <Sheet open={!!product} onOpenChange={open => !open && onClose()}>
+      <SheetContent className="w-full sm:max-w-lg flex flex-col gap-0 p-0">
+        <SheetHeader className="px-6 py-4 border-b">
+          <SheetTitle className="flex items-center gap-2">
+            <Truck className="w-5 h-5 text-muted-foreground" />
+            Vendors for <span className="font-semibold truncate">{product?.name}</span>
+          </SheetTitle>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Add vendor form */}
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <p className="text-sm font-medium">Add Vendor</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <Label className="text-xs mb-1.5 block">Vendor</Label>
+                <Select value={addForm.vendorId} onValueChange={v => setAddForm(f => ({ ...f, vendorId: v }))}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select vendor…" />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {vendors.filter(v => !alreadyMapped.has(v.id)).map(v => (
+                      <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>
+                    ))}
+                    {vendors.filter(v => !alreadyMapped.has(v.id)).length === 0 && (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">All vendors already mapped</div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs mb-1.5 block">Unit Price (₹)</Label>
+                <Input
+                  type="number" min={0} step={0.01}
+                  className="h-8 text-sm"
+                  value={addForm.unitPrice}
+                  onChange={e => setAddForm(f => ({ ...f, unitPrice: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <Label className="text-xs mb-1.5 block">Lead Time (days)</Label>
+                <Input
+                  type="number" min={1}
+                  className="h-8 text-sm"
+                  value={addForm.leadTimeDays}
+                  onChange={e => setAddForm(f => ({ ...f, leadTimeDays: e.target.value }))}
+                />
+              </div>
+              <div className="col-span-2 flex items-center gap-2">
+                <Switch
+                  id="preferred-new"
+                  checked={addForm.isPreferred}
+                  onCheckedChange={v => setAddForm(f => ({ ...f, isPreferred: v }))}
+                />
+                <Label htmlFor="preferred-new" className="text-sm cursor-pointer">Mark as preferred vendor</Label>
+              </div>
+            </div>
+            <Button size="sm" onClick={handleAdd} disabled={addMutation.isPending} className="w-full">
+              <Plus className="w-4 h-4 mr-1" /> Add Vendor
+            </Button>
+          </div>
+
+          {/* Mapped vendors list */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              {isLoading ? "Loading…" : mappings.length === 0 ? "No vendors mapped yet" : `${mappings.length} vendor${mappings.length > 1 ? "s" : ""} mapped`}
+            </p>
+            {mappings.map(m => (
+              <div key={m.id} className={`flex items-start gap-3 rounded-lg border p-3 ${m.isPreferred ? "border-amber-500/40 bg-amber-500/5" : "bg-card"}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm truncate">{m.vendorName}</span>
+                    {m.isPreferred && <Badge className="text-[10px] px-1.5 py-0 bg-amber-500 text-white">Preferred</Badge>}
+                  </div>
+                  <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                    <span>₹{m.unitPrice.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                    <span>·</span>
+                    <span>{m.leadTimeDays}d lead</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost" size="icon" className="h-7 w-7"
+                    title={m.isPreferred ? "Preferred" : "Set as preferred"}
+                    onClick={() => preferMutation.mutate({ mappingId: m.id, isPreferred: !m.isPreferred })}
+                  >
+                    <Star className={`w-4 h-4 ${m.isPreferred ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+                  </Button>
+                  <Button
+                    variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={() => removeMutation.mutate(m.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function Products() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string | undefined>();
@@ -71,6 +244,8 @@ export function Products() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [managerProductId, setManagerProductId] = useState<number | null>(null);
+  const [vendorMapProduct, setVendorMapProduct] = useState<{ id: number; name: string } | null>(null);
+  const [addVendorForm, setAddVendorForm] = useState({ vendorId: "", unitPrice: "", leadTimeDays: "7", isPreferred: false });
   const [imagePreview, setImagePreview] = useState<string>("");
   const [imageUploading, setImageUploading] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -445,6 +620,9 @@ export function Products() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{product.vendorName || "—"}</TableCell>
                     <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Vendor mapping" onClick={() => setVendorMapProduct({ id: product.id, name: product.name })}>
+                        <Truck className="w-4 h-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setManagerProductId(product.id)} title="Variants / pricing / customizations">
                         <Settings2 className="w-4 h-4" />
                       </Button>
@@ -629,6 +807,17 @@ export function Products() {
       {managerProductId && (
         <ProductManager productId={managerProductId} open={!!managerProductId} onOpenChange={v => !v && setManagerProductId(null)} />
       )}
+
+      {/* Vendor Mapping Sheet */}
+      <VendorMapSheet
+        product={vendorMapProduct}
+        vendors={vendors ?? []}
+        onClose={() => setVendorMapProduct(null)}
+        addForm={addVendorForm}
+        setAddForm={setAddVendorForm}
+        toast={toast}
+        queryClient={queryClient}
+      />
 
       <AlertDialog open={deleteId !== null} onOpenChange={open => !open && setDeleteId(null)}>
         <AlertDialogContent>

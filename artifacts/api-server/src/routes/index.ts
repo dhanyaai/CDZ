@@ -35,6 +35,7 @@ import servicesRouter from "./services";
 import catalogueSharesRouter from "./catalogueShares";
 import advanceReceiptsRouter from "./advanceReceipts";
 import proformaInvoicesRouter from "./proformaInvoices";
+import vendorProductsRouter from "./vendorProducts";
 
 const router: IRouter = Router();
 
@@ -74,5 +75,6 @@ router.use(servicesRouter);
 router.use(catalogueSharesRouter);
 router.use(advanceReceiptsRouter);
 router.use(proformaInvoicesRouter);
+router.use(vendorProductsRouter);
 
 export default router;
