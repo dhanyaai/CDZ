@@ -147,6 +147,7 @@ export function Leads() {
       return lead;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); setDialog(false); setForm({ ...BLANK_FORM }); setFormItems([blankItem()]); toast({ title: "Lead created" }); },
+    onError: (e: Error) => toast({ title: "Failed to create lead", description: e.message, variant: "destructive" }),
   });
 
   const update = useMutation({
