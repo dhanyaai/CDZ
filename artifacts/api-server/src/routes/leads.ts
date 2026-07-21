@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, sql, and, inArray, asc } from "drizzle-orm";
-import { db, leadsTable, leadItemsTable, opportunitiesTable, clientsTable, usersTable, quotesTable, salesOrdersTable, shipmentsTable, invoicesTable, activitiesTable } from "@workspace/db";
+import { db, leadsTable, leadItemsTable, opportunitiesTable, clientsTable, usersTable, quotesTable, salesOrdersTable, shipmentsTable, invoicesTable, activitiesTable, productsTable, sampleOrdersTable, sampleOrderItemsTable } from "@workspace/db";
 
 const router = Router();
 
@@ -228,6 +228,82 @@ router.delete("/v1/opportunities/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   await db.delete(opportunitiesTable).where(and(eq(opportunitiesTable.id, id), eq(opportunitiesTable.companyId, req.companyId)));
   res.sendStatus(204);
+});
+
+// GET /v1/opportunities/:id/shortlisted-products
+// Returns product details for the IDs stored in shortlistedProductIds
+router.get("/v1/opportunities/:id/shortlisted-products", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const [opp] = await db
+    .select({ shortlistedProductIds: opportunitiesTable.shortlistedProductIds })
+    .from(opportunitiesTable)
+    .where(and(eq(opportunitiesTable.id, id), eq(opportunitiesTable.companyId, req.companyId)));
+  if (!opp) { res.status(404).json({ error: "Not found" }); return; }
+  if (!opp.shortlistedProductIds) { res.json([]); return; }
+
+  const ids: number[] = JSON.parse(opp.shortlistedProductIds);
+  if (ids.length === 0) { res.json([]); return; }
+
+  const products = await db
+    .select({
+      id: productsTable.id,
+      name: productsTable.name,
+      sku: productsTable.sku,
+      category: productsTable.category,
+      brand: productsTable.brand,
+      sellingPrice: productsTable.sellingPrice,
+      imageUrl: productsTable.imageUrl,
+    })
+    .from(productsTable)
+    .where(and(inArray(productsTable.id, ids), eq(productsTable.companyId, req.companyId)));
+
+  // Return in the same order as shortlisted
+  const byId = new Map(products.map(p => [p.id, p]));
+  const ordered = ids.map(id => byId.get(id)).filter(Boolean);
+  res.json(ordered.map(p => ({ ...p, sellingPrice: Number(p!.sellingPrice) })));
+});
+
+// POST /v1/opportunities/:id/create-sample-from-shortlist
+// Creates a sample order from the opportunity's shortlisted products and advances stage to "samples"
+router.post("/v1/opportunities/:id/create-sample-from-shortlist", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const [opp] = await db
+    .select()
+    .from(opportunitiesTable)
+    .where(and(eq(opportunitiesTable.id, id), eq(opportunitiesTable.companyId, req.companyId)));
+  if (!opp) { res.status(404).json({ error: "Not found" }); return; }
+  if (!opp.shortlistedProductIds) { res.status(400).json({ error: "No shortlisted products on this opportunity" }); return; }
+
+  const productIds: number[] = JSON.parse(opp.shortlistedProductIds);
+  if (productIds.length === 0) { res.status(400).json({ error: "Shortlisted products list is empty" }); return; }
+
+  // Create the sample order
+  const [order] = await db.insert(sampleOrdersTable).values({
+    companyId: req.companyId,
+    sampleNumber: "",
+    clientId: opp.clientId ?? null,
+    opportunityId: opp.id,
+    customerName: null,
+    status: "Requested",
+    notes: `Created from shortlisted products`,
+  }).returning({ id: sampleOrdersTable.id });
+
+  const sampleNumber = `SMPL-${String(order.id).padStart(5, "0")}`;
+  await db.update(sampleOrdersTable)
+    .set({ sampleNumber })
+    .where(eq(sampleOrdersTable.id, order.id));
+
+  // Insert items (qty=1 each by default)
+  await db.insert(sampleOrderItemsTable).values(
+    productIds.map(pid => ({ sampleOrderId: order.id, productId: pid, quantity: 1 }))
+  );
+
+  // Advance opportunity stage to "samples"
+  await db.update(opportunitiesTable)
+    .set({ stage: "samples", updatedAt: new Date() })
+    .where(eq(opportunitiesTable.id, opp.id));
+
+  res.status(201).json({ sampleOrderId: order.id, sampleNumber });
 });
 
 router.get("/v1/leads/:id/history", async (req, res): Promise<void> => {

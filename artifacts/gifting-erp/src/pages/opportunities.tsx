@@ -146,7 +146,13 @@ export function Opportunities() {
   const { data: sampleOrders } = useQuery({
     queryKey: ["opp-sample-orders", selected?.id],
     queryFn: () => api<SampleOrderSummary[]>(`/v1/sample-orders?opportunityId=${selected!.id}`),
-    enabled: !!selected && selected.stage === "samples",
+    enabled: !!selected && (selected.stage === "samples" || selected.stage === "shortlisted"),
+  });
+  type ShortlistedProduct = { id: number; name: string; sku: string | null; category: string; brand: string | null; sellingPrice: number; imageUrl: string | null };
+  const { data: shortlistedProducts, isLoading: shortlistedLoading } = useQuery<ShortlistedProduct[]>({
+    queryKey: ["opp-shortlisted-products", selected?.id],
+    queryFn: () => api<ShortlistedProduct[]>(`/v1/opportunities/${selected!.id}/shortlisted-products`),
+    enabled: !!selected && selected.stage === "shortlisted",
   });
   const { data: products } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products"), enabled: sampleDialog || selected?.stage === "sent_catalogue" || selected?.stage === "quotation_sent" });
   const { data: oppQuotes } = useQuery<OppQuote[], Error, OppQuote[]>({
@@ -385,6 +391,18 @@ export function Opportunities() {
       qc.invalidateQueries({ queryKey: ["sample-orders"] });
       setSampleDialog(false); resetSampleForm();
       toast({ title: "Sample order created" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to create sample order", description: e.message, variant: "destructive" }),
+  });
+
+  const createSampleFromShortlist = useMutation({
+    mutationFn: () => api<{ sampleOrderId: number; sampleNumber: string }>(`/v1/opportunities/${selected!.id}/create-sample-from-shortlist`, { method: "POST" }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["opportunities"] });
+      qc.invalidateQueries({ queryKey: ["opp-sample-orders", selected?.id] });
+      qc.invalidateQueries({ queryKey: ["sample-orders"] });
+      setSelected(prev => prev ? { ...prev, stage: "samples" } : prev);
+      toast({ title: "Sample order created", description: `${data.sampleNumber} created from shortlisted products` });
     },
     onError: (e: Error) => toast({ title: "Failed to create sample order", description: e.message, variant: "destructive" }),
   });
@@ -1078,6 +1096,49 @@ export function Opportunities() {
                           </Button>
                         </div>
                         <p className="text-xs text-blue-500 dark:text-blue-400">Tap the link to select it, then copy & share with your customer.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {selected.stage === "shortlisted" && (
+                  <div className="space-y-2" data-testid="section-shortlisted-products">
+                    <label className="text-sm font-medium flex items-center gap-1.5">
+                      <BookOpen className="w-4 h-4 text-amber-500" />Customer Shortlisted Products
+                    </label>
+                    {shortlistedLoading ? (
+                      <p className="text-xs text-muted-foreground py-2">Loading shortlisted products…</p>
+                    ) : (shortlistedProducts ?? []).length === 0 ? (
+                      <p className="text-xs text-muted-foreground border rounded-lg p-3 bg-muted/20">
+                        No shortlisted products yet. Share the catalogue link so the customer can shortlist products — they'll appear here automatically.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="border rounded-lg divide-y">
+                          {(shortlistedProducts ?? []).map(p => (
+                            <div key={p.id} className="flex items-center gap-3 px-3 py-2.5">
+                              {p.imageUrl
+                                ? <img src={p.imageUrl} className="w-8 h-8 rounded object-cover border shrink-0" />
+                                : <div className="w-8 h-8 rounded bg-amber-100 flex items-center justify-center shrink-0 text-sm">🎁</div>
+                              }
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium truncate">{p.name}</div>
+                                <div className="text-xs text-muted-foreground">{p.category}{p.brand ? ` · ${p.brand}` : ""}</div>
+                              </div>
+                              <span className="text-sm font-semibold text-amber-700 shrink-0">
+                                ₹{Number(p.sellingPrice).toLocaleString("en-IN")}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <Button
+                          className="w-full bg-violet-600 hover:bg-violet-700 text-white h-9"
+                          disabled={createSampleFromShortlist.isPending}
+                          onClick={() => createSampleFromShortlist.mutate()}>
+                          <FlaskConical className="w-4 h-4 mr-2" />
+                          {createSampleFromShortlist.isPending
+                            ? "Creating…"
+                            : `Create Sample Order (${(shortlistedProducts ?? []).length} product${(shortlistedProducts ?? []).length !== 1 ? "s" : ""})`}
+                        </Button>
                       </div>
                     )}
                   </div>
