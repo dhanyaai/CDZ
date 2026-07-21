@@ -121,12 +121,14 @@ export function Quotes() {
   });
 
   const convertToPI = useMutation({
-    mutationFn: (id: number) => api(`/v1/quotes/${id}/convert-to-pi`, { method: "POST" }),
-    onSuccess: () => {
+    mutationFn: (id: number) => api<{ piId: number; piNumber: string; message: string }>(`/v1/quotes/${id}/convert-to-pi`, { method: "POST" }),
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["proforma-invoices"] });
-      toast({ title: "Proforma Invoice created" }); setSelected(null);
+      const isExisting = data.message?.includes("already exists");
+      toast({ title: isExisting ? `Already converted: ${data.piNumber}` : `Proforma Invoice ${data.piNumber} created` });
+      setSelected(null);
     },
-    onError: () => toast({ title: "Conversion failed", variant: "destructive" }),
+    onError: (err: Error) => toast({ title: "Conversion failed", description: err.message, variant: "destructive" }),
   });
 
   const del = useMutation({
