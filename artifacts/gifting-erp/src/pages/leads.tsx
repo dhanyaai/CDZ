@@ -391,8 +391,8 @@ export function Leads() {
               </div>
             </div>
 
-            {/* Total QTY / Total Budget per Piece / Margin */}
-            <div className="grid grid-cols-3 gap-3">
+            {/* Total QTY / Budget per Piece / Total Budget / Margin */}
+            <div className="grid grid-cols-4 gap-3">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Total QTY</label>
                 <Input type="number" placeholder="0" value={form.totalQty} onChange={e => setForm({ ...form, totalQty: e.target.value })} />
@@ -400,6 +400,19 @@ export function Leads() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Budget per Piece (₹)</label>
                 <Input type="number" placeholder="0" value={form.totalBudgetPerPiece} onChange={e => setForm({ ...form, totalBudgetPerPiece: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Total Budget (₹)</label>
+                <Input
+                  readOnly
+                  value={
+                    form.totalQty && form.totalBudgetPerPiece
+                      ? (Number(form.totalQty) * Number(form.totalBudgetPerPiece)).toLocaleString("en-IN")
+                      : ""
+                  }
+                  placeholder="Auto-calculated"
+                  className="bg-muted text-muted-foreground cursor-default"
+                />
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Margin (%)</label>
