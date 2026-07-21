@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useListVendors, useCreateVendor, useUpdateVendor, getListVendorsQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,7 +12,7 @@ import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Edit, Package, Mail, Phone, MapPin, CreditCard, Landmark, Clock } from "lucide-react";
+import { Search, Plus, Edit, Package, Mail, Phone, MapPin, CreditCard, Landmark, Clock, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const INDIAN_STATES = [
@@ -46,6 +47,7 @@ export function Vendors() {
   const [search, setSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [productsVendor, setProductsVendor] = useState<{ id: number; name: string } | null>(null);
 
   const { data: vendors, isLoading } = useListVendors();
   const qc = useQueryClient();
@@ -150,6 +152,9 @@ export function Vendors() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{vendor.leadTimeDays}d</TableCell>
                   <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100" title="View mapped products" onClick={() => setProductsVendor({ id: vendor.id, name: vendor.name })}>
+                      <Package className="w-4 h-4" />
+                    </Button>
                     <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100" onClick={() => openEdit(vendor)}>
                       <Edit className="w-4 h-4" />
                     </Button>
@@ -267,6 +272,88 @@ export function Vendors() {
           </form>
         </SheetContent>
       </Sheet>
+      <VendorProductsSheet vendor={productsVendor} onClose={() => setProductsVendor(null)} />
     </div>
+  );
+}
+
+type VendorProductMapping = {
+  id: number;
+  productId: number;
+  productName: string;
+  productSku: string | null;
+  productCategory: string | null;
+  unitPrice: number;
+  leadTimeDays: number;
+  isPreferred: boolean;
+};
+
+function VendorProductsSheet({ vendor, onClose }: {
+  vendor: { id: number; name: string } | null;
+  onClose: () => void;
+}) {
+  const { data: mappings = [], isLoading } = useQuery<VendorProductMapping[]>({
+    queryKey: ["vendor-products", vendor?.id],
+    enabled: !!vendor,
+    queryFn: () => api<VendorProductMapping[]>(`/v1/vendors/${vendor!.id}/products`),
+  });
+
+  return (
+    <Sheet open={!!vendor} onOpenChange={open => !open && onClose()}>
+      <SheetContent className="w-full sm:max-w-lg flex flex-col gap-0 p-0">
+        <SheetHeader className="px-6 py-4 border-b">
+          <SheetTitle className="flex items-center gap-2">
+            <Package className="w-5 h-5 text-muted-foreground" />
+            Products for <span className="font-semibold truncate">{vendor?.name}</span>
+          </SheetTitle>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-lg bg-muted animate-pulse" />)}
+            </div>
+          ) : mappings.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Package className="w-10 h-10 text-muted-foreground/30 mb-3" />
+              <p className="text-muted-foreground text-sm">No products mapped to this vendor yet.</p>
+              <p className="text-muted-foreground/60 text-xs mt-1">Go to Products → click the truck icon on a product to map it here.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground mb-3">
+                {mappings.length} product{mappings.length > 1 ? "s" : ""} mapped
+              </p>
+              {mappings.map(m => (
+                <div key={m.id} className={`flex items-start gap-3 rounded-lg border p-3 ${m.isPreferred ? "border-amber-500/40 bg-amber-500/5" : "bg-card"}`}>
+                  <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                    <Package className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm truncate">{m.productName}</span>
+                      {m.isPreferred && (
+                        <span className="flex items-center gap-0.5 text-[10px] text-amber-500 font-medium">
+                          <Star className="w-3 h-3 fill-amber-400" /> Preferred
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {m.productSku && <span className="text-xs font-mono text-muted-foreground">{m.productSku}</span>}
+                      {m.productCategory && <span className="text-xs text-muted-foreground">· {m.productCategory}</span>}
+                    </div>
+                    <div className="flex gap-3 mt-1.5 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">₹{m.unitPrice.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                      <span>·</span>
+                      <span>{m.leadTimeDays}d lead time</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

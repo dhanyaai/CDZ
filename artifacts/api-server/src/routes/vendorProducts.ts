@@ -102,6 +102,42 @@ router.patch("/v1/products/:productId/vendors/:mappingId", async (req, res): Pro
   res.json({ id: row.id, isPreferred: row.isPreferred === 1 });
 });
 
+// GET /v1/vendors/:id/products — list all products mapped to a vendor
+router.get("/v1/vendors/:id/products", async (req, res): Promise<void> => {
+  const vendorId = parseInt(req.params.id as string, 10);
+
+  const [vendor] = await db.select({ id: vendorsTable.id })
+    .from(vendorsTable)
+    .where(and(eq(vendorsTable.id, vendorId), eq(vendorsTable.companyId, req.companyId)));
+  if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
+
+  const rows = await db
+    .select({
+      id: vendorProductsTable.id,
+      productId: vendorProductsTable.productId,
+      productName: productsTable.name,
+      productSku: productsTable.sku,
+      productCategory: productsTable.category,
+      unitPrice: vendorProductsTable.unitPrice,
+      leadTimeDays: vendorProductsTable.leadTimeDays,
+      isPreferred: vendorProductsTable.isPreferred,
+    })
+    .from(vendorProductsTable)
+    .leftJoin(productsTable, eq(vendorProductsTable.productId, productsTable.id))
+    .where(and(eq(vendorProductsTable.vendorId, vendorId), eq(vendorProductsTable.companyId, req.companyId)));
+
+  res.json(rows.map(r => ({
+    id: r.id,
+    productId: r.productId,
+    productName: r.productName ?? "Unknown",
+    productSku: r.productSku ?? null,
+    productCategory: r.productCategory ?? null,
+    unitPrice: Number(r.unitPrice),
+    leadTimeDays: r.leadTimeDays,
+    isPreferred: r.isPreferred === 1,
+  })));
+});
+
 // DELETE /v1/products/:productId/vendors/:mappingId — remove vendor mapping
 router.delete("/v1/products/:productId/vendors/:mappingId", async (req, res): Promise<void> => {
   const mappingId = parseInt(req.params.mappingId as string, 10);
