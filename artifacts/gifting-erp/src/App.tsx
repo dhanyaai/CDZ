@@ -50,6 +50,7 @@ import { OrderProcessingList } from "@/pages/order-processing-list";
 import { OrderProcessing } from "@/pages/order-processing";
 import { Services } from "@/pages/services";
 import { CatalogueViewer } from "@/pages/catalogue-viewer";
+import { ProformaInvoices } from "@/pages/proforma-invoices";
 
 initAuth();
 initTheme();
@@ -103,6 +104,7 @@ function Router() {
         <Route path="/leads" component={Leads} />
         <Route path="/opportunities" component={Opportunities} />
         <Route path="/quotes" component={Quotes} />
+        <Route path="/proforma-invoices" component={ProformaInvoices} />
         <Route path="/products" component={Products} />
         <Route path="/bundles" component={Bundles} />
         <Route path="/bundle-costing" component={BundleCosting} />

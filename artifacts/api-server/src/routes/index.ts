@@ -34,6 +34,7 @@ import reportsRouter from "./reports";
 import servicesRouter from "./services";
 import catalogueSharesRouter from "./catalogueShares";
 import advanceReceiptsRouter from "./advanceReceipts";
+import proformaInvoicesRouter from "./proformaInvoices";
 
 const router: IRouter = Router();
 
@@ -72,5 +73,6 @@ router.use(reportsRouter);
 router.use(servicesRouter);
 router.use(catalogueSharesRouter);
 router.use(advanceReceiptsRouter);
+router.use(proformaInvoicesRouter);
 
 export default router;

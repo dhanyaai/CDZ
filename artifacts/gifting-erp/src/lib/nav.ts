@@ -32,6 +32,7 @@ import {
   ClipboardCheck,
   Wrench,
   Calculator,
+  FilePlus2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -57,6 +58,7 @@ export function getNavItems(opts: { production?: boolean } = {}): NavGroup[] {
         { label: "Leads", href: "/leads", icon: Target },
         { label: "Opportunities", href: "/opportunities", icon: TrendingUp },
         { label: "Quotes", href: "/quotes", icon: FileSpreadsheet },
+        { label: "Proforma Invoices", href: "/proforma-invoices", icon: FilePlus2 },
         { label: "Follow-ups", href: "/follow-ups", icon: CalendarClock },
       ],
     },

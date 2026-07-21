@@ -37,3 +37,4 @@ export * from "./services";
 export * from "./sessions";
 export * from "./catalogueShares";
 export * from "./advanceReceipts";
+export * from "./proformaInvoices";

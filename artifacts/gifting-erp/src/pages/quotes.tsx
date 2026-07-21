@@ -120,6 +120,15 @@ export function Quotes() {
     onError: () => toast({ title: "Conversion failed", variant: "destructive" }),
   });
 
+  const convertToPI = useMutation({
+    mutationFn: (id: number) => api(`/v1/quotes/${id}/convert-to-pi`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["proforma-invoices"] });
+      toast({ title: "Proforma Invoice created" }); setSelected(null);
+    },
+    onError: () => toast({ title: "Conversion failed", variant: "destructive" }),
+  });
+
   const del = useMutation({
     mutationFn: (id: number) => api(`/v1/quotes/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["quotes"] }); toast({ title: "Quote deleted" }); setSelected(null); },
@@ -451,6 +460,10 @@ export function Quotes() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <Button variant="outline" className="w-full" onClick={() => convertToPI.mutate(selected.id)} disabled={convertToPI.isPending}>
+                    <ArrowRight className="w-4 h-4 mr-2" />Convert to Proforma Invoice
+                  </Button>
 
                   {selected.status === "accepted" && (
                     <Button className="w-full" onClick={() => convertToOrder.mutate(selected.id)} disabled={convertToOrder.isPending}>
