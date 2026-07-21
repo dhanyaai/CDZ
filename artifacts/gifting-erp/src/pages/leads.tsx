@@ -398,7 +398,7 @@ export function Leads() {
                 <Input type="number" placeholder="0" value={form.totalQty} onChange={e => setForm({ ...form, totalQty: e.target.value })} />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">Total Budget / Piece (₹)</label>
+                <label className="text-sm font-medium">Budget per Piece (₹)</label>
                 <Input type="number" placeholder="0" value={form.totalBudgetPerPiece} onChange={e => setForm({ ...form, totalBudgetPerPiece: e.target.value })} />
               </div>
               <div className="space-y-1">
