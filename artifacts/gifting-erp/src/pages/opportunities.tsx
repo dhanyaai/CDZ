@@ -50,8 +50,8 @@ const SAMPLE_STATUS_COLOR: Record<string, string> = {
 };
 
 const STAGES = [
-  "enquiry", "sent_catalogue", "samples",
-  "shortlisted", "quotation_sent",
+  "enquiry", "sent_catalogue", "shortlisted",
+  "samples", "quotation_sent",
   "received_po", "material_supplied",
   "received_payments", "lost",
 ];
