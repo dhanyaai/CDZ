@@ -44,6 +44,58 @@ const PRINT_CSS = `
   @media print { body { padding: 0; } @page { margin: 18mm; size: A4; } }
 `;
 
+const GST_CSS = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #000; background: #fff; padding: 18px; }
+  .top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+  .top-gstin { font-size: 10px; }
+  .top-right { text-align: right; font-size: 10px; line-height: 1.8; }
+  .doc-title { text-align: center; font-size: 15px; font-weight: bold; margin: 4px 0; text-decoration: underline; letter-spacing: 1px; }
+  .company-header { text-align: center; margin: 6px 0 8px; line-height: 1.7; }
+  .company-name { font-size: 20px; font-weight: bold; }
+  .company-sub { font-size: 10px; }
+  hr { border: 0; border-top: 1px solid #000; margin: 6px 0; }
+  .doc-meta { display: flex; justify-content: space-between; padding: 4px 0 6px; font-size: 11px; }
+  .party-block { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #000; margin-bottom: 6px; }
+  .party-col { padding: 6px 8px; font-size: 10px; line-height: 1.7; }
+  .party-col:first-child { border-right: 1px solid #000; }
+  .party-label { font-weight: bold; margin-bottom: 2px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+  th, td { border: 1px solid #000; padding: 4px 5px; font-size: 10px; }
+  th { text-align: center; font-weight: bold; background: #f9f9f9; line-height: 1.4; }
+  td { vertical-align: middle; }
+  .num { text-align: right; }
+  .ctr { text-align: center; }
+  .bold { font-weight: bold; }
+  .words-row { border: 1px solid #000; padding: 5px 8px; font-size: 10px; margin-bottom: 6px; }
+  .declaration { text-align: center; font-size: 10px; margin: 6px 0 8px; }
+  .declaration b { display: block; text-decoration: underline; margin-bottom: 3px; }
+  .bank { font-size: 10px; margin: 0 0 8px; line-height: 1.9; }
+  .footer-row { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #000; margin-top: 6px; min-height: 110px; }
+  .footer-left { padding: 8px; font-size: 10px; border-right: 1px solid #000; line-height: 1.8; }
+  .footer-right { padding: 8px; font-size: 10px; text-align: right; display: flex; flex-direction: column; justify-content: space-between; }
+  .sig-block { border-top: 1px solid #000; padding-top: 4px; margin-top: 6px; }
+  @media print { body { padding: 0; } @page { margin: 10mm; size: A4; } }
+`;
+
+const CO = {
+  gstin: "36CSNPK3414P1Z7",
+  pan: "CSNPK3414P",
+  name: "CUSTOMIZE DUNIYA",
+  address: "Plot No 32 & 33, 1st Floor, Sathya Mansion, Chitta Reddy Colony, Tar Bund X Road, Secunderabad, Telangana 500003",
+  email: "customizeduniya@gmail.com",
+  bankAcct: "922030040473792",
+  bankIfsc: "UTIB0000008",
+  bankName: "Axis Bank",
+  bankBranch: "Greenlands, Begumpet",
+};
+
+const DEFAULT_TC = [
+  "We take confirmation through 50% payment advance with PO and the rest 50% during delivery.",
+  "Goods once sold will not be taken back.",
+  "Interest @ 18% p.a. will be charged if the payment is not made within the stipulated time.",
+];
+
 function printedOn() {
   return new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" });
 }
@@ -64,6 +116,232 @@ function openWin(title: string, html: string) {
   w.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${title}</title><style>${PRINT_CSS}</style></head><body>${html}${footer()}</body></html>`);
   w.document.close();
   setTimeout(() => { w.focus(); w.print(); }, 300);
+}
+
+function gstOpenWin(title: string, html: string) {
+  const w = window.open("", "_blank", "width=960,height=720,scrollbars=yes");
+  if (!w) { alert("Pop-ups are blocked. Please allow pop-ups for this site to print."); return; }
+  w.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${title}</title><style>${GST_CSS}</style></head><body>${html}</body></html>`);
+  w.document.close();
+  setTimeout(() => { w.focus(); w.print(); }, 400);
+}
+
+function fmtGstDate(d: string | null | undefined): string {
+  if (!d) return printedOn();
+  const dt = new Date(d);
+  return `${String(dt.getDate()).padStart(2, "0")}-${String(dt.getMonth() + 1).padStart(2, "0")}-${dt.getFullYear()}`;
+}
+
+function amountToWords(amount: number): string {
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tensArr = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  function tw(n: number): string {
+    if (n <= 0) return "";
+    if (n < 20) return ones[n] + " ";
+    if (n < 100) return tensArr[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "") + " ";
+    if (n < 1000) return ones[Math.floor(n / 100)] + " Hundred " + tw(n % 100);
+    if (n < 100000) return tw(Math.floor(n / 1000)) + "Thousand " + tw(n % 1000);
+    if (n < 10000000) return tw(Math.floor(n / 100000)) + "Lakh " + tw(n % 100000);
+    return tw(Math.floor(n / 10000000)) + "Crore " + tw(n % 10000000);
+  }
+  const r = Math.floor(amount);
+  const p = Math.round((amount - r) * 100);
+  let words = "Rupees " + (tw(r).trim() || "Zero");
+  if (p > 0) words += " and Paisa " + tw(p).trim();
+  return words + " Only";
+}
+
+interface GstLine {
+  sn: number;
+  description: string;
+  hsnCode?: string | null;
+  qty: number;
+  unit: string;
+  taxableUnitPrice: number;
+  taxableLineTotal: number;
+  cgstRate: number;
+  cgstAmt: number;
+  sgstRate: number;
+  sgstAmt: number;
+  lineGrandTotal: number;
+}
+
+function buildGstHtml(p: {
+  docTitle: string;
+  docNumber: string;
+  docDate: string;
+  docLabel: string;
+  clientName: string;
+  clientAddress?: string | null;
+  clientGst?: string | null;
+  clientPoc?: string | null;
+  items: GstLine[];
+  grandTotal: number;
+  notes?: string | null;
+  declarationLines?: string;
+  termsAndConditions?: string | null;
+  wordsOverride?: string;
+}): string {
+  const fmt = (n: number | null | undefined) =>
+    Number(n ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const totalCgst = p.items.reduce((s, i) => s + i.cgstAmt, 0);
+  const totalSgst = p.items.reduce((s, i) => s + i.sgstAmt, 0);
+  const totalQty  = p.items.reduce((s, i) => s + i.qty, 0);
+
+  const hsnMap = new Map<string, { taxable: number; cgst: number; sgst: number; rate: number }>();
+  for (const it of p.items) {
+    const key = it.hsnCode || "—";
+    const ex = hsnMap.get(key) ?? { taxable: 0, cgst: 0, sgst: 0, rate: it.cgstRate + it.sgstRate };
+    hsnMap.set(key, { taxable: ex.taxable + it.taxableLineTotal, cgst: ex.cgst + it.cgstAmt, sgst: ex.sgst + it.sgstAmt, rate: ex.rate });
+  }
+
+  const itemRows = p.items.map(it => `
+    <tr>
+      <td class="ctr">${it.sn}.</td>
+      <td>${it.description}</td>
+      <td class="ctr">${it.hsnCode || ""}</td>
+      <td class="num">${it.qty.toFixed(2)}</td>
+      <td class="ctr">${it.unit}</td>
+      <td class="num">${fmt(it.taxableUnitPrice)}</td>
+      <td class="ctr">${it.cgstRate.toFixed(2)} %</td>
+      <td class="num">${fmt(it.cgstAmt)}</td>
+      <td class="ctr">${it.sgstRate.toFixed(2)} %</td>
+      <td class="num">${fmt(it.sgstAmt)}</td>
+      <td class="num">${fmt(it.lineGrandTotal)}</td>
+    </tr>`).join("");
+
+  const hsnRows = Array.from(hsnMap.entries()).map(([hsn, v]) => `
+    <tr>
+      <td>${hsn}</td>
+      <td class="ctr">${v.rate}%</td>
+      <td class="num">${fmt(v.taxable)}</td>
+      <td class="num">${fmt(v.cgst)}</td>
+      <td class="num">${fmt(v.sgst)}</td>
+      <td class="num">${fmt(v.cgst + v.sgst)}</td>
+    </tr>`).join("");
+
+  const addrHtml = (p.clientAddress || "").replace(/\n/g, "<br>");
+  const decl = p.declarationLines || "Payment terms: 50% advance 50% Immediately post delivery<br>Shipment charges are applicable on actuals";
+  const words = p.wordsOverride || amountToWords(p.grandTotal);
+
+  const tcLines = (p.termsAndConditions || DEFAULT_TC.join("\n"))
+    .split("\n").filter(Boolean)
+    .map((line, i) => `${i + 1}. ${line.replace(/^\d+\.\s*/, "")}`)
+    .join("<br>");
+
+  return `
+<div class="top-row">
+  <div class="top-gstin">GSTIN : ${CO.gstin}</div>
+  <div class="top-right">Original Copy<br>Pre Authenticated by<br><strong>for ${CO.name}</strong></div>
+</div>
+
+<div class="doc-title">${p.docTitle}</div>
+
+<div class="company-header">
+  <div class="company-name">${CO.name}</div>
+  <div class="company-sub">${CO.address}</div>
+  <div class="company-sub">PAN : ${CO.pan} &nbsp;&nbsp;&nbsp; email : ${CO.email}</div>
+</div>
+
+<hr>
+
+<div class="doc-meta">
+  <span><strong>${p.docLabel} No.</strong>&nbsp;&nbsp;: ${p.docNumber}</span>
+  <span><strong>Date</strong>&nbsp;&nbsp;: ${p.docDate}</span>
+</div>
+
+<div class="party-block">
+  <div class="party-col">
+    <div class="party-label">${p.docLabel} to :</div>
+    <strong>${p.clientName}</strong>
+    ${addrHtml ? `<br>${addrHtml}` : ""}
+    ${p.clientPoc ? `<br>POC: ${p.clientPoc}` : ""}
+    ${p.clientGst ? `<br>GSTIN / UIN &nbsp;&nbsp;&nbsp; : ${p.clientGst}` : ""}
+  </div>
+  <div class="party-col">
+    <div class="party-label">Shipped to :</div>
+    <strong>${p.clientName}</strong>
+    ${addrHtml ? `<br>${addrHtml}` : ""}
+    ${p.clientPoc ? `<br>POC: ${p.clientPoc}` : ""}
+    ${p.clientGst ? `<br>GSTIN / UIN &nbsp;&nbsp;&nbsp; : ${p.clientGst}` : ""}
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:4%">S.N.</th>
+      <th style="width:23%">Description of Goods</th>
+      <th style="width:9%">HSN/SAC<br>Code</th>
+      <th style="width:6%">Qty.</th>
+      <th style="width:5%">Unit</th>
+      <th style="width:8%">Price</th>
+      <th style="width:6%">CGST<br>Rate</th>
+      <th style="width:8%">CGST<br>Amount</th>
+      <th style="width:6%">SGST<br>Rate</th>
+      <th style="width:8%">SGST<br>Amount</th>
+      <th style="width:10%">Amount(&#8377;)</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${itemRows || `<tr><td colspan="11" class="ctr" style="padding:14px">No items</td></tr>`}
+    <tr class="bold">
+      <td colspan="3" class="ctr">Grand Total</td>
+      <td class="num">${totalQty.toFixed(2)} Pcs</td>
+      <td></td><td></td><td></td>
+      <td class="num">${fmt(totalCgst)}</td>
+      <td></td>
+      <td class="num">${fmt(totalSgst)}</td>
+      <td class="num">&#8377;&nbsp;${fmt(p.grandTotal)}</td>
+    </tr>
+  </tbody>
+</table>
+
+<table>
+  <thead>
+    <tr>
+      <th>HSN/SAC</th>
+      <th>Tax Rate</th>
+      <th>Taxable Amt.</th>
+      <th>CGST Amt.</th>
+      <th>SGST Amt.</th>
+      <th>Total Tax</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${hsnRows || `<tr><td colspan="6" class="ctr">—</td></tr>`}
+  </tbody>
+</table>
+
+<div class="words-row">${words}</div>
+
+${p.notes ? `<div style="font-size:10px;margin:4px 0 6px"><strong>Notes:</strong> ${p.notes}</div>` : ""}
+
+<div class="declaration">
+  <b>Declaration</b>
+  ${decl}
+</div>
+
+<div class="bank">
+  Bank Details : ACCN NO: ${CO.bankAcct}, IFSC code: ${CO.bankIfsc}<br>
+  <span style="display:inline-block;width:82px">&nbsp;</span>BANK: ${CO.bankName}, Branch: ${CO.bankBranch}
+</div>
+
+<div class="footer-row">
+  <div class="footer-left">
+    <strong>Terms &amp; Conditions</strong><br>
+    ${tcLines}
+  </div>
+  <div class="footer-right">
+    <div>Receiver's Signature &nbsp;&nbsp;:</div>
+    <div>
+      <div>For ${CO.name}</div>
+      <div class="sig-block"><strong>Authorised Signatory</strong></div>
+    </div>
+  </div>
+</div>`;
 }
 
 
@@ -91,11 +369,10 @@ export function printSalesOrder(order: {
 }) {
   const items = order.items ?? [];
   const addresses = order.deliveryAddresses ?? [];
-  const subtotal = Number(order.totalAmount ?? 0);           // stored as after-discount subtotal
+  const subtotal = Number(order.totalAmount ?? 0);
   const discountPct = Number(order.discountPct ?? 0);
   const gstAmount = Number(order.gstAmount) || 0;
   const grandTotal = Number(order.grandTotal) || (subtotal + gstAmount);
-  // back-compute the original pre-discount line-items total so the discount row shows correctly
   const discountAmt = discountPct > 0 && subtotal > 0
     ? subtotal / (1 - discountPct / 100) * (discountPct / 100)
     : 0;
@@ -317,81 +594,138 @@ export function printPurchaseOrder(order: {
 
 export function printQuote(q: {
   quoteNumber: string;
-  clientName: string | null;
+  clientName?: string | null;
+  contactPerson?: string | null;
+  clientPhone?: string | null;
+  clientEmail?: string | null;
+  clientGst?: string | null;
+  billingAddress?: string | null;
   totalAmount: number;
   gstAmount: number;
   subtotal?: number;
-  discountPct: number;
+  discountPct?: number | null;
   validUntil?: string | null;
   notes?: string | null;
-  status: string;
-  items?: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number; imageUrl?: string | null }>;
+  termsAndConditions?: string | null;
+  paymentTerms?: string | null;
+  status?: string;
+  createdAt?: string;
+  items?: Array<{
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    hsnCode?: string | null;
+    imageUrl?: string | null;
+  }>;
 }) {
-  const subtotalAmt = q.subtotal ?? (Number(q.totalAmount) - Number(q.gstAmount));
-  const items = q.items ?? [];
-  const itemsHtml = items.length > 0 ? `
-    <div class="section-title" style="margin-top:4px;">Quoted Items</div>
-    <table>
-      <thead>
-        <tr>
-          <th style="width:52px;"></th>
-          <th>Product / Description</th>
-          <th class="text-right" style="width:60px;">Qty</th>
-          <th class="text-right" style="width:110px;">Unit Price</th>
-          <th class="text-right" style="width:120px;">Line Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${items.map(item => `<tr>
-          <td style="padding:8px 12px;">
-            ${item.imageUrl
-              ? `<img src="${item.imageUrl}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;border:1px solid #e5e7eb;display:block;" />`
-              : `<div style="width:40px;height:40px;border-radius:6px;background:#ede9fe;display:flex;align-items:center;justify-content:center;font-size:18px;">🎁</div>`
-            }
-          </td>
-          <td class="font-bold">${item.description}</td>
-          <td class="text-right">${item.quantity}</td>
-          <td class="text-right">₹${Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-          <td class="text-right font-bold">₹${Number(item.lineTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-        </tr>`).join("")}
-      </tbody>
-    </table>
-  ` : "";
-  const html = `
-    <div class="doc-header">
-      <div><div class="brand">Customize Duniya</div><div class="brand-sub">Quotation</div></div>
-      <div class="doc-id">
-        <h1>${q.quoteNumber}</h1>
-        <div class="date">Printed ${printedOn()}</div>
-        <span class="${badgeClass(q.status)}">${q.status}</span>
-      </div>
-    </div>
-    <div class="meta-grid">
-      <div class="meta-section">
-        <h3>Quoted To</h3>
-        <div class="meta-row"><span class="lbl">Client</span><span class="val">${q.clientName ?? "—"}</span></div>
-        ${q.validUntil ? `<div class="meta-row"><span class="lbl">Valid Until</span><span class="val">${new Date(q.validUntil).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></div>` : ""}
-      </div>
-      <div class="meta-section">
-        <h3>Amount Summary</h3>
-        <div class="meta-row"><span class="lbl">Subtotal</span><span class="val">₹${subtotalAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
-        ${q.discountPct > 0 ? `<div class="meta-row"><span class="lbl">Discount</span><span class="val">${q.discountPct}%</span></div>` : ""}
-        <div class="meta-row"><span class="lbl">GST (18%)</span><span class="val">₹${Number(q.gstAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
-      </div>
-    </div>
-    ${q.notes ? `<div class="note-box"><strong>Notes</strong>${q.notes}</div>` : ""}
-    ${itemsHtml}
-    <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
-      <div class="totals-box">
-        <div class="total-row sub"><span>Subtotal</span><span>₹${subtotalAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
-        ${q.discountPct > 0 ? `<div class="total-row discount"><span>Discount (${q.discountPct}%)</span><span>applied</span></div>` : ""}
-        <div class="total-row sub"><span>GST 18%</span><span>₹${Number(q.gstAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
-        <div class="total-row final"><span>Quote Total</span><span>₹${Number(q.totalAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
-      </div>
-    </div>
-    <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:16px;">This quotation is valid until ${q.validUntil ? new Date(q.validUntil).toLocaleDateString("en-IN") : "further notice"}. Prices are subject to change.</p>
-  `;
-  openWin(q.quoteNumber, html);
+  const disc = 1 - (Number(q.discountPct ?? 0) / 100);
+  const gstItems: GstLine[] = (q.items ?? []).map((it, idx) => {
+    const taxableLine = it.lineTotal * disc;
+    const cgst = taxableLine * 0.09;
+    const sgst = taxableLine * 0.09;
+    return {
+      sn: idx + 1,
+      description: it.description,
+      hsnCode: it.hsnCode ?? null,
+      qty: it.quantity,
+      unit: "Pcs",
+      taxableUnitPrice: it.unitPrice * disc,
+      taxableLineTotal: taxableLine,
+      cgstRate: 9,
+      cgstAmt: cgst,
+      sgstRate: 9,
+      sgstAmt: sgst,
+      lineGrandTotal: taxableLine + cgst + sgst,
+    };
+  });
+
+  const poc = [q.contactPerson, q.clientPhone ? `(${q.clientPhone})` : null].filter(Boolean).join(" ");
+  const decl = q.paymentTerms
+    ? `Payment terms: ${q.paymentTerms}<br>Shipment charges are applicable on actuals`
+    : "Payment terms: 50% advance 50% Immediately post delivery<br>Shipment charges are applicable on actuals";
+
+  gstOpenWin(q.quoteNumber, buildGstHtml({
+    docTitle: "SALES QUOTATION",
+    docNumber: q.quoteNumber,
+    docDate: fmtGstDate(q.createdAt),
+    docLabel: "Quotation",
+    clientName: q.clientName ?? "—",
+    clientAddress: q.billingAddress,
+    clientGst: q.clientGst,
+    clientPoc: poc || undefined,
+    items: gstItems,
+    grandTotal: Number(q.totalAmount),
+    notes: q.notes,
+    declarationLines: decl,
+    termsAndConditions: q.termsAndConditions,
+  }));
+}
+
+export function printProformaInvoice(pi: {
+  piNumber: string;
+  clientName?: string | null;
+  contactPerson?: string | null;
+  clientPhone?: string | null;
+  clientGst?: string | null;
+  billingAddress?: string | null;
+  subtotal: number;
+  discountPct: number;
+  gstAmount: number;
+  totalAmount: number;
+  notes?: string | null;
+  termsAndConditions?: string | null;
+  paymentTerms?: string | null;
+  createdAt: string;
+  items?: Array<{
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    hsnCode?: string | null;
+  }>;
+}) {
+  const disc = 1 - (pi.discountPct / 100);
+  const gstItems: GstLine[] = (pi.items ?? []).map((it, idx) => {
+    const taxableLine = it.lineTotal * disc;
+    const cgst = taxableLine * 0.09;
+    const sgst = taxableLine * 0.09;
+    return {
+      sn: idx + 1,
+      description: it.description,
+      hsnCode: it.hsnCode ?? null,
+      qty: it.quantity,
+      unit: "Pcs",
+      taxableUnitPrice: it.unitPrice * disc,
+      taxableLineTotal: taxableLine,
+      cgstRate: 9,
+      cgstAmt: cgst,
+      sgstRate: 9,
+      sgstAmt: sgst,
+      lineGrandTotal: taxableLine + cgst + sgst,
+    };
+  });
+
+  const poc = [pi.contactPerson, pi.clientPhone ? `(${pi.clientPhone})` : null].filter(Boolean).join(" ");
+  const decl = pi.paymentTerms
+    ? `Payment terms: ${pi.paymentTerms}<br>Shipment charges are applicable on actuals`
+    : "Payment terms: 50% advance 50% Immediately post delivery<br>Shipment charges are applicable on actuals";
+
+  gstOpenWin(pi.piNumber, buildGstHtml({
+    docTitle: "PROFORMA INVOICE",
+    docNumber: pi.piNumber,
+    docDate: fmtGstDate(pi.createdAt),
+    docLabel: "Invoice",
+    clientName: pi.clientName ?? "—",
+    clientAddress: pi.billingAddress,
+    clientGst: pi.clientGst,
+    clientPoc: poc || undefined,
+    items: gstItems,
+    grandTotal: Number(pi.totalAmount),
+    notes: pi.notes,
+    declarationLines: decl,
+    termsAndConditions: pi.termsAndConditions,
+  }));
 }
 
 export function printCreditNote(cn: {
@@ -425,7 +759,7 @@ export function printCreditNote(cn: {
       </div>
     </div>
     <div class="note-box"><strong>Reason for Credit</strong>${cn.reason}</div>
-    <div style="display:flex;justify-content:flex-end;">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
       <div class="totals-box">
         <div class="total-row final" style="color:#dc2626;"><span>Credit Amount</span><span>−₹${Number(cn.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
       </div>
@@ -581,6 +915,8 @@ export function printTaxInvoice(inv: {
   clientName: string | null;
   clientGst?: string | null;
   billingAddress?: string | null;
+  contactPerson?: string | null;
+  clientPhone?: string | null;
   salesOrderId?: number | null;
   orderNumber?: string | null;
   createdAt: string;
@@ -590,6 +926,7 @@ export function printTaxInvoice(inv: {
   igst?: number | null;
   grandTotal: number;
   amountInWords?: string | null;
+  paymentTerms?: string | null;
   lines?: Array<{
     description: string;
     hsnCode?: string | null;
@@ -604,83 +941,48 @@ export function printTaxInvoice(inv: {
     lineGrandTotal: number;
   }>;
 }) {
-  const isIntra = (Number(inv.cgst ?? 0) + Number(inv.sgst ?? 0)) > 0;
   const lines = inv.lines ?? [];
-  const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-  const fmt = (n: number | string | null | undefined) => Number(n ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+  const gstItems: GstLine[] = lines.map((l, idx) => {
+    const cgstAmt = Number(l.cgst ?? 0);
+    const sgstAmt = Number(l.sgst ?? 0);
+    const igstAmt = Number(l.igst ?? 0);
+    const isIgst = igstAmt > 0 && cgstAmt === 0 && sgstAmt === 0;
+    return {
+      sn: idx + 1,
+      description: l.description,
+      hsnCode: l.hsnCode,
+      qty: l.quantity,
+      unit: l.uom || "Pcs",
+      taxableUnitPrice: l.unitPrice,
+      taxableLineTotal: l.lineTotal,
+      cgstRate: isIgst ? l.gstRate : l.gstRate / 2,
+      cgstAmt: isIgst ? igstAmt : cgstAmt,
+      sgstRate: isIgst ? 0 : l.gstRate / 2,
+      sgstAmt: isIgst ? 0 : sgstAmt,
+      lineGrandTotal: l.lineGrandTotal,
+    };
+  });
 
-  const lineRows = lines.map(l => `<tr>
-    <td>${l.description}</td>
-    <td>${l.hsnCode || "—"}</td>
-    <td class="text-right">${l.quantity}${l.uom ? " " + l.uom : ""}</td>
-    <td class="text-right">₹${fmt(l.unitPrice)}</td>
-    <td class="text-right">₹${fmt(l.lineTotal)}</td>
-    <td class="text-center">${l.gstRate}%</td>
-    ${isIntra
-      ? `<td class="text-right">₹${fmt(l.cgst)}</td><td class="text-right">₹${fmt(l.sgst)}</td>`
-      : `<td class="text-right">₹${fmt(l.igst)}</td>`}
-    <td class="text-right font-bold">₹${fmt(l.lineGrandTotal)}</td>
-  </tr>`).join("");
+  const poc = [inv.contactPerson, inv.clientPhone ? `(${inv.clientPhone})` : null].filter(Boolean).join(" ");
+  const words = inv.amountInWords || amountToWords(Number(inv.grandTotal));
+  const decl = inv.paymentTerms
+    ? `Payment terms: ${inv.paymentTerms}<br>Shipment charges are applicable on actuals`
+    : "Payment terms: 50% advance 50% Immediately post delivery<br>Shipment charges are applicable on actuals";
 
-  const gstHeaders = isIntra
-    ? `<th class="text-right" style="width:9%;">CGST</th><th class="text-right" style="width:9%;">SGST</th>`
-    : `<th class="text-right" style="width:18%;">IGST</th>`;
-
-  const html = `
-    <div class="doc-header">
-      <div><div class="brand">Customize Duniya</div><div class="brand-sub">Tax Invoice</div></div>
-      <div class="doc-id">
-        <h1>${inv.invoiceNumber}</h1>
-        <div class="date">${fmtDate(inv.createdAt)}</div>
-      </div>
-    </div>
-    <div class="meta-grid">
-      <div class="meta-section">
-        <h3>Bill To</h3>
-        <div class="meta-row"><span class="lbl">Client</span><span class="val">${inv.clientName ?? "—"}</span></div>
-        ${inv.clientGst ? `<div class="meta-row"><span class="lbl">GSTIN</span><span class="val" style="font-family:monospace;font-size:11px;">${inv.clientGst}</span></div>` : ""}
-        ${inv.billingAddress ? `<div class="meta-row"><span class="lbl">Address</span><span class="val" style="text-align:right;max-width:180px;">${inv.billingAddress}</span></div>` : ""}
-      </div>
-      <div class="meta-section">
-        <h3>Invoice Details</h3>
-        <div class="meta-row"><span class="lbl">Invoice #</span><span class="val">${inv.invoiceNumber}</span></div>
-        <div class="meta-row"><span class="lbl">Invoice Date</span><span class="val">${fmtDate(inv.createdAt)}</span></div>
-        ${inv.orderNumber ? `<div class="meta-row"><span class="lbl">Sales Order</span><span class="val">${inv.orderNumber}</span></div>` : ""}
-        <div class="meta-row"><span class="lbl">Supply Type</span><span class="val">${isIntra ? "Intra-State (CGST + SGST)" : "Inter-State (IGST)"}</span></div>
-      </div>
-    </div>
-    ${lines.length > 0 ? `
-      <div class="section-title">Line Items</div>
-      <table style="font-size:11px;">
-        <thead>
-          <tr>
-            <th style="width:27%;">Description</th>
-            <th style="width:9%;">HSN</th>
-            <th class="text-right" style="width:7%;">Qty</th>
-            <th class="text-right" style="width:10%;">Rate</th>
-            <th class="text-right" style="width:10%;">Taxable</th>
-            <th class="text-center" style="width:7%;">GST%</th>
-            ${gstHeaders}
-            <th class="text-right" style="width:11%;">Total</th>
-          </tr>
-        </thead>
-        <tbody>${lineRows}</tbody>
-      </table>
-    ` : ""}
-    <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
-      <div class="totals-box">
-        <div class="total-row sub"><span>Taxable Amount</span><span>₹${fmt(inv.totalAmount)}</span></div>
-        ${isIntra
-          ? `<div class="total-row sub"><span>CGST</span><span>₹${fmt(inv.cgst)}</span></div>
-             <div class="total-row sub"><span>SGST</span><span>₹${fmt(inv.sgst)}</span></div>`
-          : `<div class="total-row sub"><span>IGST</span><span>₹${fmt(inv.igst)}</span></div>`}
-        <div class="total-row final"><span>Grand Total</span><span>₹${fmt(inv.grandTotal)}</span></div>
-      </div>
-    </div>
-    ${inv.amountInWords ? `<p style="font-style:italic;font-size:12px;color:#4b5563;margin-bottom:16px;">Amount in words: ${inv.amountInWords}</p>` : ""}
-    <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px;">This is a computer-generated Tax Invoice. No signature required.</p>
-  `;
-  openWin(inv.invoiceNumber, html);
+  gstOpenWin(inv.invoiceNumber, buildGstHtml({
+    docTitle: "TAX INVOICE",
+    docNumber: inv.invoiceNumber,
+    docDate: fmtGstDate(inv.createdAt),
+    docLabel: "Invoice",
+    clientName: inv.clientName ?? "—",
+    clientAddress: inv.billingAddress,
+    clientGst: inv.clientGst,
+    clientPoc: poc || undefined,
+    items: gstItems,
+    grandTotal: Number(inv.grandTotal),
+    declarationLines: decl,
+    wordsOverride: words,
+  }));
 }
 
 export function printCatalogue(opts: {

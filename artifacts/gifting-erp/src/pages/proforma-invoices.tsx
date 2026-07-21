@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { FilePlus2, Trash2, Printer, IndianRupee, FileCheck2, Clock, XCircle, Building2, Phone, Mail, CreditCard } from "lucide-react";
+import { printProformaInvoice } from "@/lib/print-utils";
 import { format } from "date-fns";
 
 type PI = {
@@ -38,41 +39,6 @@ function fmtINR(n: number) {
   return `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function printPI(pi: PIDetail) {
-  const w = window.open("", "_blank");
-  if (!w) return;
-  const rows = pi.items.map(i =>
-    `<tr>
-      <td style="padding:8px;border:1px solid #e5e7eb">${i.description}</td>
-      <td style="padding:8px;border:1px solid #e5e7eb;text-align:right">${i.quantity}</td>
-      <td style="padding:8px;border:1px solid #e5e7eb;text-align:right">₹${i.unitPrice.toLocaleString("en-IN")}</td>
-      <td style="padding:8px;border:1px solid #e5e7eb;text-align:right">₹${i.lineTotal.toLocaleString("en-IN")}</td>
-    </tr>`
-  ).join("");
-  const afterDisc = pi.subtotal * (1 - pi.discountPct / 100);
-  w.document.write(`<!DOCTYPE html><html><head><title>${pi.piNumber}</title>
-  <style>body{font-family:Arial,sans-serif;margin:40px;color:#111}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;padding:8px;border:1px solid #e5e7eb;text-align:left}.right{text-align:right}.header{display:flex;justify-content:space-between;margin-bottom:32px}.totals td{padding:6px 8px}@media print{button{display:none}}</style></head>
-  <body>
-  <div class="header">
-    <div><h1 style="font-size:24px;margin:0;color:#1d4ed8">PROFORMA INVOICE</h1><p style="margin:4px 0;color:#6b7280">${pi.piNumber}</p></div>
-    <div style="text-align:right"><p style="margin:2px 0"><strong>Date:</strong> ${format(new Date(pi.createdAt), "dd MMM yyyy")}</p>${pi.validUntil ? `<p style="margin:2px 0"><strong>Valid Until:</strong> ${format(new Date(pi.validUntil), "dd MMM yyyy")}</p>` : ""}</div>
-  </div>
-  <div style="display:flex;justify-content:space-between;margin-bottom:24px">
-    <div><strong>Bill To:</strong><br>${pi.clientName ?? ""}<br>${pi.billingAddress ?? ""}<br>${pi.clientGst ? `GSTIN: ${pi.clientGst}` : ""}</div>
-    <div style="text-align:right">${pi.subject ? `<strong>Subject:</strong> ${pi.subject}<br>` : ""}${pi.paymentTerms ? `<strong>Payment Terms:</strong> ${pi.paymentTerms}` : ""}</div>
-  </div>
-  <table><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody></table>
-  <table class="totals" style="width:300px;margin-left:auto;margin-top:16px">
-    <tr><td>Subtotal</td><td class="right">${fmtINR(pi.subtotal)}</td></tr>
-    ${pi.discountPct > 0 ? `<tr><td>Discount (${pi.discountPct}%)</td><td class="right">-${fmtINR(pi.subtotal - afterDisc)}</td></tr>` : ""}
-    <tr><td>GST (18%)</td><td class="right">${fmtINR(pi.gstAmount)}</td></tr>
-    <tr style="font-weight:bold;font-size:16px"><td>Total</td><td class="right">${fmtINR(pi.totalAmount)}</td></tr>
-  </table>
-  ${pi.notes ? `<p style="margin-top:24px"><strong>Notes:</strong> ${pi.notes}</p>` : ""}
-  ${pi.termsAndConditions ? `<p><strong>Terms & Conditions:</strong> ${pi.termsAndConditions}</p>` : ""}
-  <script>window.onload=()=>window.print()</script></body></html>`);
-  w.document.close();
-}
 
 export function ProformaInvoices() {
   const qc = useQueryClient();
@@ -289,7 +255,7 @@ export function ProformaInvoices() {
                   </div>
 
                   {d && (
-                    <Button variant="outline" className="w-full" onClick={() => printPI(d)}>
+                    <Button variant="outline" className="w-full" onClick={() => printProformaInvoice(d)}>
                       <Printer className="w-4 h-4 mr-2" />Print / Download PDF
                     </Button>
                   )}

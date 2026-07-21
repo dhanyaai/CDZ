@@ -475,7 +475,13 @@ export function Quotes() {
 
                   <Button variant="outline" className="w-full" onClick={() => printQuote({
                     ...selected,
-                    items: detailItems.map(it => ({ description: it.description, quantity: it.quantity, unitPrice: it.unitPrice, lineTotal: it.lineTotal, imageUrl: it.imageUrl })),
+                    contactPerson: quoteDetail?.contactPerson,
+                    clientPhone: quoteDetail?.clientPhone,
+                    clientEmail: quoteDetail?.clientEmail,
+                    clientGst: quoteDetail?.clientGst,
+                    billingAddress: quoteDetail?.billingAddress,
+                    termsAndConditions: quoteDetail?.termsAndConditions ?? selected.termsAndConditions ?? null,
+                    items: detailItems.map(it => ({ description: it.description, quantity: it.quantity, unitPrice: it.unitPrice, lineTotal: it.lineTotal })),
                   })}>
                     <Printer className="w-4 h-4 mr-2" />Print Quote
                   </Button>
