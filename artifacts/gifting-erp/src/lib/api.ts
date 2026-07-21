@@ -26,7 +26,15 @@ export async function api<T = unknown>(path: string, init?: RequestInit): Promis
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `HTTP ${res.status}`);
+    try {
+      const json = JSON.parse(text);
+      throw new Error(json.error ?? json.message ?? `HTTP ${res.status}`);
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        throw new Error(text.includes("<") ? `Server error (${res.status})` : text || `HTTP ${res.status}`);
+      }
+      throw e;
+    }
   }
   if (res.status === 204) return null as T;
   return res.json() as Promise<T>;
