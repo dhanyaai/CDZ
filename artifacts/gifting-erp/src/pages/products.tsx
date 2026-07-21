@@ -530,6 +530,16 @@ export function Products() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="category" render={({ field }) => (
+                  <FormItem><FormLabel>Category *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {categoryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  <FormMessage /></FormItem>
+                )} />
                 <FormField control={form.control} name="productType" render={({ field }) => (
                   <FormItem><FormLabel>Product Type</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || "__none__"}>
@@ -537,16 +547,6 @@ export function Products() {
                       <SelectContent>
                         <SelectItem value="__none__">— None —</SelectItem>
                         {PRODUCT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  <FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="category" render={({ field }) => (
-                  <FormItem><FormLabel>Category *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        {categoryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   <FormMessage /></FormItem>
