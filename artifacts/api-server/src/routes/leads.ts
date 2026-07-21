@@ -112,10 +112,11 @@ router.post("/v1/leads/:id/items", async (req, res): Promise<void> => {
     .where(and(eq(leadsTable.id, leadId), eq(leadsTable.companyId, req.companyId)));
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
   const { slNo, productName, customProduct, qty, budget, margin } = req.body ?? {};
+  const toNum = (v: unknown) => v != null && v !== "" ? Number(v) : null;
   const [item] = await db.insert(leadItemsTable).values({
     leadId, slNo: slNo ?? 1,
     productName: productName || null, customProduct: customProduct || null,
-    qty: qty ?? null, budget: budget ?? null, margin: margin ?? null,
+    qty: toNum(qty), budget: toNum(budget) != null ? String(toNum(budget)) : null, margin: toNum(margin) != null ? String(toNum(margin)) : null,
   }).returning();
   res.status(201).json({ ...item, budget: item.budget ? Number(item.budget) : null, margin: item.margin ? Number(item.margin) : null, createdAt: item.createdAt.toISOString() });
 });
