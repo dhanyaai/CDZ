@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, inArray } from "drizzle-orm";
-import { db, catalogueSharesTable, companiesTable, productsTable, opportunitiesTable } from "@workspace/db";
+import { db, catalogueSharesTable, companiesTable, productsTable, sampleOrdersTable, sampleOrderItemsTable, opportunitiesTable } from "@workspace/db";
 import crypto from "crypto";
 
 const router = Router();
@@ -67,8 +67,7 @@ router.get("/v1/public/catalogue/:token", async (req, res): Promise<void> => {
 });
 
 // POST /v1/public/catalogue/:token/request-samples
-// Public endpoint — no auth required.
-// Customer selects products; we save them as shortlisted on the opportunity and advance stage to "shortlisted".
+// Public endpoint — no auth required. Customer selects products; we create a sample order.
 router.post("/v1/public/catalogue/:token/request-samples", async (req, res): Promise<void> => {
   const { token } = req.params as { token: string };
   const { productIds } = req.body ?? {};
@@ -90,21 +89,38 @@ router.post("/v1/public/catalogue/:token/request-samples", async (req, res): Pro
     return;
   }
 
-  // Save shortlisted product IDs to the opportunity and advance stage to "shortlisted"
+  // Create the sample order
+  const [order] = await db.insert(sampleOrdersTable).values({
+    companyId: share.companyId,
+    sampleNumber: "",
+    clientId: share.clientId ?? null,
+    opportunityId: share.opportunityId ?? null,
+    customerName: share.clientName ?? share.opportunityTitle,
+    status: "Requested",
+    notes: `Auto-created from catalogue link: ${share.opportunityTitle}`,
+  }).returning({ id: sampleOrdersTable.id });
+
+  // Patch sample number
+  await db.update(sampleOrdersTable)
+    .set({ sampleNumber: `SMPL-${String(order.id).padStart(5, "0")}` })
+    .where(eq(sampleOrdersTable.id, order.id));
+
+  // Insert items (qty=1 each)
+  await db.insert(sampleOrderItemsTable).values(
+    selectedIds.map(pid => ({ sampleOrderId: order.id, productId: pid, quantity: 1 }))
+  );
+
+  // Bump opportunity stage to "samples" if linked
   if (share.opportunityId) {
     await db.update(opportunitiesTable)
-      .set({
-        shortlistedProductIds: JSON.stringify(selectedIds),
-        stage: "shortlisted",
-        updatedAt: new Date(),
-      })
+      .set({ stage: "samples", updatedAt: new Date() })
       .where(and(
         eq(opportunitiesTable.id, share.opportunityId),
         eq(opportunitiesTable.companyId, share.companyId),
       ));
   }
 
-  res.json({ success: true, shortlistedCount: selectedIds.length });
+  res.json({ success: true, sampleOrderId: order.id, sampleNumber: `SMPL-${String(order.id).padStart(5, "0")}` });
 });
 
 export default router;

@@ -129,10 +129,11 @@ export function CatalogueViewer({ token }: { token: string }) {
   if (submitted) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center max-w-sm px-6">
-        <div className="text-6xl mb-5">✅</div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Products Shortlisted!</h2>
+        <div className="text-6xl mb-5">🎉</div>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Sample Request Sent!</h2>
         <p className="text-gray-500 text-sm mb-6">
-          You've shortlisted <strong>{selected.size}</strong> product{selected.size !== 1 ? "s" : ""}. Our team will review your selection and follow up with samples shortly.
+          Your sample request for <strong>{selected.size}</strong> product{selected.size !== 1 ? "s" : ""} has been received.
+          Our team will get in touch with you shortly.
         </p>
         <p className="text-xs text-gray-400">{data.companyName}</p>
       </div>
@@ -175,7 +176,7 @@ export function CatalogueViewer({ token }: { token: string }) {
       {/* Instruction bar */}
       <div className="bg-blue-50 border-b border-blue-100 px-6 py-3">
         <p className="text-blue-700 text-sm text-center font-medium max-w-5xl mx-auto">
-          👇 Tap the products you like, then click <strong>Shortlist Products</strong> below — our team will follow up with samples.
+          👇 Tap the products you'd like to receive as samples, then click <strong>Request Samples</strong> below.
         </p>
       </div>
 
@@ -275,7 +276,7 @@ export function CatalogueViewer({ token }: { token: string }) {
                   : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
               }`}
             >
-              {submitting ? "Submitting…" : `Shortlist Products (${selected.size})`}
+              {submitting ? "Submitting…" : `Request Samples (${selected.size})`}
             </button>
           </div>
         </div>

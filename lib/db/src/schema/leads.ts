@@ -44,7 +44,6 @@ export const opportunitiesTable = pgTable("opportunities", {
   expectedCloseDate: timestamp("expected_close_date", { withTimezone: true }),
   ownerId: integer("owner_id").references(() => usersTable.id, { onDelete: "set null" }),
   notes: text("notes"),
-  shortlistedProductIds: text("shortlisted_product_ids"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
