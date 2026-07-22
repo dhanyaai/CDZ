@@ -5,9 +5,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { initAuth } from "@/lib/auth";
+import { initAuth, getStoredUser } from "@/lib/auth";
 import { initTheme } from "@/lib/theme";
 import { getToken } from "@/lib/api";
+import { can } from "@/lib/permissions";
+import { ShieldOff } from "lucide-react";
 
 import { Dashboard } from "@/pages/dashboard";
 import { Clients } from "@/pages/clients";
@@ -85,6 +87,28 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <AppLayout>{children}</AppLayout>;
 }
 
+function ProtectedRoute({
+  permission,
+  component: Component,
+}: {
+  permission: string;
+  component: React.ComponentType;
+}) {
+  const user = getStoredUser();
+  if (!can(user?.role, permission)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground p-8">
+        <ShieldOff className="w-14 h-14 opacity-30" />
+        <h2 className="text-xl font-semibold text-foreground">Access Denied</h2>
+        <p className="text-sm text-center max-w-xs">
+          You don't have permission to view this page. Contact your Admin if you need access.
+        </p>
+      </div>
+    );
+  }
+  return <Component />;
+}
+
 function CatalogueViewerWrapper() {
   const [, params] = useRoute("/catalogue/:token");
   return <CatalogueViewer token={params?.token ?? ""} />;
@@ -97,46 +121,46 @@ function Router() {
         <Route path="/login" component={Login} />
         <Route path="/catalogue/:token" component={CatalogueViewerWrapper} />
         <Route path="/" component={() => <Redirect to="/dashboard" />} />
-        <Route path="/dashboard" component={Dashboard} />
-        <Route path="/clients" component={Clients} />
-        <Route path="/clients/:id" component={ClientDetailWrapper} />
-        <Route path="/contacts" component={Contacts} />
-        <Route path="/leads" component={Leads} />
-        <Route path="/opportunities" component={Opportunities} />
-        <Route path="/quotes" component={Quotes} />
-        <Route path="/proforma-invoices" component={ProformaInvoices} />
-        <Route path="/products" component={Products} />
-        <Route path="/bundles" component={Bundles} />
-        <Route path="/bundle-costing" component={BundleCosting} />
-        <Route path="/categories" component={Categories} />
-        <Route path="/services" component={Services} />
-        <Route path="/vendors" component={Vendors} />
-        <Route path="/sample-orders" component={SampleOrders} />
-        <Route path="/sales-orders" component={SalesOrders} />
-        <Route path="/sales-orders/:id" component={SalesOrderDetailWrapper} />
-        <Route path="/order-processing" component={OrderProcessingList} />
-        <Route path="/order-processing/:salesOrderId" component={OrderProcessingWrapper} />
-        <Route path="/purchase-orders" component={PurchaseOrders} />
-        <Route path="/purchase-orders/:id" component={PurchaseOrderDetailWrapper} />
-        <Route path="/inventory" component={Inventory} />
-        <Route path="/item-ledger" component={ItemLedger} />
-        <Route path="/transfers" component={Transfers} />
-        <Route path="/locations" component={Locations} />
-        <Route path="/grn" component={Grn} />
-        <Route path="/assembly" component={Assembly} />
-        <Route path="/artwork" component={Artwork} />
-        <Route path="/shipments" component={Shipments} />
-        <Route path="/invoices" component={Invoices} />
-        <Route path="/payments" component={Payments} />
-        <Route path="/credit-notes" component={CreditNotes} />
-        <Route path="/fixed-assets" component={FixedAssets} />
-        <Route path="/production" component={ProductionOrders} />
-        <Route path="/reports" component={Reports} />
-        <Route path="/users" component={Users} />
-        <Route path="/follow-ups" component={FollowUps} />
-        <Route path="/companies" component={Companies} />
-        <Route path="/settings" component={Settings} />
-        <Route path="/pdf-extractor" component={PdfExtractor} />
+        <Route path="/dashboard" component={() => <ProtectedRoute permission="page.dashboard" component={Dashboard} />} />
+        <Route path="/clients" component={() => <ProtectedRoute permission="page.crm" component={Clients} />} />
+        <Route path="/clients/:id" component={() => <ProtectedRoute permission="page.crm" component={ClientDetailWrapper} />} />
+        <Route path="/contacts" component={() => <ProtectedRoute permission="page.crm" component={Contacts} />} />
+        <Route path="/leads" component={() => <ProtectedRoute permission="page.crm" component={Leads} />} />
+        <Route path="/opportunities" component={() => <ProtectedRoute permission="page.crm" component={Opportunities} />} />
+        <Route path="/quotes" component={() => <ProtectedRoute permission="page.crm" component={Quotes} />} />
+        <Route path="/proforma-invoices" component={() => <ProtectedRoute permission="page.crm" component={ProformaInvoices} />} />
+        <Route path="/products" component={() => <ProtectedRoute permission="page.catalog" component={Products} />} />
+        <Route path="/bundles" component={() => <ProtectedRoute permission="page.catalog" component={Bundles} />} />
+        <Route path="/bundle-costing" component={() => <ProtectedRoute permission="page.catalog" component={BundleCosting} />} />
+        <Route path="/categories" component={() => <ProtectedRoute permission="page.catalog" component={Categories} />} />
+        <Route path="/services" component={() => <ProtectedRoute permission="page.catalog" component={Services} />} />
+        <Route path="/vendors" component={() => <ProtectedRoute permission="page.purchase_orders" component={Vendors} />} />
+        <Route path="/sample-orders" component={() => <ProtectedRoute permission="page.sales_orders" component={SampleOrders} />} />
+        <Route path="/sales-orders" component={() => <ProtectedRoute permission="page.sales_orders" component={SalesOrders} />} />
+        <Route path="/sales-orders/:id" component={() => <ProtectedRoute permission="page.sales_orders" component={SalesOrderDetailWrapper} />} />
+        <Route path="/order-processing" component={() => <ProtectedRoute permission="page.sales_orders" component={OrderProcessingList} />} />
+        <Route path="/order-processing/:salesOrderId" component={() => <ProtectedRoute permission="page.sales_orders" component={OrderProcessingWrapper} />} />
+        <Route path="/purchase-orders" component={() => <ProtectedRoute permission="page.purchase_orders" component={PurchaseOrders} />} />
+        <Route path="/purchase-orders/:id" component={() => <ProtectedRoute permission="page.purchase_orders" component={PurchaseOrderDetailWrapper} />} />
+        <Route path="/inventory" component={() => <ProtectedRoute permission="page.operations" component={Inventory} />} />
+        <Route path="/item-ledger" component={() => <ProtectedRoute permission="page.operations" component={ItemLedger} />} />
+        <Route path="/transfers" component={() => <ProtectedRoute permission="page.operations" component={Transfers} />} />
+        <Route path="/locations" component={() => <ProtectedRoute permission="page.operations" component={Locations} />} />
+        <Route path="/grn" component={() => <ProtectedRoute permission="page.operations" component={Grn} />} />
+        <Route path="/assembly" component={() => <ProtectedRoute permission="page.operations" component={Assembly} />} />
+        <Route path="/artwork" component={() => <ProtectedRoute permission="page.operations" component={Artwork} />} />
+        <Route path="/shipments" component={() => <ProtectedRoute permission="page.logistics" component={Shipments} />} />
+        <Route path="/invoices" component={() => <ProtectedRoute permission="page.finance" component={Invoices} />} />
+        <Route path="/payments" component={() => <ProtectedRoute permission="page.finance" component={Payments} />} />
+        <Route path="/credit-notes" component={() => <ProtectedRoute permission="page.finance" component={CreditNotes} />} />
+        <Route path="/fixed-assets" component={() => <ProtectedRoute permission="page.finance" component={FixedAssets} />} />
+        <Route path="/production" component={() => <ProtectedRoute permission="page.operations" component={ProductionOrders} />} />
+        <Route path="/reports" component={() => <ProtectedRoute permission="page.reports" component={Reports} />} />
+        <Route path="/users" component={() => <ProtectedRoute permission="page.admin" component={Users} />} />
+        <Route path="/follow-ups" component={() => <ProtectedRoute permission="page.crm" component={FollowUps} />} />
+        <Route path="/companies" component={() => <ProtectedRoute permission="page.admin" component={Companies} />} />
+        <Route path="/settings" component={() => <ProtectedRoute permission="page.admin" component={Settings} />} />
+        <Route path="/pdf-extractor" component={() => <ProtectedRoute permission="page.tools" component={PdfExtractor} />} />
         <Route component={NotFound} />
       </Switch>
     </AuthGate>

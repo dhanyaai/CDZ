@@ -37,6 +37,7 @@ import { getStoredUser, setStoredUser, logout, getStoredCompanyId, setStoredComp
 import { NotificationsBell } from "@/components/notifications-bell";
 import { CommandPalette } from "@/components/command-palette";
 import { getNavItems } from "@/lib/nav";
+import { can } from "@/lib/permissions";
 import { useTheme } from "@/lib/theme";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, setToken } from "@/lib/api";
@@ -91,7 +92,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     ? user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
     : "??";
 
-  const navItems = getNavItems({ production: productionEnabled });
+  const role = user?.role ?? "";
+  const allNavItems = getNavItems({ production: productionEnabled });
+  const navItems = allNavItems
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !item.permission || can(role, item.permission),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
   const flatNavItems = navItems.flatMap((g) => g.items);
 
   const current = flatNavItems.find(
