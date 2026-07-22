@@ -1058,8 +1058,9 @@ export function Opportunities() {
                             const url = `${window.location.origin}${base}/catalogue/${token}`;
                             setShareUrl(url);
                             try { await navigator.clipboard.writeText(url); setShareCopied(true); setTimeout(() => setShareCopied(false), 3000); } catch { /* clipboard unavailable — user will copy from dialog */ }
-                          } catch {
-                            toast({ title: "Failed to generate link", variant: "destructive" });
+                          } catch (err: unknown) {
+                            if (err instanceof Error && err.message === "Unauthorized") return; // redirect to login already in progress
+                            toast({ title: "Failed to generate link", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
                           } finally {
                             setShareLoading(false);
                           }

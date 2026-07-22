@@ -17,18 +17,24 @@ router.post("/v1/catalogue-shares", async (req, res): Promise<void> => {
   const token = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-  await db.insert(catalogueSharesTable).values({
-    token,
-    companyId: req.companyId,
-    companyName: company.name,
-    opportunityId: opportunityId ? Number(opportunityId) : null,
-    clientId: clientId ? Number(clientId) : null,
-    opportunityTitle,
-    clientName: clientName ?? null,
-    catalogueType,
-    productIds: JSON.stringify(productIds),
-    expiresAt,
-  });
+  try {
+    await db.insert(catalogueSharesTable).values({
+      token,
+      companyId: req.companyId,
+      companyName: company.name,
+      opportunityId: opportunityId ? Number(opportunityId) : null,
+      clientId: clientId ? Number(clientId) : null,
+      opportunityTitle,
+      clientName: clientName ?? null,
+      catalogueType,
+      productIds: JSON.stringify(productIds),
+      expiresAt,
+    });
+  } catch (err: unknown) {
+    req.log.error({ err }, "Failed to insert catalogue share");
+    res.status(500).json({ error: "Failed to create share link. The database may be missing required columns — please contact support." });
+    return;
+  }
 
   res.json({ token });
 });
