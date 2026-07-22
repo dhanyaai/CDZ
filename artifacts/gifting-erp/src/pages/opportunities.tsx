@@ -115,6 +115,7 @@ export function Opportunities() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [creatingFromShortlist, setCreatingFromShortlist] = useState(false);
   const [printingQuoteId, setPrintingQuoteId] = useState<number | null>(null);
   const [advShowForm, setAdvShowForm] = useState(false);
   const [advForm, setAdvForm] = useState({ amount: "", paymentMode: "", referenceNo: "", receiptDate: new Date().toISOString().slice(0, 10), notes: "" });
@@ -143,10 +144,17 @@ export function Opportunities() {
   const { data: clients } = useListClients();
   const { data: leads } = useQuery({ queryKey: ["leads"], queryFn: () => api<Lead[]>("/v1/leads") });
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/v1/users") });
-  const { data: sampleOrders } = useQuery({
+  const { data: sampleOrders, refetch: refetchSampleOrders } = useQuery({
     queryKey: ["opp-sample-orders", selected?.id],
     queryFn: () => api<SampleOrderSummary[]>(`/v1/sample-orders?opportunityId=${selected!.id}`),
     enabled: !!selected && selected.stage === "samples",
+  });
+  type ShortlistedProduct = { id: number; name: string; category: string; sellingPrice: number; imageUrl: string | null };
+  type ShortlistedData = { products: ShortlistedProduct[]; shareToken: string | null; catalogueType: string | null };
+  const { data: shortlistedData, refetch: refetchShortlisted } = useQuery<ShortlistedData>({
+    queryKey: ["opp-shortlisted", selected?.id],
+    queryFn: () => api<ShortlistedData>(`/v1/opportunities/${selected!.id}/shortlisted-products`),
+    enabled: !!selected && selected.stage === "shortlisted",
   });
   const { data: products } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products"), enabled: sampleDialog || selected?.stage === "sent_catalogue" || selected?.stage === "quotation_sent" });
   const { data: oppQuotes } = useQuery<OppQuote[], Error, OppQuote[]>({
@@ -1079,6 +1087,67 @@ export function Opportunities() {
                         </div>
                         <p className="text-xs text-blue-500 dark:text-blue-400">Tap the link to select it, then copy & share with your customer.</p>
                       </div>
+                    )}
+                  </div>
+                )}
+                {selected.stage === "shortlisted" && (
+                  <div className="space-y-3 border rounded-xl p-4 bg-amber-50/40">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">📋</span>
+                      <span className="text-sm font-semibold text-amber-700">Customer Shortlist</span>
+                      {shortlistedData && shortlistedData.products.length > 0 && (
+                        <span className="ml-auto text-xs text-amber-600 font-medium">{shortlistedData.products.length} product{shortlistedData.products.length !== 1 ? "s" : ""} selected</span>
+                      )}
+                    </div>
+                    {!shortlistedData || shortlistedData.products.length === 0 ? (
+                      <div className="text-center py-6 text-sm text-muted-foreground">
+                        <p className="text-2xl mb-2">⏳</p>
+                        <p>Waiting for the customer to submit their selection from the catalogue link.</p>
+                      </div>
+                    ) : (
+                      <>
+                        {shortlistedData.catalogueType && (
+                          <p className="text-xs text-amber-700 font-medium bg-amber-100 rounded-lg px-2.5 py-1">
+                            Catalogue: {shortlistedData.catalogueType}
+                          </p>
+                        )}
+                        <div className="border rounded-lg bg-background divide-y max-h-60 overflow-y-auto">
+                          {shortlistedData.products.map(p => (
+                            <div key={p.id} className="flex items-center gap-2.5 px-3 py-2">
+                              {p.imageUrl
+                                ? <img src={p.imageUrl} className="w-8 h-8 rounded object-cover border shrink-0" />
+                                : <div className="w-8 h-8 rounded bg-amber-100 flex items-center justify-center shrink-0 text-base">🎁</div>
+                              }
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium truncate">{p.name}</div>
+                                <div className="text-xs text-muted-foreground">{p.category}</div>
+                              </div>
+                              <span className="text-xs font-semibold text-blue-700 shrink-0">₹{Number(p.sellingPrice).toLocaleString("en-IN")}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <Button
+                          className="w-full bg-amber-600 hover:bg-amber-700 text-white h-9 text-sm"
+                          disabled={creatingFromShortlist}
+                          onClick={async () => {
+                            if (!selected) return;
+                            setCreatingFromShortlist(true);
+                            try {
+                              await api(`/v1/opportunities/${selected.id}/create-sample-from-shortlist`, { method: "POST" });
+                              toast({ title: "Sample order created", description: "The opportunity has moved to the Samples stage." });
+                              setSelected({ ...selected, stage: "samples" });
+                              void refetchShortlisted();
+                            } catch {
+                              toast({ title: "Failed to create sample order", variant: "destructive" });
+                            } finally {
+                              setCreatingFromShortlist(false);
+                            }
+                          }}
+                        >
+                          <FlaskConical className="w-3.5 h-3.5 mr-1.5" />
+                          {creatingFromShortlist ? "Creating…" : "Create Sample Order from Shortlist"}
+                        </Button>
+                      </>
                     )}
                   </div>
                 )}

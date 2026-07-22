@@ -12,6 +12,7 @@ export const catalogueSharesTable = pgTable("catalogue_shares", {
   clientName: text("client_name"),
   catalogueType: text("catalogue_type").notNull(),
   productIds: text("product_ids").notNull(),
+  selectedProductIds: text("selected_product_ids"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
 });

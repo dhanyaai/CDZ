@@ -10,6 +10,7 @@ type CatalogueData = {
   clientName: string | null; catalogueType: string;
   opportunityId: number | null; clientId: number | null;
   expiresAt: string | null; createdAt: string;
+  alreadySubmitted: boolean;
   products: Product[];
 };
 
@@ -126,16 +127,16 @@ export function CatalogueViewer({ token }: { token: string }) {
     </div>
   );
 
-  if (submitted) return (
+  if (submitted || data?.alreadySubmitted) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center max-w-sm px-6">
-        <div className="text-6xl mb-5">🎉</div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Sample Request Sent!</h2>
+        <div className="text-6xl mb-5">✅</div>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Selection Submitted!</h2>
         <p className="text-gray-500 text-sm mb-6">
-          Your sample request for <strong>{selected.size}</strong> product{selected.size !== 1 ? "s" : ""} has been received.
-          Our team will get in touch with you shortly.
+          Your selection of{submitted ? <> <strong>{selected.size}</strong> product{selected.size !== 1 ? "s" : ""}</> : " products"} has been received.
+          Our sales team will review your shortlist and get in touch with you shortly.
         </p>
-        <p className="text-xs text-gray-400">{data.companyName}</p>
+        <p className="text-xs text-gray-400">{data?.companyName}</p>
       </div>
     </div>
   );
@@ -176,7 +177,7 @@ export function CatalogueViewer({ token }: { token: string }) {
       {/* Instruction bar */}
       <div className="bg-blue-50 border-b border-blue-100 px-6 py-3">
         <p className="text-blue-700 text-sm text-center font-medium max-w-5xl mx-auto">
-          👇 Tap the products you'd like to receive as samples, then click <strong>Request Samples</strong> below.
+          👇 Tap the products you're interested in, then click <strong>Submit My Selection</strong> — our team will follow up with you.
         </p>
       </div>
 
@@ -276,7 +277,7 @@ export function CatalogueViewer({ token }: { token: string }) {
                   : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
               }`}
             >
-              {submitting ? "Submitting…" : `Request Samples (${selected.size})`}
+              {submitting ? "Submitting…" : selected.size === 0 ? "Select products to continue" : `Submit My Selection (${selected.size})`}
             </button>
           </div>
         </div>

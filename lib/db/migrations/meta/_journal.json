@@ -78,6 +78,13 @@
       "when": 1784613600000,
       "tag": "0010_lead_items_and_catalogue_fixes",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1753228800000,
+      "tag": "0011_shortlisted_products",
+      "breakpoints": true
     }
   ]
 }
