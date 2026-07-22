@@ -3,11 +3,18 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import JSZip from "jszip";
 import * as XLSX from "xlsx";
-import { Upload, Download, FileImage, X, ImageDown, Loader2, Archive, FileSpreadsheet, Table2 } from "lucide-react";
+import { Upload, Download, FileImage, X, ImageDown, Loader2, Archive, FileSpreadsheet, Table2, Package, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useCreateProduct, getListProductsQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
@@ -129,6 +136,21 @@ function groupTextByRows(items: PdfTextItem[], yTolerance = 5): { y: number; cel
   }).filter((row) => row.cells.length > 0 && row.cells.some((c) => c.text.trim() !== ""));
 }
 
+const ITEM_CATEGORIES = [
+  "Office Gifts","Stationery","Drinkware","Apparel","Bags & Accessories",
+  "Electronics","Lifestyle","Wellness","Festive","Eco-Friendly","Other",
+];
+
+interface CreateItemForm {
+  name: string;
+  category: string;
+  costPrice: string;
+  sellingPrice: string;
+  imageUrl: string;
+}
+
+const EMPTY_ITEM: CreateItemForm = { name: "", category: "", costPrice: "", sellingPrice: "", imageUrl: "" };
+
 export function PdfExtractor() {
   const [mode, setMode] = useState<Mode>("images");
 
@@ -149,6 +171,59 @@ export function PdfExtractor() {
   const [zipping, setZipping] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const excelFileRef = useRef<HTMLInputElement>(null);
+
+  const [createItemOpen, setCreateItemOpen] = useState(false);
+  const [createItemForm, setCreateItemForm] = useState<CreateItemForm>(EMPTY_ITEM);
+  const [createItemUploading, setCreateItemUploading] = useState(false);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const createProduct = useCreateProduct({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+        setCreateItemOpen(false);
+        setCreateItemForm(EMPTY_ITEM);
+        toast({ title: "Item created", description: "Product added to your catalogue." });
+      },
+      onError: () => toast({ title: "Failed to create item", variant: "destructive" }),
+    },
+  });
+
+  const handleCreateItem = async (img: ExtractedImage) => {
+    setCreateItemForm(EMPTY_ITEM);
+    setCreateItemUploading(true);
+    setCreateItemOpen(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", img.blob, img.filename);
+      const res = await fetch("/api/v1/uploads/image", { method: "POST", body: fd });
+      if (!res.ok) throw new Error("Upload failed");
+      const { url } = await res.json() as { url: string };
+      setCreateItemForm(f => ({ ...f, imageUrl: url }));
+    } catch {
+      toast({ title: "Image upload failed", description: "You can still create the item without an image.", variant: "destructive" });
+    } finally {
+      setCreateItemUploading(false);
+    }
+  };
+
+  const submitCreateItem = () => {
+    if (!createItemForm.name.trim()) { toast({ title: "Item name is required", variant: "destructive" }); return; }
+    if (!createItemForm.category) { toast({ title: "Category is required", variant: "destructive" }); return; }
+    createProduct.mutate({
+      data: {
+        name: createItemForm.name.trim(),
+        category: createItemForm.category,
+        costPrice: Number(createItemForm.costPrice) || 0,
+        sellingPrice: Number(createItemForm.sellingPrice) || 0,
+        imageUrl: createItemForm.imageUrl || undefined,
+        stockLevel: 0,
+        lowStockThreshold: 10,
+      },
+    });
+  };
 
   const extractImages = useCallback(
     async (file: File) => {
@@ -543,23 +618,38 @@ export function PdfExtractor() {
               className="group relative rounded-xl border border-border overflow-hidden bg-muted/20 shadow-sm hover:shadow-md transition-shadow"
             >
               <img src={img.dataUrl} alt={`Page ${img.page}`} className="w-full object-contain block" />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
                 <button
                   onClick={() => downloadOne(img)}
-                  className="bg-white text-gray-900 rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1 shadow-lg hover:bg-gray-100 transition-colors"
+                  className="bg-white text-gray-900 rounded-lg px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1 shadow-lg hover:bg-gray-100 transition-colors"
                 >
                   <ImageDown size={13} /> Download
+                </button>
+                <button
+                  onClick={() => handleCreateItem(img)}
+                  className="bg-primary text-primary-foreground rounded-lg px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1 shadow-lg hover:bg-primary/90 transition-colors"
+                >
+                  <Plus size={13} /> Create Item
                 </button>
               </div>
               <div className="px-2 py-1.5 flex items-center justify-between bg-background border-t border-border">
                 <span className="text-xs text-muted-foreground font-medium">Page {img.page}</span>
-                <button
-                  onClick={() => downloadOne(img)}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                  title={`Download ${img.filename}`}
-                >
-                  <Download size={13} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleCreateItem(img)}
+                    className="text-primary hover:text-primary/80 transition-colors"
+                    title="Create product from this page"
+                  >
+                    <Package size={13} />
+                  </button>
+                  <button
+                    onClick={() => downloadOne(img)}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    title={`Download ${img.filename}`}
+                  >
+                    <Download size={13} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -644,6 +734,100 @@ export function PdfExtractor() {
           </button>
         </div>
       )}
+
+      {/* Create Item dialog */}
+      <Dialog open={createItemOpen} onOpenChange={(open) => { if (!open && !createProduct.isPending) { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package size={18} className="text-primary" /> Create Product from Page
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Image preview */}
+            {(createItemUploading || createItemForm.imageUrl) && (
+              <div className="flex justify-center">
+                {createItemUploading ? (
+                  <div className="w-32 h-32 rounded-lg border border-border bg-muted/30 flex flex-col items-center justify-center gap-2 text-muted-foreground text-xs">
+                    <Loader2 size={20} className="animate-spin text-primary" />
+                    Uploading image…
+                  </div>
+                ) : (
+                  <img src={createItemForm.imageUrl} alt="Product" className="max-h-32 rounded-lg border border-border object-contain" />
+                )}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ci-name" className="text-sm">Item Name <span className="text-destructive">*</span></Label>
+              <Input
+                id="ci-name"
+                placeholder="e.g. Leather Laptop Bag"
+                value={createItemForm.name}
+                onChange={e => setCreateItemForm(f => ({ ...f, name: e.target.value }))}
+                className="h-9"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-sm">Category <span className="text-destructive">*</span></Label>
+              <Select
+                value={createItemForm.category}
+                onValueChange={v => setCreateItemForm(f => ({ ...f, category: v }))}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Select category…" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {ITEM_CATEGORIES.map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ci-cost" className="text-sm">Cost Price (₹)</Label>
+                <Input
+                  id="ci-cost"
+                  type="number" min={0} step={0.01}
+                  placeholder="0.00"
+                  value={createItemForm.costPrice}
+                  onChange={e => setCreateItemForm(f => ({ ...f, costPrice: e.target.value }))}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ci-sell" className="text-sm">Selling Price (₹)</Label>
+                <Input
+                  id="ci-sell"
+                  type="number" min={0} step={0.01}
+                  placeholder="0.00"
+                  value={createItemForm.sellingPrice}
+                  onChange={e => setCreateItemForm(f => ({ ...f, sellingPrice: e.target.value }))}
+                  className="h-9"
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              You can fill in additional details (SKU, HSN, vendors, stock) from the Products page after creation.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); }} disabled={createProduct.isPending}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={submitCreateItem} disabled={createProduct.isPending || createItemUploading} className="gap-1.5">
+              {createProduct.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              {createProduct.isPending ? "Creating…" : "Create Item"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
