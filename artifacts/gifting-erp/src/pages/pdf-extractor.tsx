@@ -191,13 +191,31 @@ export function PdfExtractor() {
     },
   });
 
+  const resizeToThumbnail = (dataUrl: string, maxWidth = 600, jpegQuality = 0.72): Promise<Blob> =>
+    new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, maxWidth / image.width);
+        const w = Math.round(image.width * scale);
+        const h = Math.round(image.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(image, 0, 0, w, h);
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error("Resize failed")), "image/jpeg", jpegQuality);
+      };
+      image.onerror = reject;
+      image.src = dataUrl;
+    });
+
   const handleCreateItem = async (img: ExtractedImage) => {
     setCreateItemForm(EMPTY_ITEM);
     setCreateItemUploading(true);
     setCreateItemOpen(true);
     try {
+      const thumb = await resizeToThumbnail(img.dataUrl);
       const fd = new FormData();
-      fd.append("image", img.blob, img.filename);
+      fd.append("image", thumb, img.filename.replace(/\.(png|jpg)$/i, ".jpg"));
       const res = await fetch("/api/v1/uploads/image", { method: "POST", body: fd });
       if (!res.ok) throw new Error("Upload failed");
       const { url } = await res.json() as { url: string };
