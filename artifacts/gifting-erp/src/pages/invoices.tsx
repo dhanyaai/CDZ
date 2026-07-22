@@ -123,7 +123,7 @@ export function Invoices() {
     } as any,
   });
 
-  const eligibleOrders = salesOrders?.filter(o => !["Draft", "Cancelled"].includes(o.status)) || [];
+  const eligibleOrders = salesOrders?.filter(o => o.status !== "Cancelled") || [];
   const totalBilled = (allInvoices ?? []).reduce((s, i) => s + Number((i as any).grandTotal ?? i.totalAmount ?? 0), 0);
   const totalPaid = (allInvoices ?? []).filter(i => i.status === "Paid").reduce((s, i) => s + Number((i as any).grandTotal ?? i.totalAmount ?? 0), 0);
   const totalOutstanding = (allInvoices ?? []).filter(i => ["Issued", "Partially Paid"].includes(i.status)).reduce((s, i) => s + Number((i as any).grandTotal ?? i.totalAmount ?? 0), 0);

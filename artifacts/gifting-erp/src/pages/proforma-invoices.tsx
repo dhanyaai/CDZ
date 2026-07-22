@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { FilePlus2, Trash2, Printer, IndianRupee, FileCheck2, Clock, XCircle, Building2, Phone, Mail, CreditCard } from "lucide-react";
+import { FilePlus2, Trash2, Printer, IndianRupee, FileCheck2, Clock, XCircle, Building2, Phone, Mail, CreditCard, PackageCheck, ArrowRight } from "lucide-react";
 import { printProformaInvoice } from "@/lib/print-utils";
 import { format } from "date-fns";
 
@@ -45,6 +45,7 @@ export function ProformaInvoices() {
   const { toast } = useToast();
   const [selected, setSelected] = useState<PI | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [createdSO, setCreatedSO] = useState<{ id: number; orderNumber: string } | null>(null);
 
   const { data: piList, isLoading } = useQuery<PI[]>({
     queryKey: ["proforma-invoices"],
@@ -55,6 +56,21 @@ export function ProformaInvoices() {
     queryKey: ["proforma-invoice-detail", selected?.id],
     queryFn: () => api(`/v1/proforma-invoices/${selected!.id}`),
     enabled: selected != null,
+  });
+
+  const convertToSO = useMutation({
+    mutationFn: async (quoteId: number) => {
+      await api(`/v1/quotes/${quoteId}`, { method: "PATCH", body: JSON.stringify({ status: "accepted" }) });
+      return api<{ salesOrderId: number; orderNumber: string; message: string }>(`/v1/quotes/${quoteId}/convert`, { method: "POST" });
+    },
+    onSuccess: (data) => {
+      setCreatedSO({ id: data.salesOrderId, orderNumber: data.orderNumber });
+      toast({ title: "Sales Order Created", description: `${data.orderNumber} has been created from this PI.` });
+      qc.invalidateQueries({ queryKey: ["sales-orders"] });
+    },
+    onError: (err: unknown) => {
+      toast({ title: "Conversion failed", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
+    },
   });
 
   const updateStatus = useMutation({
@@ -141,7 +157,7 @@ export function ProformaInvoices() {
                 No proforma invoices yet. Convert a quote to get started.
               </TableCell></TableRow>
             ) : filtered.map(pi => (
-              <TableRow key={pi.id} className="cursor-pointer hover:bg-muted/40" onClick={() => setSelected(pi)}>
+              <TableRow key={pi.id} className="cursor-pointer hover:bg-muted/40" onClick={() => { setSelected(pi); setCreatedSO(null); }}>
                 <TableCell className="font-mono text-sm font-semibold">{pi.piNumber}</TableCell>
                 <TableCell className="text-sm">{pi.subject ?? <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell className="text-sm">{pi.clientName ?? "—"}</TableCell>
@@ -253,6 +269,28 @@ export function ProformaInvoices() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Create Sales Order from this PI */}
+                  {selected.quoteId && (
+                    createdSO ? (
+                      <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm">
+                        <PackageCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="text-emerald-700 font-medium">Sales Order <span className="font-mono">{createdSO.orderNumber}</span> created</span>
+                        <a href="/sales-orders" className="ml-auto text-xs text-emerald-600 underline hover:text-emerald-800 flex items-center gap-0.5">
+                          View <ArrowRight className="w-3 h-3" />
+                        </a>
+                      </div>
+                    ) : (
+                      <Button
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                        disabled={convertToSO.isPending}
+                        onClick={() => { setCreatedSO(null); convertToSO.mutate(selected.quoteId!); }}
+                      >
+                        <PackageCheck className="w-4 h-4 mr-2" />
+                        {convertToSO.isPending ? "Creating Sales Order…" : "Create Sales Order"}
+                      </Button>
+                    )
+                  )}
 
                   {d && (
                     <Button variant="outline" className="w-full" onClick={() => printProformaInvoice(d)}>

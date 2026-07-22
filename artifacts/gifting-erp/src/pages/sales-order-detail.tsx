@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, MapPin, Calendar, FileText, Printer, Package, Building2, Phone, Mail, CreditCard, Truck, ClipboardCheck, ChevronRight, XCircle } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, FileText, Printer, Package, Building2, Phone, Mail, CreditCard, Truck, ClipboardCheck, ChevronRight, XCircle, FilePlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { printSalesOrder } from "@/lib/print-utils";
@@ -124,6 +124,13 @@ export function SalesOrderDetail({ id }: { id: number }) {
               <ClipboardCheck className="w-4 h-4 mr-2" />Process
             </Button>
           </Link>
+          {order.status !== "Cancelled" && (
+            <Link href="/invoices">
+              <Button size="sm" variant="outline" className="border-violet-400/50 text-violet-600 hover:bg-violet-50">
+                <FilePlus className="w-4 h-4 mr-2" />Create Invoice
+              </Button>
+            </Link>
+          )}
           {validTransitions.filter(s => s !== "Cancelled").map(toStatus => {
             const cfg = TRANSITION_LABELS[toStatus] ?? { label: toStatus, variant: "default" as const };
             return (
