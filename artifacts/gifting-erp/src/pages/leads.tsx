@@ -524,7 +524,17 @@ export function Leads() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Delivery Time</label>
-                <Input placeholder="e.g. 10 days" value={form.deliveryTime} onChange={e => setForm({ ...form, deliveryTime: e.target.value })} />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 10"
+                    value={form.deliveryTime}
+                    onChange={e => setForm({ ...form, deliveryTime: e.target.value })}
+                    className="w-full"
+                  />
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">days</span>
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">City Of Delivery</label>
@@ -683,7 +693,17 @@ export function Leads() {
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Delivery Time</label>
-                        <Input className="h-8 text-sm" value={editForm.deliveryTime ?? ""} onChange={e => setEditForm(f => ({ ...f, deliveryTime: e.target.value || null }))} placeholder="e.g. 10 days" />
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            className="h-8 text-sm"
+                            type="number"
+                            min="1"
+                            placeholder="e.g. 10"
+                            value={editForm.deliveryTime ?? ""}
+                            onChange={e => setEditForm(f => ({ ...f, deliveryTime: e.target.value || null }))}
+                          />
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">days</span>
+                        </div>
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">City</label>
@@ -961,7 +981,7 @@ export function Leads() {
                 {(selected.deliveryTime || selected.deliveryDate || selected.branding != null) && (
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-muted/40 rounded-lg p-3">
                     {selected.branding != null && <div><span className="text-xs text-muted-foreground block">Branding</span>{selected.branding ? "Yes" : "No"}</div>}
-                    {selected.deliveryTime && <div><span className="text-xs text-muted-foreground block">Delivery Time</span>{selected.deliveryTime}</div>}
+                    {selected.deliveryTime && <div><span className="text-xs text-muted-foreground block">Delivery Time</span>{selected.deliveryTime} days</div>}
                     {selected.deliveryDate && <div><span className="text-xs text-muted-foreground block">Delivery Date</span>{new Date(selected.deliveryDate).toLocaleDateString("en-IN")}</div>}
                   </div>
                 )}
