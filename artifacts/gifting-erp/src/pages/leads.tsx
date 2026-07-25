@@ -524,29 +524,12 @@ export function Leads() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Delivery Time</label>
-                <Select
-                  value={form.deliveryTime || "__none__"}
-                  onValueChange={v => setForm({ ...form, deliveryTime: v === "__none__" ? "" : v })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select duration…" />
-                  </SelectTrigger>
-                  <SelectContent position="popper">
-                    <SelectItem value="__none__">— Not set —</SelectItem>
-                    <SelectItem value="1 Day">1 Day</SelectItem>
-                    <SelectItem value="2 Days">2 Days</SelectItem>
-                    <SelectItem value="3 Days">3 Days</SelectItem>
-                    <SelectItem value="5 Days">5 Days</SelectItem>
-                    <SelectItem value="7 Days">7 Days (1 Week)</SelectItem>
-                    <SelectItem value="10 Days">10 Days</SelectItem>
-                    <SelectItem value="14 Days">14 Days (2 Weeks)</SelectItem>
-                    <SelectItem value="21 Days">21 Days (3 Weeks)</SelectItem>
-                    <SelectItem value="30 Days">30 Days (1 Month)</SelectItem>
-                    <SelectItem value="45 Days">45 Days</SelectItem>
-                    <SelectItem value="60 Days">60 Days (2 Months)</SelectItem>
-                    <SelectItem value="90 Days">90 Days (3 Months)</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input
+                  type="time"
+                  value={form.deliveryTime}
+                  onChange={e => setForm({ ...form, deliveryTime: e.target.value })}
+                  className="w-full"
+                />
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">City Of Delivery</label>
@@ -705,29 +688,12 @@ export function Leads() {
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Delivery Time</label>
-                        <Select
-                          value={editForm.deliveryTime ?? "__none__"}
-                          onValueChange={v => setEditForm(f => ({ ...f, deliveryTime: v === "__none__" ? null : v }))}
-                        >
-                          <SelectTrigger className="h-8 text-sm w-full">
-                            <SelectValue placeholder="Select duration…" />
-                          </SelectTrigger>
-                          <SelectContent position="popper">
-                            <SelectItem value="__none__">— Not set —</SelectItem>
-                            <SelectItem value="1 Day">1 Day</SelectItem>
-                            <SelectItem value="2 Days">2 Days</SelectItem>
-                            <SelectItem value="3 Days">3 Days</SelectItem>
-                            <SelectItem value="5 Days">5 Days</SelectItem>
-                            <SelectItem value="7 Days">7 Days (1 Week)</SelectItem>
-                            <SelectItem value="10 Days">10 Days</SelectItem>
-                            <SelectItem value="14 Days">14 Days (2 Weeks)</SelectItem>
-                            <SelectItem value="21 Days">21 Days (3 Weeks)</SelectItem>
-                            <SelectItem value="30 Days">30 Days (1 Month)</SelectItem>
-                            <SelectItem value="45 Days">45 Days</SelectItem>
-                            <SelectItem value="60 Days">60 Days (2 Months)</SelectItem>
-                            <SelectItem value="90 Days">90 Days (3 Months)</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Input
+                          className="h-8 text-sm w-full"
+                          type="time"
+                          value={editForm.deliveryTime ?? ""}
+                          onChange={e => setEditForm(f => ({ ...f, deliveryTime: e.target.value || null }))}
+                        />
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">City</label>
