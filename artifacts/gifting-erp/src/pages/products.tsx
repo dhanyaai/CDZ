@@ -42,7 +42,7 @@ const formSchema = z.object({
   gstRate: z.coerce.number().default(18),
   uom: z.string().default("PCS"),
   costPrice: z.coerce.number().min(0),
-  sellingPrice: z.coerce.number().min(0),
+  sellingPrice: z.coerce.number().min(0).default(0),
   stockLevel: z.coerce.number().min(0).default(0),
   lowStockThreshold: z.coerce.number().min(0).default(10),
   reorderQty: z.coerce.number().min(0).default(0),
@@ -765,14 +765,9 @@ export function Products() {
                 )} />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={form.control} name="costPrice" render={({ field }) => (
-                  <FormItem><FormLabel>Cost Price ₹</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="sellingPrice" render={({ field }) => (
-                  <FormItem><FormLabel>Selling Price ₹</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-              </div>
+              <FormField control={form.control} name="costPrice" render={({ field }) => (
+                <FormItem><FormLabel>Cost Price ₹</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
 
               <div className="grid grid-cols-3 gap-4">
                 <FormField control={form.control} name="stockLevel" render={({ field }) => (
