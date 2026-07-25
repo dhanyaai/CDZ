@@ -459,7 +459,7 @@ export function Leads() {
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-10">Sl No</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Products</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Custom Products</th>
-                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-20">Qty</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Qty</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Budget (₹)</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-24">Margin (%)</th>
                       <th className="w-8"></th>
@@ -524,17 +524,29 @@ export function Leads() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Delivery Time</label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="1"
-                    placeholder="e.g. 10"
-                    value={form.deliveryTime}
-                    onChange={e => setForm({ ...form, deliveryTime: e.target.value })}
-                    className="w-full"
-                  />
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">days</span>
-                </div>
+                <Select
+                  value={form.deliveryTime || "__none__"}
+                  onValueChange={v => setForm({ ...form, deliveryTime: v === "__none__" ? "" : v })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select duration…" />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="__none__">— Not set —</SelectItem>
+                    <SelectItem value="1 Day">1 Day</SelectItem>
+                    <SelectItem value="2 Days">2 Days</SelectItem>
+                    <SelectItem value="3 Days">3 Days</SelectItem>
+                    <SelectItem value="5 Days">5 Days</SelectItem>
+                    <SelectItem value="7 Days">7 Days (1 Week)</SelectItem>
+                    <SelectItem value="10 Days">10 Days</SelectItem>
+                    <SelectItem value="14 Days">14 Days (2 Weeks)</SelectItem>
+                    <SelectItem value="21 Days">21 Days (3 Weeks)</SelectItem>
+                    <SelectItem value="30 Days">30 Days (1 Month)</SelectItem>
+                    <SelectItem value="45 Days">45 Days</SelectItem>
+                    <SelectItem value="60 Days">60 Days (2 Months)</SelectItem>
+                    <SelectItem value="90 Days">90 Days (3 Months)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">City Of Delivery</label>
@@ -693,17 +705,29 @@ export function Leads() {
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Delivery Time</label>
-                        <div className="flex items-center gap-1.5">
-                          <Input
-                            className="h-8 text-sm"
-                            type="number"
-                            min="1"
-                            placeholder="e.g. 10"
-                            value={editForm.deliveryTime ?? ""}
-                            onChange={e => setEditForm(f => ({ ...f, deliveryTime: e.target.value || null }))}
-                          />
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">days</span>
-                        </div>
+                        <Select
+                          value={editForm.deliveryTime ?? "__none__"}
+                          onValueChange={v => setEditForm(f => ({ ...f, deliveryTime: v === "__none__" ? null : v }))}
+                        >
+                          <SelectTrigger className="h-8 text-sm w-full">
+                            <SelectValue placeholder="Select duration…" />
+                          </SelectTrigger>
+                          <SelectContent position="popper">
+                            <SelectItem value="__none__">— Not set —</SelectItem>
+                            <SelectItem value="1 Day">1 Day</SelectItem>
+                            <SelectItem value="2 Days">2 Days</SelectItem>
+                            <SelectItem value="3 Days">3 Days</SelectItem>
+                            <SelectItem value="5 Days">5 Days</SelectItem>
+                            <SelectItem value="7 Days">7 Days (1 Week)</SelectItem>
+                            <SelectItem value="10 Days">10 Days</SelectItem>
+                            <SelectItem value="14 Days">14 Days (2 Weeks)</SelectItem>
+                            <SelectItem value="21 Days">21 Days (3 Weeks)</SelectItem>
+                            <SelectItem value="30 Days">30 Days (1 Month)</SelectItem>
+                            <SelectItem value="45 Days">45 Days</SelectItem>
+                            <SelectItem value="60 Days">60 Days (2 Months)</SelectItem>
+                            <SelectItem value="90 Days">90 Days (3 Months)</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">City</label>
@@ -727,7 +751,7 @@ export function Leads() {
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-8">#</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Product</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Custom</th>
-                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-14">Qty</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-24">Qty</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-20">Budget</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-16">Margin%</th>
                               <th className="w-6"></th>
@@ -981,7 +1005,7 @@ export function Leads() {
                 {(selected.deliveryTime || selected.deliveryDate || selected.branding != null) && (
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-muted/40 rounded-lg p-3">
                     {selected.branding != null && <div><span className="text-xs text-muted-foreground block">Branding</span>{selected.branding ? "Yes" : "No"}</div>}
-                    {selected.deliveryTime && <div><span className="text-xs text-muted-foreground block">Delivery Time</span>{selected.deliveryTime} days</div>}
+                    {selected.deliveryTime && <div><span className="text-xs text-muted-foreground block">Delivery Time</span>{selected.deliveryTime}</div>}
                     {selected.deliveryDate && <div><span className="text-xs text-muted-foreground block">Delivery Date</span>{new Date(selected.deliveryDate).toLocaleDateString("en-IN")}</div>}
                   </div>
                 )}
