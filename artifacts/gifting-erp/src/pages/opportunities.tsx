@@ -156,7 +156,7 @@ export function Opportunities() {
     queryFn: () => api<ShortlistedData>(`/v1/opportunities/${selected!.id}/shortlisted-products`),
     enabled: !!selected && selected.stage === "shortlisted",
   });
-  const { data: products } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products"), enabled: sampleDialog || selected?.stage === "sent_catalogue" || selected?.stage === "quotation_sent" });
+  const { data: products, isLoading: productsLoading } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products") });
   const { data: oppQuotes } = useQuery<OppQuote[], Error, OppQuote[]>({
     queryKey: ["opp-quotes", selected?.id],
     queryFn: () => api<OppQuote[]>("/v1/quotes"),
@@ -1016,8 +1016,11 @@ export function Opportunities() {
                               <span className="text-xs font-semibold text-blue-700 shrink-0">₹{Number(p.sellingPrice).toLocaleString("en-IN")}</span>
                             </label>
                           ))}
-                        {(products ?? []).length === 0 && (
+                        {productsLoading && (
                           <p className="text-xs text-muted-foreground text-center py-4">Loading products…</p>
+                        )}
+                        {!productsLoading && (products ?? []).length === 0 && (
+                          <p className="text-xs text-muted-foreground text-center py-4">No products found. Add products in the Products catalogue first.</p>
                         )}
                       </div>
                       {catalogueSelected.size > 0 && (
