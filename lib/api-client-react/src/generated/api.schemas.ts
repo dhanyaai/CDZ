@@ -164,6 +164,8 @@ export interface ProductInput {
   lowStockThreshold?: number;
   vendorId?: number;
   imageUrl?: string;
+  branding?: string;
+  transportation?: string;
 }
 
 export interface ProductUpdate {
@@ -175,6 +177,8 @@ export interface ProductUpdate {
   lowStockThreshold?: number;
   vendorId?: number;
   imageUrl?: string;
+  branding?: string;
+  transportation?: string;
 }
 
 export interface BundleItem {

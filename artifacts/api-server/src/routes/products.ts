@@ -25,6 +25,8 @@ function serializeProduct(p: typeof productsTable.$inferSelect, vendorName?: str
     isPerishable: p.isPerishable,
     shelfLifeDays: p.shelfLifeDays ?? null,
     brandable: p.brandable,
+    branding: p.branding ?? null,
+    transportation: p.transportation ?? null,
     isPackaging: p.isPackaging,
     barcode: p.barcode ?? null,
     vendorId: p.vendorId ?? null,
@@ -60,6 +62,7 @@ router.post("/v1/products", async (req, res): Promise<void> => {
     stockLevel, lowStockThreshold, reorderQty,
     vendorId, imageUrl, brand, productType,
     hsnCode, gstRate, uom, isPerishable, shelfLifeDays, brandable,
+    branding, transportation,
     isPackaging, barcode,
   } = req.body ?? {};
 
@@ -88,6 +91,8 @@ router.post("/v1/products", async (req, res): Promise<void> => {
       isPerishable: isPerishable ?? false,
       shelfLifeDays: shelfLifeDays ?? null,
       brandable: brandable ?? false,
+      branding: branding ?? null,
+      transportation: transportation ?? null,
       isPackaging: isPackaging ?? false,
       barcode: barcode ?? null,
       vendorId: vendorId ?? null,
@@ -204,7 +209,7 @@ router.patch("/v1/products/:id", async (req, res): Promise<void> => {
   const fields: string[] = [
     "name", "sku", "brand", "productType", "category",
     "hsnCode", "uom", "vendorId", "imageUrl",
-    "isPerishable", "brandable", "isPackaging", "barcode",
+    "isPerishable", "brandable", "branding", "transportation", "isPackaging", "barcode",
   ];
   for (const f of fields) {
     if ((req.body as Record<string, unknown>)[f] != null) updates[f] = (req.body as Record<string, unknown>)[f];

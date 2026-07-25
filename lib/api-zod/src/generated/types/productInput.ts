@@ -15,4 +15,6 @@ export interface ProductInput {
   lowStockThreshold?: number;
   vendorId?: number;
   imageUrl?: string;
+  branding?: string;
+  transportation?: string;
 }

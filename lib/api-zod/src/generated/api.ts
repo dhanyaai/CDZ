@@ -261,7 +261,9 @@ export const CreateProductBody = zod.object({
   "stockLevel": zod.number().optional(),
   "lowStockThreshold": zod.number().optional(),
   "vendorId": zod.number().optional(),
-  "imageUrl": zod.string().optional()
+  "imageUrl": zod.string().optional(),
+  "branding": zod.string().optional(),
+  "transportation": zod.string().optional()
 })
 
 
@@ -296,7 +298,9 @@ export const UpdateProductBody = zod.object({
   "stockLevel": zod.number().optional(),
   "lowStockThreshold": zod.number().optional(),
   "vendorId": zod.number().optional(),
-  "imageUrl": zod.string().optional()
+  "imageUrl": zod.string().optional(),
+  "branding": zod.string().optional(),
+  "transportation": zod.string().optional()
 })
 
 export const UpdateProductResponse = zod.object({
