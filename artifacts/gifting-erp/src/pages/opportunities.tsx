@@ -26,7 +26,8 @@ type Opportunity = {
 };
 type Lead = { id: number; title: string; companyName: string | null };
 type User = { id: number; name: string; role: string };
-type Product = { id: number; name: string; sku: string | null; brand: string | null; category: string; sellingPrice: string | number; imageUrl: string | null; brandable: boolean; stockLevel: number };
+type Product = { id: number; name: string; sku: string | null; brand: string | null; category: string; costPrice: number; sellingPrice: string | number; imageUrl: string | null; brandable: boolean; stockLevel: number; branding: number | null; transportation: number | null };
+type LeadItem = { id: number; productName: string | null; category: string | null; transportation: number | null; margin: number | null };
 type SampleOrderItem = { id: number; productId: number; productName: string; quantity: number; returnedQty: number; disposition: "gift" | "invoice" | null; notes: string | null };
 type SampleOrderSummary = { id: number; sampleNumber: string; status: string; notes: string | null; createdAt: string; items: SampleOrderItem[] };
 type SampleOrderDetail = SampleOrderSummary & {
@@ -93,6 +94,16 @@ const MAIN_FLOW = STAGES.filter(s => s !== "lost");
 
 const BLANK_FORM = { title: "", clientId: "", leadId: "", value: "", probability: "50", expectedCloseDate: "", ownerId: "", notes: "" };
 
+function calcCataloguePrice(product: Product, leadItems: LeadItem[] | undefined): number {
+  const base = product.costPrice + (product.transportation ?? 0) + (product.branding ?? 0);
+  // Match lead item by exact product name first, then by category
+  const item = leadItems?.find(i => i.productName && product.name && i.productName.toLowerCase() === product.name.toLowerCase())
+    ?? leadItems?.find(i => i.category && product.category && i.category.toLowerCase() === product.category.toLowerCase());
+  const transport = item?.transportation ?? 0;
+  const margin = item?.margin ?? 0;
+  return Math.round((base + transport) * (1 + margin / 100));
+}
+
 export function Opportunities() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -157,6 +168,11 @@ export function Opportunities() {
     enabled: !!selected && selected.stage === "shortlisted",
   });
   const { data: products, isLoading: productsLoading } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products") });
+  const { data: leadItems } = useQuery<LeadItem[]>({
+    queryKey: ["lead-items-catalogue", selected?.leadId],
+    queryFn: () => api<LeadItem[]>(`/v1/leads/${selected!.leadId}/items`),
+    enabled: !!selected?.leadId && selected.stage === "sent_catalogue",
+  });
   const { data: oppQuotes } = useQuery<OppQuote[], Error, OppQuote[]>({
     queryKey: ["opp-quotes", selected?.id],
     queryFn: () => api<OppQuote[]>("/v1/quotes"),
@@ -1013,7 +1029,7 @@ export function Opportunities() {
                                 <div className="text-xs font-medium truncate">{p.name}</div>
                                 <div className="text-xs text-muted-foreground">{p.category}{p.brand ? ` · ${p.brand}` : ""}</div>
                               </div>
-                              <span className="text-xs font-semibold text-blue-700 shrink-0">₹{Number(p.sellingPrice).toLocaleString("en-IN")}</span>
+                              <span className="text-xs font-semibold text-blue-700 shrink-0">₹{calcCataloguePrice(p, leadItems).toLocaleString("en-IN")}</span>
                             </label>
                           ))}
                         {productsLoading && (

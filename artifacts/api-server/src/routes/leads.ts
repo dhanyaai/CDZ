@@ -101,6 +101,7 @@ router.get("/v1/leads/:id/items", async (req, res): Promise<void> => {
   res.json(items.map(i => ({
     ...i,
     budget: i.budget ? Number(i.budget) : null,
+    transportation: i.transportation ? Number(i.transportation) : null,
     margin: i.margin ? Number(i.margin) : null,
     createdAt: i.createdAt.toISOString(),
   })));
@@ -111,14 +112,18 @@ router.post("/v1/leads/:id/items", async (req, res): Promise<void> => {
   const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
     .where(and(eq(leadsTable.id, leadId), eq(leadsTable.companyId, req.companyId)));
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
-  const { slNo, productName, customProduct, qty, budget, margin } = req.body ?? {};
+  const { slNo, productName, customProduct, qty, category, budget, transportation, margin } = req.body ?? {};
   const toNum = (v: unknown) => v != null && v !== "" ? Number(v) : null;
   const [item] = await db.insert(leadItemsTable).values({
     leadId, slNo: slNo ?? 1,
     productName: productName || null, customProduct: customProduct || null,
-    qty: toNum(qty), budget: toNum(budget) != null ? String(toNum(budget)) : null, margin: toNum(margin) != null ? String(toNum(margin)) : null,
+    qty: toNum(qty),
+    category: category || null,
+    budget: toNum(budget) != null ? String(toNum(budget)) : null,
+    transportation: toNum(transportation) != null ? String(toNum(transportation)) : null,
+    margin: toNum(margin) != null ? String(toNum(margin)) : null,
   }).returning();
-  res.status(201).json({ ...item, budget: item.budget ? Number(item.budget) : null, margin: item.margin ? Number(item.margin) : null, createdAt: item.createdAt.toISOString() });
+  res.status(201).json({ ...item, budget: item.budget ? Number(item.budget) : null, transportation: item.transportation ? Number(item.transportation) : null, margin: item.margin ? Number(item.margin) : null, createdAt: item.createdAt.toISOString() });
 });
 
 router.delete("/v1/leads/:id/items", async (req, res): Promise<void> => {

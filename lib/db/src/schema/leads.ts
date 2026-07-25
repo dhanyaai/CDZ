@@ -55,7 +55,9 @@ export const leadItemsTable = pgTable("lead_items", {
   productName: text("product_name"),
   customProduct: text("custom_product"),
   qty: integer("qty"),
+  category: text("category"),
   budget: numeric("budget", { precision: 12, scale: 2 }),
+  transportation: numeric("transportation", { precision: 12, scale: 2 }),
   margin: numeric("margin", { precision: 5, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
