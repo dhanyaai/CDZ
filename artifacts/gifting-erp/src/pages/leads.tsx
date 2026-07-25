@@ -22,8 +22,8 @@ type LeadItem = {
   qty: number | null; budget: number | null; margin: number | null;
   createdAt: string;
 };
-type FormItem = { tempId: string; category: string; productName: string; customProduct: string; qty: string; budget: string; margin: string; };
-const blankItem = (): FormItem => ({ tempId: Math.random().toString(36).slice(2), category: "", productName: "", customProduct: "", qty: "", budget: "", margin: "" });
+type FormItem = { tempId: string; category: string; productName: string; customProduct: string; qty: string; budget: string; transportation: string; margin: string; };
+const blankItem = (): FormItem => ({ tempId: Math.random().toString(36).slice(2), category: "", productName: "", customProduct: "", qty: "", budget: "", transportation: "", margin: "" });
 
 type LeadHistory = {
   opportunities: { id: number; title: string; stage: string; value: number | null; createdAt: string }[];
@@ -140,6 +140,7 @@ export function Leads() {
             customProduct: item.customProduct || null,
             qty: item.qty ? Number(item.qty) : null,
             budget: item.budget ? Number(item.budget) : null,
+            transportation: item.transportation ? Number(item.transportation) : null,
             margin: item.margin ? Number(item.margin) : null,
           }),
         });
@@ -154,7 +155,7 @@ export function Leads() {
     mutationFn: async ({ id, data, items }: { id: number; data: Partial<Lead>; items: FormItem[] }) => {
       const lead = await api<Lead>(`/v1/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) });
       await api(`/v1/leads/${id}/items`, { method: "DELETE" });
-      const validItems = items.filter(i => i.productName || i.customProduct || i.qty || i.budget || i.margin);
+      const validItems = items.filter(i => i.productName || i.customProduct || i.qty || i.budget || i.transportation || i.margin);
       for (let idx = 0; idx < validItems.length; idx++) {
         const item = validItems[idx];
         await api(`/v1/leads/${id}/items`, {
@@ -164,6 +165,7 @@ export function Leads() {
             customProduct: item.customProduct || null,
             qty: item.qty ? Number(item.qty) : null,
             budget: item.budget ? Number(item.budget) : null,
+            transportation: item.transportation ? Number(item.transportation) : null,
             margin: item.margin ? Number(item.margin) : null,
           }),
         });
@@ -462,6 +464,7 @@ export function Leads() {
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Custom Products</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Qty</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Budget (₹)</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Transport (₹)</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-24">Margin (%)</th>
                       <th className="w-8"></th>
                     </tr>
@@ -499,6 +502,10 @@ export function Leads() {
                         <td className="px-2 py-1.5">
                           <Input className="h-7 text-xs" type="number" placeholder="0" value={item.budget}
                             onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, budget: e.target.value } : i))} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input className="h-7 text-xs" type="number" placeholder="0" value={item.transportation}
+                            onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, transportation: e.target.value } : i))} />
                         </td>
                         <td className="px-2 py-1.5">
                           <Input className="h-7 text-xs" type="number" placeholder="0" value={item.margin}
@@ -577,6 +584,7 @@ export function Leads() {
                             customProduct: item.customProduct ?? "",
                             qty: item.qty != null ? String(item.qty) : "",
                             budget: item.budget != null ? String(item.budget) : "",
+                            transportation: (item as any).transportation != null ? String((item as any).transportation) : "",
                             margin: item.margin != null ? String(item.margin) : "",
                           };
                         }));
@@ -734,6 +742,7 @@ export function Leads() {
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Custom</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-24">Qty</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-20">Budget</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-20">Transport</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-16">Margin%</th>
                               <th className="w-6"></th>
                             </tr>
@@ -771,6 +780,10 @@ export function Leads() {
                                 <td className="px-1 py-1">
                                   <Input className="h-6 text-xs" type="number" placeholder="0" value={item.budget}
                                     onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, budget: e.target.value } : i))} />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <Input className="h-6 text-xs" type="number" placeholder="0" value={item.transportation}
+                                    onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, transportation: e.target.value } : i))} />
                                 </td>
                                 <td className="px-1 py-1">
                                   <Input className="h-6 text-xs" type="number" placeholder="0" value={item.margin}
