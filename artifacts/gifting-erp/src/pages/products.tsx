@@ -47,8 +47,8 @@ const formSchema = z.object({
   lowStockThreshold: z.coerce.number().min(0).default(10),
   reorderQty: z.coerce.number().min(0).default(0),
   brandable: z.boolean().default(false),
-  branding: z.string().optional(),
-  transportation: z.string().optional(),
+  branding: z.coerce.number().min(0).optional(),
+  transportation: z.coerce.number().min(0).optional(),
   vendorId: z.coerce.number().optional().nullable(),
   imageUrl: z.string().optional(),
 });
@@ -60,7 +60,7 @@ const EMPTY_FORM: FormValues = {
   hsnCode: "", gstRate: 18, uom: "PCS",
   costPrice: 0, sellingPrice: 0, stockLevel: 0, lowStockThreshold: 10,
   reorderQty: 0, brandable: false,
-  branding: "", transportation: "",
+  branding: undefined, transportation: undefined,
   vendorId: null, imageUrl: "",
 };
 
@@ -324,8 +324,8 @@ export function Products() {
       lowStockThreshold: product.lowStockThreshold ?? 10,
       reorderQty: product.reorderQty ?? 0,
       brandable: product.brandable ?? false,
-      branding: (product as any).branding || "",
-      transportation: (product as any).transportation || "",
+      branding: (product as any).branding ?? undefined,
+      transportation: (product as any).transportation ?? undefined,
       vendorId: product.vendorId,
       imageUrl: product.imageUrl || "",
     });
@@ -363,8 +363,8 @@ export function Products() {
       ...data,
       brand: data.brand || undefined,
       productType: data.productType || undefined,
-      branding: data.branding || undefined,
-      transportation: data.transportation || undefined,
+      branding: data.branding ?? undefined,
+      transportation: data.transportation ?? undefined,
       vendorId: data.vendorId || undefined,
       imageUrl: data.imageUrl || undefined,
     };
@@ -800,10 +800,10 @@ export function Products() {
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="branding" render={({ field }) => (
-                  <FormItem><FormLabel>Branding</FormLabel><FormControl><Input placeholder="e.g. Screen Print, Emboss" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Branding Cost (₹)</FormLabel><FormControl><Input type="number" step="0.01" min="0" placeholder="0" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="transportation" render={({ field }) => (
-                  <FormItem><FormLabel>Transportation</FormLabel><FormControl><Input placeholder="e.g. Air, Road, Courier" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Transportation Cost (₹)</FormLabel><FormControl><Input type="number" step="0.01" min="0" placeholder="0" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
 

@@ -1414,8 +1414,8 @@ components:
         lowStockThreshold: { type: integer }
         vendorId: { type: integer }
         imageUrl: { type: string }
-        branding: { type: string }
-        transportation: { type: string }
+        branding: { type: number }
+        transportation: { type: number }
 
     ProductUpdate:
       type: object
@@ -1428,8 +1428,8 @@ components:
         lowStockThreshold: { type: integer }
         vendorId: { type: integer }
         imageUrl: { type: string }
-        branding: { type: string }
-        transportation: { type: string }
+        branding: { type: number }
+        transportation: { type: number }
 
     # ── Bundles ──
     BundleItem:
