@@ -22,8 +22,8 @@ type LeadItem = {
   qty: number | null; budget: number | null; margin: number | null;
   createdAt: string;
 };
-type FormItem = { tempId: string; productName: string; customProduct: string; qty: string; budget: string; margin: string; };
-const blankItem = (): FormItem => ({ tempId: Math.random().toString(36).slice(2), productName: "", customProduct: "", qty: "", budget: "", margin: "" });
+type FormItem = { tempId: string; category: string; productName: string; customProduct: string; qty: string; budget: string; margin: string; };
+const blankItem = (): FormItem => ({ tempId: Math.random().toString(36).slice(2), category: "", productName: "", customProduct: "", qty: "", budget: "", margin: "" });
 
 type LeadHistory = {
   opportunities: { id: number; title: string; stage: string; value: number | null; createdAt: string }[];
@@ -457,6 +457,7 @@ export function Leads() {
                   <thead className="bg-muted/50">
                     <tr>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-10">Sl No</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-32">Category</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Products</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Custom Products</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Qty</th>
@@ -470,11 +471,20 @@ export function Leads() {
                       <tr key={item.tempId} className="border-t">
                         <td className="px-3 py-1.5 text-xs text-muted-foreground">{idx + 1}</td>
                         <td className="px-2 py-1.5">
+                          <Select value={item.category || "__none__"} onValueChange={v => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, category: v === "__none__" ? "" : v, productName: "" } : i))}>
+                            <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Category…" /></SelectTrigger>
+                            <SelectContent position="popper" className="max-h-60">
+                              <SelectItem value="__none__">— All —</SelectItem>
+                              {Array.from(new Set(productList?.map(p => p.category).filter(Boolean))).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-2 py-1.5">
                           <Select value={item.productName || "__none__"} onValueChange={v => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, productName: v === "__none__" ? "" : v } : i))}>
                             <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
                             <SelectContent position="popper" className="max-h-60">
                               <SelectItem value="__none__">— None —</SelectItem>
-                              {productList?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                              {(item.category ? productList?.filter(p => p.category === item.category) : productList)?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </td>
@@ -558,14 +568,18 @@ export function Leads() {
                     <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs px-3 mt-0.5"
                       onClick={() => {
                         setEditForm({ ...selected });
-                        setEditItems((leadItems ?? []).map(item => ({
-                          tempId: String(item.id),
-                          productName: item.productName ?? "",
-                          customProduct: item.customProduct ?? "",
-                          qty: item.qty != null ? String(item.qty) : "",
-                          budget: item.budget != null ? String(item.budget) : "",
-                          margin: item.margin != null ? String(item.margin) : "",
-                        })));
+                        setEditItems((leadItems ?? []).map(item => {
+                          const cat = productList?.find(p => p.name === (item.productName ?? ""))?.category ?? "";
+                          return {
+                            tempId: String(item.id),
+                            category: cat,
+                            productName: item.productName ?? "",
+                            customProduct: item.customProduct ?? "",
+                            qty: item.qty != null ? String(item.qty) : "",
+                            budget: item.budget != null ? String(item.budget) : "",
+                            margin: item.margin != null ? String(item.margin) : "",
+                          };
+                        }));
                         setEditMode(true);
                       }}>
                       Edit Lead
@@ -715,6 +729,7 @@ export function Leads() {
                           <thead className="bg-muted/50">
                             <tr>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-8">#</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-28">Category</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Product</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Custom</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-24">Qty</th>
@@ -728,11 +743,20 @@ export function Leads() {
                               <tr key={item.tempId} className="border-t">
                                 <td className="px-2 py-1 text-muted-foreground">{idx + 1}</td>
                                 <td className="px-1 py-1">
+                                  <Select value={item.category || "__none__"} onValueChange={v => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, category: v === "__none__" ? "" : v, productName: "" } : i))}>
+                                    <SelectTrigger className="h-6 text-xs"><SelectValue placeholder="Category…" /></SelectTrigger>
+                                    <SelectContent position="popper" className="max-h-52">
+                                      <SelectItem value="__none__">— All —</SelectItem>
+                                      {Array.from(new Set(productList?.map(p => p.category).filter(Boolean))).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <td className="px-1 py-1">
                                   <Select value={item.productName || "__none__"} onValueChange={v => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, productName: v === "__none__" ? "" : v } : i))}>
                                     <SelectTrigger className="h-6 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
                                     <SelectContent position="popper" className="max-h-52">
                                       <SelectItem value="__none__">— None —</SelectItem>
-                                      {productList?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                                      {(item.category ? productList?.filter(p => p.category === item.category) : productList)?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
                                     </SelectContent>
                                   </Select>
                                 </td>
