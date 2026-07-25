@@ -20,10 +20,11 @@ type LeadItem = {
   id: number; leadId: number; slNo: number;
   productName: string | null; customProduct: string | null;
   qty: number | null; budget: number | null; margin: number | null;
+  transportationPrice: number | null; brandingPrice: number | null;
   createdAt: string;
 };
-type FormItem = { tempId: string; productName: string; customProduct: string; qty: string; budget: string; margin: string; };
-const blankItem = (): FormItem => ({ tempId: Math.random().toString(36).slice(2), productName: "", customProduct: "", qty: "", budget: "", margin: "" });
+type FormItem = { tempId: string; productName: string; customProduct: string; qty: string; budget: string; margin: string; transportationPrice: string; brandingPrice: string; };
+const blankItem = (): FormItem => ({ tempId: Math.random().toString(36).slice(2), productName: "", customProduct: "", qty: "", budget: "", margin: "", transportationPrice: "", brandingPrice: "" });
 
 type LeadHistory = {
   opportunities: { id: number; title: string; stage: string; value: number | null; createdAt: string }[];
@@ -141,6 +142,8 @@ export function Leads() {
             qty: item.qty ? Number(item.qty) : null,
             budget: item.budget ? Number(item.budget) : null,
             margin: item.margin ? Number(item.margin) : null,
+            transportationPrice: item.transportationPrice ? Number(item.transportationPrice) : null,
+            brandingPrice: item.brandingPrice ? Number(item.brandingPrice) : null,
           }),
         });
       }
@@ -165,6 +168,8 @@ export function Leads() {
             qty: item.qty ? Number(item.qty) : null,
             budget: item.budget ? Number(item.budget) : null,
             margin: item.margin ? Number(item.margin) : null,
+            transportationPrice: item.transportationPrice ? Number(item.transportationPrice) : null,
+            brandingPrice: item.brandingPrice ? Number(item.brandingPrice) : null,
           }),
         });
       }
@@ -462,6 +467,8 @@ export function Leads() {
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Qty</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Budget (₹)</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-24">Margin (%)</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Transport (₹)</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Branding (₹)</th>
                       <th className="w-8"></th>
                     </tr>
                   </thead>
@@ -493,6 +500,14 @@ export function Leads() {
                         <td className="px-2 py-1.5">
                           <Input className="h-7 text-xs" type="number" placeholder="0" value={item.margin}
                             onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, margin: e.target.value } : i))} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input className="h-7 text-xs" type="number" placeholder="0" value={item.transportationPrice}
+                            onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, transportationPrice: e.target.value } : i))} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input className="h-7 text-xs" type="number" placeholder="0" value={item.brandingPrice}
+                            onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, brandingPrice: e.target.value } : i))} />
                         </td>
                         <td className="px-2 py-1.5">
                           <button type="button" onClick={() => setFormItems(prev => prev.filter(i => i.tempId !== item.tempId))}
@@ -565,6 +580,8 @@ export function Leads() {
                           qty: item.qty != null ? String(item.qty) : "",
                           budget: item.budget != null ? String(item.budget) : "",
                           margin: item.margin != null ? String(item.margin) : "",
+                          transportationPrice: item.transportationPrice != null ? String(item.transportationPrice) : "",
+                          brandingPrice: item.brandingPrice != null ? String(item.brandingPrice) : "",
                         })));
                         setEditMode(true);
                       }}>
@@ -720,6 +737,8 @@ export function Leads() {
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-24">Qty</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-20">Budget</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-16">Margin%</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-24">Transport (₹)</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-24">Branding (₹)</th>
                               <th className="w-6"></th>
                             </tr>
                           </thead>
@@ -751,6 +770,14 @@ export function Leads() {
                                 <td className="px-1 py-1">
                                   <Input className="h-6 text-xs" type="number" placeholder="0" value={item.margin}
                                     onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, margin: e.target.value } : i))} />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <Input className="h-6 text-xs" type="number" placeholder="0" value={item.transportationPrice}
+                                    onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, transportationPrice: e.target.value } : i))} />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <Input className="h-6 text-xs" type="number" placeholder="0" value={item.brandingPrice}
+                                    onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, brandingPrice: e.target.value } : i))} />
                                 </td>
                                 <td className="px-1 py-1">
                                   <button type="button" onClick={() => setEditItems(prev => prev.filter(i => i.tempId !== item.tempId))}
@@ -990,6 +1017,8 @@ export function Leads() {
                             <th className="text-right px-2 py-1.5 font-medium text-muted-foreground w-14">Qty</th>
                             <th className="text-right px-2 py-1.5 font-medium text-muted-foreground w-20">Budget</th>
                             <th className="text-right px-2 py-1.5 font-medium text-muted-foreground w-16">Margin</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-muted-foreground w-24">Transport (₹)</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-muted-foreground w-24">Branding (₹)</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1001,6 +1030,8 @@ export function Leads() {
                               <td className="px-2 py-1.5 text-right">{item.qty ?? "—"}</td>
                               <td className="px-2 py-1.5 text-right">{item.budget != null ? `₹${item.budget.toLocaleString("en-IN")}` : "—"}</td>
                               <td className="px-2 py-1.5 text-right">{item.margin != null ? `${item.margin}%` : "—"}</td>
+                              <td className="px-2 py-1.5 text-right">{item.transportationPrice != null ? `₹${item.transportationPrice.toLocaleString("en-IN")}` : "—"}</td>
+                              <td className="px-2 py-1.5 text-right">{item.brandingPrice != null ? `₹${item.brandingPrice.toLocaleString("en-IN")}` : "—"}</td>
                             </tr>
                           ))}
                         </tbody>

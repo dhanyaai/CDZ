@@ -102,6 +102,8 @@ router.get("/v1/leads/:id/items", async (req, res): Promise<void> => {
     ...i,
     budget: i.budget ? Number(i.budget) : null,
     margin: i.margin ? Number(i.margin) : null,
+    transportationPrice: i.transportationPrice ? Number(i.transportationPrice) : null,
+    brandingPrice: i.brandingPrice ? Number(i.brandingPrice) : null,
     createdAt: i.createdAt.toISOString(),
   })));
 });
@@ -111,14 +113,23 @@ router.post("/v1/leads/:id/items", async (req, res): Promise<void> => {
   const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
     .where(and(eq(leadsTable.id, leadId), eq(leadsTable.companyId, req.companyId)));
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
-  const { slNo, productName, customProduct, qty, budget, margin } = req.body ?? {};
+  const { slNo, productName, customProduct, qty, budget, margin, transportationPrice, brandingPrice } = req.body ?? {};
   const toNum = (v: unknown) => v != null && v !== "" ? Number(v) : null;
+  const toStr = (v: unknown) => toNum(v) != null ? String(toNum(v)) : null;
   const [item] = await db.insert(leadItemsTable).values({
     leadId, slNo: slNo ?? 1,
     productName: productName || null, customProduct: customProduct || null,
-    qty: toNum(qty), budget: toNum(budget) != null ? String(toNum(budget)) : null, margin: toNum(margin) != null ? String(toNum(margin)) : null,
+    qty: toNum(qty), budget: toStr(budget), margin: toStr(margin),
+    transportationPrice: toStr(transportationPrice), brandingPrice: toStr(brandingPrice),
   }).returning();
-  res.status(201).json({ ...item, budget: item.budget ? Number(item.budget) : null, margin: item.margin ? Number(item.margin) : null, createdAt: item.createdAt.toISOString() });
+  res.status(201).json({
+    ...item,
+    budget: item.budget ? Number(item.budget) : null,
+    margin: item.margin ? Number(item.margin) : null,
+    transportationPrice: item.transportationPrice ? Number(item.transportationPrice) : null,
+    brandingPrice: item.brandingPrice ? Number(item.brandingPrice) : null,
+    createdAt: item.createdAt.toISOString(),
+  });
 });
 
 router.delete("/v1/leads/:id/items", async (req, res): Promise<void> => {
