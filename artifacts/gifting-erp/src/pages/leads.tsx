@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 type LeadItem = {
   id: number; leadId: number; slNo: number;
   productName: string | null; customProduct: string | null;
+  category: string | null; transportation: number | null;
   qty: number | null; budget: number | null; margin: number | null;
   createdAt: string;
 };
@@ -578,10 +579,9 @@ export function Leads() {
                       onClick={() => {
                         setEditForm({ ...selected });
                         setEditItems((leadItems ?? []).map(item => {
-                          const cat = productList?.find(p => p.name === (item.productName ?? ""))?.category ?? "";
                           return {
                             tempId: String(item.id),
-                            category: cat,
+                            category: item.category ?? "",
                             productName: item.productName ?? "",
                             customProduct: item.customProduct ?? "",
                             qty: item.qty != null ? String(item.qty) : "",
