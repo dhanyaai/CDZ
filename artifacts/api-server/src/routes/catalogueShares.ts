@@ -283,6 +283,15 @@ router.post("/v1/opportunities/:id/create-sample-from-shortlist", async (req, re
     return;
   }
 
+  // Optional subset — the salesperson may tick only some shortlisted products for sampling
+  const requestedRaw = (req.body ?? {}).productIds;
+  const requested: number[] | null = Array.isArray(requestedRaw) ? requestedRaw.map(Number).filter(Number.isInteger) : null;
+  const sampleIds = requested ? selectedIds.filter(id => requested.includes(id)) : selectedIds;
+  if (sampleIds.length === 0) {
+    res.status(400).json({ error: "None of the picked products are in the shortlist" });
+    return;
+  }
+
   const [opp] = await db.select().from(opportunitiesTable)
     .where(and(eq(opportunitiesTable.id, oppId), eq(opportunitiesTable.companyId, req.companyId)));
   if (!opp) { res.status(404).json({ error: "Opportunity not found" }); return; }
@@ -303,7 +312,7 @@ router.post("/v1/opportunities/:id/create-sample-from-shortlist", async (req, re
     .where(eq(sampleOrdersTable.id, order.id));
 
   await db.insert(sampleOrderItemsTable).values(
-    selectedIds.map(pid => ({ sampleOrderId: order.id, productId: pid, quantity: 1 }))
+    sampleIds.map(pid => ({ sampleOrderId: order.id, productId: pid, quantity: 1 }))
   );
 
   // Advance opportunity to "samples"

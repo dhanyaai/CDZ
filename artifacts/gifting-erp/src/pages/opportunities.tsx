@@ -128,6 +128,8 @@ export function Opportunities() {
   // null = all products selected (default); a Set = explicit user selection
   const [catalogueSelected, setCatalogueSelected] = useState<Set<number> | null>(null);
   const [creatingFromShortlist, setCreatingFromShortlist] = useState(false);
+  // Ticked products for "Create Sample Order from Shortlist" (null = all ticked)
+  const [shortlistPicked, setShortlistPicked] = useState<Set<number> | null>(null);
   const [printingQuoteId, setPrintingQuoteId] = useState<number | null>(null);
   const [advShowForm, setAdvShowForm] = useState(false);
   const [advForm, setAdvForm] = useState({ amount: "", paymentMode: "", referenceNo: "", receiptDate: new Date().toISOString().slice(0, 10), notes: "" });
@@ -171,6 +173,19 @@ export function Opportunities() {
     // samples stage also shows the shortlist (with Convert to Quote)
     enabled: !!selected && (selected.stage === "shortlisted" || selected.stage === "samples"),
   });
+  const toggleShortlistPick = (id: number) => {
+    setShortlistPicked(prev => {
+      const all = shortlistedData?.products.map(p => p.id) ?? [];
+      const cur = prev === null ? new Set(all) : new Set(prev);
+      if (cur.has(id)) cur.delete(id); else cur.add(id);
+      return cur;
+    });
+  };
+  const shortlistPickedCount = shortlistedData
+    ? (shortlistPicked === null
+        ? shortlistedData.products.length
+        : shortlistedData.products.filter(p => shortlistPicked.has(p.id)).length)
+    : 0;
   const { data: products, isLoading: productsLoading } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products") });
   const { data: leadItems, isLoading: leadItemsLoading } = useQuery<LeadItem[]>({
     queryKey: ["lead-items-catalogue", selected?.leadId],
@@ -230,6 +245,7 @@ export function Opportunities() {
     setShareUrls({});
     setShareCopiedCat(null);
     setShareLoadingCat(null);
+    setShortlistPicked(null);
   }, [selected?.id]);
 
   // Auto-select catalogue type from the lead items' dominant category
@@ -1236,7 +1252,7 @@ export function Opportunities() {
                       <span className="text-base">📋</span>
                       <span className="text-sm font-semibold text-amber-700">Customer Shortlist</span>
                       {shortlistedData && shortlistedData.products.length > 0 && (
-                        <span className="ml-auto text-xs text-amber-600 font-medium">{shortlistedData.products.length} product{shortlistedData.products.length !== 1 ? "s" : ""} selected</span>
+                        <span className="ml-auto text-xs text-amber-600 font-medium">{shortlistPickedCount} of {shortlistedData.products.length} selected</span>
                       )}
                     </div>
                     {!shortlistedData || shortlistedData.products.length === 0 ? (
@@ -1251,30 +1267,41 @@ export function Opportunities() {
                             Catalogue: {shortlistedData.catalogueType}
                           </p>
                         )}
+                        <p className="text-xs text-muted-foreground">Tick the products to include in the sample order:</p>
                         <div className="border rounded-lg bg-background divide-y max-h-60 overflow-y-auto">
-                          {shortlistedData.products.map(p => (
-                            <div key={p.id} className="flex items-center gap-2.5 px-3 py-2">
-                              {p.imageUrl
-                                ? <img src={p.imageUrl} className="w-8 h-8 rounded object-cover border shrink-0" />
-                                : <div className="w-8 h-8 rounded bg-amber-100 flex items-center justify-center shrink-0 text-base">🎁</div>
-                              }
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs font-medium truncate">{p.name}</div>
-                                <div className="text-xs text-muted-foreground">{p.category}</div>
+                          {shortlistedData.products.map(p => {
+                            const checked = shortlistPicked === null || shortlistPicked.has(p.id);
+                            return (
+                              <div key={p.id}
+                                className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer select-none transition-colors hover:bg-amber-50/60 ${checked ? "" : "opacity-50"}`}
+                                onClick={() => toggleShortlistPick(p.id)}>
+                                <input type="checkbox" checked={checked} readOnly
+                                  className="w-3.5 h-3.5 accent-amber-600 pointer-events-none shrink-0" />
+                                {p.imageUrl
+                                  ? <img src={p.imageUrl} className="w-8 h-8 rounded object-cover border shrink-0" />
+                                  : <div className="w-8 h-8 rounded bg-amber-100 flex items-center justify-center shrink-0 text-base">🎁</div>
+                                }
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs font-medium truncate">{p.name}</div>
+                                  <div className="text-xs text-muted-foreground">{p.category}</div>
+                                </div>
+                                <span className="text-xs font-semibold text-blue-700 shrink-0">₹{Number(p.price ?? p.sellingPrice).toLocaleString("en-IN")}</span>
                               </div>
-                              <span className="text-xs font-semibold text-blue-700 shrink-0">₹{Number(p.price ?? p.sellingPrice).toLocaleString("en-IN")}</span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                         <Button
                           className="w-full bg-amber-600 hover:bg-amber-700 text-white h-9 text-sm"
-                          disabled={creatingFromShortlist}
+                          disabled={creatingFromShortlist || shortlistPickedCount === 0}
                           onClick={async () => {
                             if (!selected) return;
+                            const allIds = shortlistedData.products.map(p => p.id);
+                            const pickedIds = shortlistPicked === null ? allIds : allIds.filter(id => shortlistPicked.has(id));
+                            if (pickedIds.length === 0) return;
                             setCreatingFromShortlist(true);
                             try {
-                              await api(`/v1/opportunities/${selected.id}/create-sample-from-shortlist`, { method: "POST" });
-                              toast({ title: "Sample order created", description: "The opportunity has moved to the Samples stage." });
+                              await api(`/v1/opportunities/${selected.id}/create-sample-from-shortlist`, { method: "POST", body: JSON.stringify({ productIds: pickedIds }) });
+                              toast({ title: "Sample order created", description: `${pickedIds.length} product${pickedIds.length !== 1 ? "s" : ""} included — moved to the Samples stage.` });
                               setSelected({ ...selected, stage: "samples" });
                               void refetchShortlisted();
                             } catch {
@@ -1285,7 +1312,7 @@ export function Opportunities() {
                           }}
                         >
                           <FlaskConical className="w-3.5 h-3.5 mr-1.5" />
-                          {creatingFromShortlist ? "Creating…" : "Create Sample Order from Shortlist"}
+                          {creatingFromShortlist ? "Creating…" : shortlistPickedCount === 0 ? "Tick at least one product" : `Create Sample Order (${shortlistPickedCount} of ${shortlistedData.products.length})`}
                         </Button>
                       </>
                     )}
