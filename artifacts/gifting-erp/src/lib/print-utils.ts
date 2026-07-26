@@ -995,6 +995,8 @@ export function printCatalogue(opts: {
     brand?: string | null;
     category: string;
     sellingPrice: string | number;
+    /** Final calculated price (cost + transport + branding + margin) — overrides sellingPrice in the PDF */
+    displayPrice?: string | number;
     imageUrl?: string | null;
     brandable?: boolean;
   }>;
@@ -1023,7 +1025,7 @@ export function printCatalogue(opts: {
       <div class="cat-body">
         <div class="cat-name">${p.name}</div>
         <div class="cat-cat">${p.category}</div>
-        <div class="cat-price">₹${Number(p.sellingPrice).toLocaleString("en-IN")}</div>
+        <div class="cat-price">₹${Number(p.displayPrice ?? p.sellingPrice).toLocaleString("en-IN")}</div>
         ${p.brand ? `<div class="cat-brand">${p.brand}</div>` : ""}
         ${p.brandable ? `<div class="cat-brandable">✦ Brandable</div>` : ""}
       </div>

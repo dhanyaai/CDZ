@@ -125,6 +125,8 @@ export function Opportunities() {
   const [shareUrls, setShareUrls] = useState<Record<string, string>>({});
   const [shareLoadingCat, setShareLoadingCat] = useState<string | null>(null);
   const [shareCopiedCat, setShareCopiedCat] = useState<string | null>(null);
+  // null = all products selected (default); a Set = explicit user selection
+  const [catalogueSelected, setCatalogueSelected] = useState<Set<number> | null>(null);
   const [creatingFromShortlist, setCreatingFromShortlist] = useState(false);
   const [printingQuoteId, setPrintingQuoteId] = useState<number | null>(null);
   const [advShowForm, setAdvShowForm] = useState(false);
@@ -222,6 +224,7 @@ export function Opportunities() {
     selectedIdRef.current = selected?.id ?? null;
     setCatalogueType("__all__");
     setCatalogueSearch("");
+    setCatalogueSelected(null);
     setShareUrls({});
     setShareCopiedCat(null);
     setShareLoadingCat(null);
@@ -1018,6 +1021,15 @@ export function Opportunities() {
                             p.name.toLowerCase().includes(catalogueSearch.toLowerCase()) ||
                             p.category.toLowerCase().includes(catalogueSearch.toLowerCase()))
                         : allCatProducts;
+                      const isChecked = (id: number) => catalogueSelected === null || catalogueSelected.has(id);
+                      const selectedProducts = allCatProducts.filter(p => isChecked(p.id));
+                      const toggleProduct = (id: number) => {
+                        setCatalogueSelected(prev => {
+                          const next = new Set(prev === null ? allCatProducts.map(pr => pr.id) : prev);
+                          if (next.has(id)) next.delete(id); else next.add(id);
+                          return next;
+                        });
+                      };
                       const shareKey = "__all__";
                       const shareUrl = shareUrls[shareKey] ?? null;
                       const isLoading = shareLoadingCat === shareKey;
@@ -1027,14 +1039,14 @@ export function Opportunities() {
                         setShareLoadingCat(shareKey);
                         try {
                           const productPrices: Record<number, number> = {};
-                          for (const p of allCatProducts) productPrices[p.id] = calcCataloguePrice(p, leadItems);
+                          for (const p of selectedProducts) productPrices[p.id] = calcCataloguePrice(p, leadItems);
                           const res = await api("/v1/catalogue-shares", {
                             method: "POST",
                             body: JSON.stringify({
                               opportunityTitle: opp.title,
                               clientName: opp.clientName ?? opp.title,
                               catalogueType: opp.title,
-                              productIds: allCatProducts.map(p => p.id),
+                              productIds: selectedProducts.map(p => p.id),
                               productPrices,
                               opportunityId: opp.id,
                               clientId: opp.clientId ?? null,
@@ -1075,7 +1087,10 @@ export function Opportunities() {
                       {/* Product list */}
                       <div className="border rounded-lg bg-background max-h-56 overflow-y-auto divide-y">
                         {viewProducts.map(p => (
-                          <div key={p.id} className="flex items-center gap-2.5 px-3 py-2">
+                          <label key={p.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors">
+                            <input type="checkbox" className="accent-blue-600 w-3.5 h-3.5 shrink-0"
+                              checked={isChecked(p.id)}
+                              onChange={() => toggleProduct(p.id)} />
                             {p.imageUrl
                               ? <img src={p.imageUrl} className="w-7 h-7 rounded object-cover border shrink-0" />
                               : <div className="w-7 h-7 rounded bg-blue-100 flex items-center justify-center shrink-0 text-base">🎁</div>
@@ -1085,22 +1100,33 @@ export function Opportunities() {
                               <div className="text-xs text-muted-foreground">{p.category}{p.brand ? ` · ${p.brand}` : ""}</div>
                             </div>
                             <span className="text-xs font-semibold text-blue-700 shrink-0">₹{calcCataloguePrice(p, leadItems).toLocaleString("en-IN")}</span>
-                          </div>
+                          </label>
                         ))}
                         {(productsLoading || leadItemsPending) && <p className="text-xs text-muted-foreground text-center py-4">Loading…</p>}
                         {!productsLoading && !leadItemsPending && viewProducts.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">No products found.</p>}
                       </div>
-                      <p className="text-xs text-muted-foreground">{viewProducts.length} product{viewProducts.length !== 1 ? "s" : ""} included</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">{selectedProducts.length} of {allCatProducts.length} selected</p>
+                        <div className="flex gap-1.5 text-xs text-muted-foreground">
+                          <button className="hover:text-foreground underline-offset-2 hover:underline" onClick={() => setCatalogueSelected(null)}>All</button>
+                          <span>·</span>
+                          <button className="hover:text-foreground underline-offset-2 hover:underline" onClick={() => setCatalogueSelected(new Set())}>None</button>
+                        </div>
+                      </div>
 
                       {/* PDF + Share Link */}
                       <div className="flex gap-2">
                         <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-8 text-sm"
-                          disabled={allCatProducts.length === 0}
-                          onClick={() => printCatalogue({ title: opp.title, clientName: opp.clientName ?? opp.title, products: allCatProducts })}>
-                          <Printer className="w-3.5 h-3.5 mr-1.5" />PDF ({allCatProducts.length})
+                          disabled={selectedProducts.length === 0}
+                          onClick={() => printCatalogue({
+                            title: opp.title,
+                            clientName: opp.clientName ?? opp.title,
+                            products: selectedProducts.map(p => ({ ...p, displayPrice: calcCataloguePrice(p, leadItems) })),
+                          })}>
+                          <Printer className="w-3.5 h-3.5 mr-1.5" />PDF ({selectedProducts.length})
                         </Button>
                         <Button className="flex-1 h-8 text-sm" variant="outline"
-                          disabled={allCatProducts.length === 0 || isLoading}
+                          disabled={selectedProducts.length === 0 || isLoading}
                           onClick={generateLink}>
                           {isCopied
                             ? <><Check className="w-3.5 h-3.5 mr-1.5 text-green-500" />Copied!</>
