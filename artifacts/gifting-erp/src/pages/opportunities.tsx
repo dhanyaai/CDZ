@@ -1002,7 +1002,7 @@ export function Opportunities() {
                     </div>
                     {/* Catalogue type */}
                     {(() => {
-                      const productCategories = Array.from(new Set((products ?? []).map(p => p.category).filter(Boolean))).sort() as string[];
+                      const productCategories = Array.from(new Set((leadItems ?? []).map(i => i.category).filter(Boolean))).sort() as string[];
                       const catalogueFiltered = (products ?? []).filter(p =>
                         (catalogueType === "__all__" || catalogueType === "Custom" || p.category === catalogueType) &&
                         (p.name.toLowerCase().includes(catalogueSearch.toLowerCase()) || p.category.toLowerCase().includes(catalogueSearch.toLowerCase()))
