@@ -38,6 +38,7 @@ type SampleOrderDetail = SampleOrderSummary & {
 type SampleLine = { productId: string; quantity: string };
 type LineItem = { description: string; quantity: number; unitPrice: number; productId?: number; imageUrl?: string | null };
 type OppQuote = { id: number; quoteNumber: string; subject: string | null; status: string; totalAmount: number; opportunityId: number | null; createdAt: string };
+type OppQuoteDetail = { quoteNumber: string; subject: string | null; status: string; subtotal: number; discountPct: number; gstAmount: number; totalAmount: number; validUntil: string | null; notes: string | null; paymentTerms: string | null; clientName: string | null; items: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number; imageUrl: string | null }> };
 type OppSalesOrder = { id: number; orderNumber: string; clientName: string; quoteId: number | null; status: string; validTransitions: string[]; grandTotal: number; deliveryDate: string | null; poNumber: string | null; createdAt: string };
 type OppShipment = { id: number; shipmentNumber: string; salesOrderId: number; orderNumber: string | null; courierPartner: string; status: string; validTransitions: string[]; trackingNumber: string | null; dispatchDate: string | null; estimatedDelivery: string | null; numberOfBoxes: number | null; totalWeight: number | null; freightCost: number; items: Array<{ id: number; deliveryName: string; address: string; awbNumber: string | null; status: string }>; createdAt: string };
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
@@ -133,6 +134,8 @@ export function Opportunities() {
   const [pmtShowForm, setPmtShowForm] = useState(false);
   const [pmtForm, setPmtForm] = useState({ amount: "", paymentMode: "", referenceNo: "", paymentDate: new Date().toISOString().slice(0, 10), notes: "" });
   const [convertingQuoteId, setConvertingQuoteId] = useState<number | null>(null);
+  const [expandedQuoteId, setExpandedQuoteId] = useState<number | null>(null);
+  const [quoteDetailCache, setQuoteDetailCache] = useState<Map<number, OppQuoteDetail>>(new Map());
   const [shipShowForm, setShipShowForm] = useState(false);
   const [shipForm, setShipForm] = useState({ courierPartner: "", trackingNumber: "", estimatedDelivery: "", numberOfBoxes: "", freightCost: "" });
   const [advancingShipId, setAdvancingShipId] = useState<number | null>(null);
@@ -1308,33 +1311,122 @@ export function Opportunities() {
                         </p>
                       )}
                       {linkedQuotes.length > 0 && (
-                        <div className="border rounded-lg divide-y text-sm">
-                          {linkedQuotes.map(q => (
-                            <div key={q.id} className="flex items-center gap-2 px-3 py-2">
-                              <span className="font-mono text-xs font-semibold text-muted-foreground">{q.quoteNumber}</span>
-                              <span className="flex-1 truncate text-xs">{q.subject ?? "—"}</span>
-                              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${QUOTE_STATUS[q.status] ?? "bg-zinc-100 text-zinc-700"}`}>{q.status}</span>
-                              <span className="text-xs font-semibold">₹{Number(q.totalAmount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
-                              <button
-                                title="Print quote"
-                                disabled={printingQuoteId === q.id}
-                                className="text-muted-foreground hover:text-foreground disabled:opacity-40"
-                                onClick={async () => {
-                                  setPrintingQuoteId(q.id);
-                                  try {
-                                    const detail = await api<{ quoteNumber: string; clientName: string | null; subject: string | null; status: string; totalAmount: number; gstAmount: number; subtotal: number; discountPct: number; validUntil: string | null; notes: string | null; paymentTerms: string | null; items: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number; imageUrl: string | null }> }>(`/v1/quotes/${q.id}`);
-                                    printQuote({ ...detail, clientName: detail.clientName ?? selected?.clientName ?? null });
-                                  } finally {
-                                    setPrintingQuoteId(null);
-                                  }
-                                }}>
-                                <Printer className="w-3.5 h-3.5" />
-                              </button>
-                              <a href="/quotes" className="text-muted-foreground hover:text-foreground">
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                            </div>
-                          ))}
+                        <div className="border rounded-lg divide-y text-sm overflow-hidden">
+                          {linkedQuotes.map(q => {
+                            const isExpanded = expandedQuoteId === q.id;
+                            const detail = quoteDetailCache.get(q.id);
+                            const discountAmt = detail ? (detail.subtotal * detail.discountPct / 100) : 0;
+                            return (
+                              <div key={q.id}>
+                                {/* Quote header row — click to expand */}
+                                <button
+                                  className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-muted/30 transition-colors text-left"
+                                  onClick={async () => {
+                                    if (isExpanded) { setExpandedQuoteId(null); return; }
+                                    setExpandedQuoteId(q.id);
+                                    if (!quoteDetailCache.has(q.id)) {
+                                      const d = await api<OppQuoteDetail>(`/v1/quotes/${q.id}`);
+                                      setQuoteDetailCache(prev => new Map(prev).set(q.id, d));
+                                    }
+                                  }}>
+                                  <span className={`transition-transform ${isExpanded ? "rotate-90" : ""} text-muted-foreground`}>▶</span>
+                                  <span className="font-mono text-xs font-semibold text-muted-foreground">{q.quoteNumber}</span>
+                                  <span className="flex-1 truncate text-xs text-left">{q.subject ?? "—"}</span>
+                                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${QUOTE_STATUS[q.status] ?? "bg-zinc-100 text-zinc-700"}`}>{q.status}</span>
+                                  <span className="text-xs font-bold">₹{Number(q.totalAmount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                                  <span onClick={e => e.stopPropagation()} className="flex items-center gap-1">
+                                    <button
+                                      title="Print quote"
+                                      disabled={printingQuoteId === q.id}
+                                      className="text-muted-foreground hover:text-foreground disabled:opacity-40 p-0.5"
+                                      onClick={async () => {
+                                        setPrintingQuoteId(q.id);
+                                        try {
+                                          const d = quoteDetailCache.get(q.id) ?? await api<OppQuoteDetail>(`/v1/quotes/${q.id}`);
+                                          printQuote({ ...d, clientName: d.clientName ?? selected?.clientName ?? null });
+                                        } finally { setPrintingQuoteId(null); }
+                                      }}>
+                                      <Printer className="w-3.5 h-3.5" />
+                                    </button>
+                                    <a href="/quotes" className="text-muted-foreground hover:text-foreground p-0.5">
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                    </a>
+                                  </span>
+                                </button>
+
+                                {/* Expanded line-item detail */}
+                                {isExpanded && (
+                                  <div className="bg-muted/20 border-t px-3 pb-3 pt-2 space-y-2">
+                                    {!detail ? (
+                                      <p className="text-xs text-muted-foreground text-center py-2">Loading…</p>
+                                    ) : (
+                                      <>
+                                        {/* Line items table */}
+                                        <div className="rounded-md border overflow-hidden">
+                                          <table className="w-full text-xs">
+                                            <thead className="bg-muted/60">
+                                              <tr>
+                                                <th className="text-left px-2 py-1.5 font-semibold text-muted-foreground">Product / Description</th>
+                                                <th className="text-center px-2 py-1.5 font-semibold text-muted-foreground w-10">Qty</th>
+                                                <th className="text-right px-2 py-1.5 font-semibold text-muted-foreground w-20">Unit ₹</th>
+                                                <th className="text-right px-2 py-1.5 font-semibold text-muted-foreground w-20">Total ₹</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                              {detail.items.map((item, idx) => (
+                                                <tr key={idx} className="bg-background hover:bg-muted/20">
+                                                  <td className="px-2 py-1.5 flex items-center gap-1.5">
+                                                    {item.imageUrl
+                                                      ? <img src={item.imageUrl} alt={item.description} className="w-6 h-6 rounded object-cover shrink-0 border" />
+                                                      : <Package className="w-4 h-4 text-muted-foreground shrink-0" />}
+                                                    <span className="leading-tight">{item.description}</span>
+                                                  </td>
+                                                  <td className="px-2 py-1.5 text-center text-muted-foreground">{item.quantity}</td>
+                                                  <td className="px-2 py-1.5 text-right text-muted-foreground">{Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                                  <td className="px-2 py-1.5 text-right font-medium">{Number(item.lineTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+
+                                        {/* Financial summary */}
+                                        <div className="bg-background rounded-md border px-3 py-2 space-y-1 text-xs">
+                                          <div className="flex justify-between text-muted-foreground">
+                                            <span>Subtotal</span>
+                                            <span>₹{Number(detail.subtotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                                          </div>
+                                          {detail.discountPct > 0 && (
+                                            <div className="flex justify-between text-amber-600 font-medium">
+                                              <span>Discount ({detail.discountPct}%)</span>
+                                              <span>−₹{discountAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                                            </div>
+                                          )}
+                                          <div className="flex justify-between text-muted-foreground">
+                                            <span>GST 18%</span>
+                                            <span>₹{Number(detail.gstAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                                          </div>
+                                          <div className="flex justify-between font-bold text-sm pt-1 border-t">
+                                            <span>Grand Total</span>
+                                            <span>₹{Number(detail.totalAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                                          </div>
+                                        </div>
+
+                                        {/* Meta row */}
+                                        {(detail.paymentTerms || detail.validUntil || detail.notes) && (
+                                          <div className="text-xs text-muted-foreground space-y-0.5 pt-0.5">
+                                            {detail.paymentTerms && <p><span className="font-medium text-foreground">Payment:</span> {detail.paymentTerms}</p>}
+                                            {detail.validUntil && <p><span className="font-medium text-foreground">Valid until:</span> {new Date(detail.validUntil).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>}
+                                            {detail.notes && <p><span className="font-medium text-foreground">Notes:</span> {detail.notes}</p>}
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
 
