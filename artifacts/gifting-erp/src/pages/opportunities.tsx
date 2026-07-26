@@ -120,7 +120,7 @@ export function Opportunities() {
   const [returningOrder, setReturningOrder] = useState<SampleOrderDetail | null>(null);
   const [returnQtys, setReturnQtys] = useState<Record<number, number>>({});
   const [dispositions, setDispositions] = useState<Record<number, "gift" | "invoice" | null>>({});
-  const [catalogueType, setCatalogueType] = useState("Corporate Gifts");
+  const [catalogueType, setCatalogueType] = useState("__all__");
   const [catalogueCustomType, setCatalogueCustomType] = useState("");
   const [catalogueSearch, setCatalogueSearch] = useState("");
   const [catalogueSelected, setCatalogueSelected] = useState<Set<number>>(new Set());
@@ -981,16 +981,26 @@ export function Opportunities() {
                       <span className="text-sm font-semibold text-blue-700">Product Catalogue</span>
                     </div>
                     {/* Catalogue type */}
+                    {(() => {
+                      const productCategories = Array.from(new Set((products ?? []).map(p => p.category).filter(Boolean))).sort() as string[];
+                      const catalogueFiltered = (products ?? []).filter(p =>
+                        (catalogueType === "__all__" || catalogueType === "Custom" || p.category === catalogueType) &&
+                        (p.name.toLowerCase().includes(catalogueSearch.toLowerCase()) || p.category.toLowerCase().includes(catalogueSearch.toLowerCase()))
+                      );
+                      return (
+                        <>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-muted-foreground">Catalogue Type</label>
-                      <Select value={catalogueType} onValueChange={v => { setCatalogueType(v); if (v !== "Custom") setCatalogueCustomType(""); }}>
+                      <Select value={catalogueType} onValueChange={v => { setCatalogueType(v); setCatalogueSelected(new Set()); if (v !== "Custom") setCatalogueCustomType(""); }}>
                         <SelectTrigger className="h-8 text-sm">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent position="popper">
-                          {["Corporate Gifts","Diwali Gifting","New Year Collection","Festive Hampers","Premium Executive Gifts","Custom"].map(t => (
+                          {productCategories.map(t => (
                             <SelectItem key={t} value={t}>{t}</SelectItem>
                           ))}
+                          <SelectItem value="__all__">All Categories</SelectItem>
+                          <SelectItem value="Custom">Custom Title</SelectItem>
                         </SelectContent>
                       </Select>
                       {catalogueType === "Custom" && (
@@ -1004,7 +1014,7 @@ export function Opportunities() {
                         <label className="text-xs font-medium text-muted-foreground">Select Products</label>
                         <div className="flex gap-1.5 text-xs text-muted-foreground">
                           <button className="hover:text-foreground underline-offset-2 hover:underline"
-                            onClick={() => setCatalogueSelected(new Set((products ?? []).map(p => p.id)))}>All</button>
+                            onClick={() => setCatalogueSelected(new Set(catalogueFiltered.map(p => p.id)))}>All</button>
                           <span>·</span>
                           <button className="hover:text-foreground underline-offset-2 hover:underline"
                             onClick={() => setCatalogueSelected(new Set())}>None</button>
@@ -1016,9 +1026,7 @@ export function Opportunities() {
                           value={catalogueSearch} onChange={e => setCatalogueSearch(e.target.value)} />
                       </div>
                       <div className="border rounded-lg bg-background max-h-48 overflow-y-auto divide-y">
-                        {(products ?? [])
-                          .filter(p => p.name.toLowerCase().includes(catalogueSearch.toLowerCase()) || p.category.toLowerCase().includes(catalogueSearch.toLowerCase()))
-                          .map(p => (
+                        {catalogueFiltered.map(p => (
                             <label key={p.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors">
                               <input type="checkbox" className="accent-blue-600 w-3.5 h-3.5"
                                 checked={catalogueSelected.has(p.id)}
@@ -1041,8 +1049,8 @@ export function Opportunities() {
                         {productsLoading && (
                           <p className="text-xs text-muted-foreground text-center py-4">Loading products…</p>
                         )}
-                        {!productsLoading && (products ?? []).length === 0 && (
-                          <p className="text-xs text-muted-foreground text-center py-4">No products found. Add products in the Products catalogue first.</p>
+                        {!productsLoading && catalogueFiltered.length === 0 && (
+                          <p className="text-xs text-muted-foreground text-center py-4">No products in this category.</p>
                         )}
                       </div>
                       {catalogueSelected.size > 0 && (
@@ -1114,6 +1122,9 @@ export function Opportunities() {
                         <p className="text-xs text-blue-500 dark:text-blue-400">Tap the link to select it, then copy & share with your customer.</p>
                       </div>
                     )}
+                    </>
+                  );
+                  })()}
                   </div>
                 )}
                 {selected.stage === "shortlisted" && (
