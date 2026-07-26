@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useListClients } from "@workspace/api-client-react";
@@ -169,7 +169,7 @@ export function Opportunities() {
     enabled: !!selected && selected.stage === "shortlisted",
   });
   const { data: products, isLoading: productsLoading } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products") });
-  const { data: leadItems } = useQuery<LeadItem[]>({
+  const { data: leadItems, isLoading: leadItemsLoading } = useQuery<LeadItem[]>({
     queryKey: ["lead-items-catalogue", selected?.leadId],
     queryFn: () => api<LeadItem[]>(`/v1/leads/${selected!.leadId}/items`),
     enabled: !!selected?.leadId && selected.stage === "sent_catalogue",
@@ -214,8 +214,12 @@ export function Opportunities() {
     enabled: !!firstSO,
   });
 
+  // Tracks the currently open opportunity so late async responses can be discarded
+  const selectedIdRef = useRef<number | null>(null);
+
   // Reset catalogue state whenever a different opportunity is opened
   useEffect(() => {
+    selectedIdRef.current = selected?.id ?? null;
     setCatalogueType("__all__");
     setCatalogueSearch("");
     setShareUrls({});
@@ -1000,9 +1004,13 @@ export function Opportunities() {
                     </div>
                     {/* All lead-category products in one list → single share link */}
                     {(() => {
+                      const opp = selected;
+                      if (!opp) return null;
+                      // Wait for lead items before deciding scope — otherwise a quick click could share the full catalogue
+                      const leadItemsPending = !!opp.leadId && leadItemsLoading;
                       const leadCategories = new Set((leadItems ?? []).map(i => i.category).filter(Boolean) as string[]);
                       // All products whose category was requested in the lead (or all if no lead items)
-                      const allCatProducts = (products ?? []).filter(p =>
+                      const allCatProducts = leadItemsPending ? [] : (products ?? []).filter(p =>
                         leadCategories.size === 0 || leadCategories.has(p.category)
                       );
                       const viewProducts = catalogueSearch
@@ -1023,15 +1031,16 @@ export function Opportunities() {
                           const res = await api("/v1/catalogue-shares", {
                             method: "POST",
                             body: JSON.stringify({
-                              opportunityTitle: selected.title,
-                              clientName: selected.clientName ?? selected.title,
-                              catalogueType: selected.title,
+                              opportunityTitle: opp.title,
+                              clientName: opp.clientName ?? opp.title,
+                              catalogueType: opp.title,
                               productIds: allCatProducts.map(p => p.id),
                               productPrices,
-                              opportunityId: selected.id,
-                              clientId: selected.clientId ?? null,
+                              opportunityId: opp.id,
+                              clientId: opp.clientId ?? null,
                             }),
                           });
+                          if (selectedIdRef.current !== opp.id) return; // opportunity switched — discard stale response
                           const { token } = res as { token: string };
                           const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
                           const url = `${window.location.origin}${base}/catalogue/${token}`;
@@ -1078,8 +1087,8 @@ export function Opportunities() {
                             <span className="text-xs font-semibold text-blue-700 shrink-0">₹{calcCataloguePrice(p, leadItems).toLocaleString("en-IN")}</span>
                           </div>
                         ))}
-                        {productsLoading && <p className="text-xs text-muted-foreground text-center py-4">Loading…</p>}
-                        {!productsLoading && viewProducts.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">No products found.</p>}
+                        {(productsLoading || leadItemsPending) && <p className="text-xs text-muted-foreground text-center py-4">Loading…</p>}
+                        {!productsLoading && !leadItemsPending && viewProducts.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">No products found.</p>}
                       </div>
                       <p className="text-xs text-muted-foreground">{viewProducts.length} product{viewProducts.length !== 1 ? "s" : ""} included</p>
 
@@ -1087,7 +1096,7 @@ export function Opportunities() {
                       <div className="flex gap-2">
                         <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-8 text-sm"
                           disabled={allCatProducts.length === 0}
-                          onClick={() => printCatalogue({ title: selected.title, clientName: selected.clientName ?? selected.title, products: allCatProducts })}>
+                          onClick={() => printCatalogue({ title: opp.title, clientName: opp.clientName ?? opp.title, products: allCatProducts })}>
                           <Printer className="w-3.5 h-3.5 mr-1.5" />PDF ({allCatProducts.length})
                         </Button>
                         <Button className="flex-1 h-8 text-sm" variant="outline"
