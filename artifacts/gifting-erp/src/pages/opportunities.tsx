@@ -305,12 +305,15 @@ export function Opportunities() {
 
   const convertQuote = useMutation({
     mutationFn: async (quoteId: number) => {
+      // Mark accepted first (convert route requires status=accepted)
       await api(`/v1/quotes/${quoteId}`, { method: "PATCH", body: JSON.stringify({ status: "accepted" }) });
       return api<{ salesOrderId: number; orderNumber: string }>(`/v1/quotes/${quoteId}/convert`, { method: "POST" });
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["opp-quotes", selected?.id] });
       qc.invalidateQueries({ queryKey: ["quotes"] });
+      qc.invalidateQueries({ queryKey: ["opp-sales-orders"] });
+      qc.invalidateQueries({ queryKey: ["sales-orders"] });
       toast({ title: "Sales Order Created", description: `${data.orderNumber} created from quote` });
     },
     onError: (err: unknown) => {
