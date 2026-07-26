@@ -121,12 +121,10 @@ export function Opportunities() {
   const [returnQtys, setReturnQtys] = useState<Record<number, number>>({});
   const [dispositions, setDispositions] = useState<Record<number, "gift" | "invoice" | null>>({});
   const [catalogueType, setCatalogueType] = useState("__all__");
-  const [catalogueCustomType, setCatalogueCustomType] = useState("");
   const [catalogueSearch, setCatalogueSearch] = useState("");
-  const [catalogueSelected, setCatalogueSelected] = useState<Set<number>>(new Set());
-  const [shareLoading, setShareLoading] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareUrls, setShareUrls] = useState<Record<string, string>>({});
+  const [shareLoadingCat, setShareLoadingCat] = useState<string | null>(null);
+  const [shareCopiedCat, setShareCopiedCat] = useState<string | null>(null);
   const [creatingFromShortlist, setCreatingFromShortlist] = useState(false);
   const [printingQuoteId, setPrintingQuoteId] = useState<number | null>(null);
   const [advShowForm, setAdvShowForm] = useState(false);
@@ -219,10 +217,10 @@ export function Opportunities() {
   // Reset catalogue state whenever a different opportunity is opened
   useEffect(() => {
     setCatalogueType("__all__");
-    setCatalogueSelected(new Set());
     setCatalogueSearch("");
-    setShareUrl(null);
-    setShareCopied(false);
+    setShareUrls({});
+    setShareCopiedCat(null);
+    setShareLoadingCat(null);
   }, [selected?.id]);
 
   // Auto-select catalogue type from the lead items' dominant category
@@ -566,7 +564,7 @@ export function Opportunities() {
                   {items.map(o => {
                     const daysLeft = o.expectedCloseDate ? differenceInDays(new Date(o.expectedCloseDate), new Date()) : null;
                     return (
-                      <div key={o.id} className="p-2.5 border rounded-lg bg-card text-xs space-y-2 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all" onClick={() => { setSelected(o); setShareUrl(null); }}>
+                      <div key={o.id} className="p-2.5 border rounded-lg bg-card text-xs space-y-2 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all" onClick={() => { setSelected(o); setShareUrls({}); }}>
                         <div className="font-medium leading-tight">{o.title}</div>
                         {o.clientName && <div className="flex items-center gap-1 text-muted-foreground"><Building2 className="w-3 h-3 shrink-0" />{o.clientName}</div>}
                         {o.value != null && <div className="font-semibold text-primary">₹{o.value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>}
@@ -682,7 +680,7 @@ export function Opportunities() {
                       return (
                         <tr key={o.id}
                           className={`cursor-pointer transition-colors hover:bg-muted/40 ${idx % 2 === 0 ? "" : "bg-muted/10"}`}
-                          onClick={() => { setSelected(o); setShareUrl(null); }}>
+                          onClick={() => { setSelected(o); setShareUrls({}); }}>
                           <td className="px-4 py-3 font-medium max-w-[200px]">
                             <div className="truncate">{o.title}</div>
                           </td>
@@ -1000,62 +998,77 @@ export function Opportunities() {
                       <BookOpen className="w-4 h-4 text-blue-600" />
                       <span className="text-sm font-semibold text-blue-700">Product Catalogue</span>
                     </div>
-                    {/* Category pill tabs + product list */}
+                    {/* Category pill tabs + per-category product view + per-category share links */}
                     {(() => {
                       const leadCategories = Array.from(new Set((leadItems ?? []).map(i => i.category).filter(Boolean))).sort() as string[];
                       const allPills = leadCategories.length > 1 ? ["__all__", ...leadCategories] : leadCategories;
-                      const catalogueFiltered = (products ?? []).filter(p =>
+                      const viewProducts = (products ?? []).filter(p =>
                         (catalogueType === "__all__" || p.category === catalogueType) &&
-                        (p.name.toLowerCase().includes(catalogueSearch.toLowerCase()) || p.category.toLowerCase().includes(catalogueSearch.toLowerCase()))
+                        (catalogueSearch === "" || p.name.toLowerCase().includes(catalogueSearch.toLowerCase()) || p.category.toLowerCase().includes(catalogueSearch.toLowerCase()))
                       );
                       const catalogueTitle = catalogueType === "__all__" ? "All Categories" : catalogueType;
+
+                      async function generateLink(catKey: string, catProducts: typeof viewProducts, title: string) {
+                        setShareLoadingCat(catKey);
+                        try {
+                          const productPrices: Record<number, number> = {};
+                          for (const p of catProducts) productPrices[p.id] = calcCataloguePrice(p, leadItems);
+                          const res = await api("/v1/catalogue-shares", {
+                            method: "POST",
+                            body: JSON.stringify({
+                              opportunityTitle: selected.title,
+                              clientName: selected.clientName ?? selected.title,
+                              catalogueType: title,
+                              productIds: catProducts.map(p => p.id),
+                              productPrices,
+                              opportunityId: selected.id,
+                              clientId: selected.clientId ?? null,
+                            }),
+                          });
+                          const { token } = res as { token: string };
+                          const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+                          const url = `${window.location.origin}${base}/catalogue/${token}`;
+                          setShareUrls(prev => ({ ...prev, [catKey]: url }));
+                          try { await navigator.clipboard.writeText(url); setShareCopiedCat(catKey); setTimeout(() => setShareCopiedCat(null), 3000); } catch { /* clipboard unavailable */ }
+                        } catch (err: unknown) {
+                          if (err instanceof Error && err.message === "Unauthorized") return;
+                          toast({ title: "Failed to generate link", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
+                        } finally {
+                          setShareLoadingCat(null);
+                        }
+                      }
+
                       return (
                         <>
-                    {/* Category pills */}
-                    {allPills.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {allPills.map(cat => (
-                          <button key={cat}
-                            onClick={() => { setCatalogueType(cat); setCatalogueSelected(new Set()); }}
-                            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                              catalogueType === cat
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white text-muted-foreground border-border hover:border-blue-400 hover:text-blue-600"
-                            }`}>
-                            {cat === "__all__" ? "All" : cat}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {/* Product list */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-medium text-muted-foreground">
-                          {catalogueType === "__all__" ? "All Products" : catalogueType}
-                        </label>
-                        <div className="flex gap-1.5 text-xs text-muted-foreground">
-                          <button className="hover:text-foreground underline-offset-2 hover:underline"
-                            onClick={() => setCatalogueSelected(new Set(catalogueFiltered.map(p => p.id)))}>All</button>
-                          <span>·</span>
-                          <button className="hover:text-foreground underline-offset-2 hover:underline"
-                            onClick={() => setCatalogueSelected(new Set())}>None</button>
+                      {/* Category pills */}
+                      {allPills.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {allPills.map(cat => (
+                            <button key={cat}
+                              onClick={() => { setCatalogueType(cat); setCatalogueSearch(""); }}
+                              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                                catalogueType === cat
+                                  ? "bg-blue-600 text-white border-blue-600"
+                                  : "bg-white text-muted-foreground border-border hover:border-blue-400 hover:text-blue-600"
+                              }`}>
+                              {cat === "__all__" ? "All" : cat}
+                              {shareUrls[cat] && <span className="ml-1 text-green-400">✓</span>}
+                            </button>
+                          ))}
                         </div>
-                      </div>
+                      )}
+
+                      {/* Search */}
                       <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                         <Input className="h-8 text-sm pl-8" placeholder="Search products…"
                           value={catalogueSearch} onChange={e => setCatalogueSearch(e.target.value)} />
                       </div>
+
+                      {/* Product list — display only, no checkboxes */}
                       <div className="border rounded-lg bg-background max-h-52 overflow-y-auto divide-y">
-                        {catalogueFiltered.map(p => (
-                          <label key={p.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors">
-                            <input type="checkbox" className="accent-blue-600 w-3.5 h-3.5"
-                              checked={catalogueSelected.has(p.id)}
-                              onChange={e => setCatalogueSelected(prev => {
-                                const next = new Set(prev);
-                                e.target.checked ? next.add(p.id) : next.delete(p.id);
-                                return next;
-                              })} />
+                        {viewProducts.map(p => (
+                          <div key={p.id} className="flex items-center gap-2.5 px-3 py-2">
                             {p.imageUrl
                               ? <img src={p.imageUrl} className="w-7 h-7 rounded object-cover border shrink-0" />
                               : <div className="w-7 h-7 rounded bg-blue-100 flex items-center justify-center shrink-0 text-base">🎁</div>
@@ -1065,95 +1078,62 @@ export function Opportunities() {
                               <div className="text-xs text-muted-foreground">{p.category}{p.brand ? ` · ${p.brand}` : ""}</div>
                             </div>
                             <span className="text-xs font-semibold text-blue-700 shrink-0">₹{calcCataloguePrice(p, leadItems).toLocaleString("en-IN")}</span>
-                          </label>
+                          </div>
                         ))}
-                        {productsLoading && (
-                          <p className="text-xs text-muted-foreground text-center py-4">Loading products…</p>
-                        )}
-                        {!productsLoading && catalogueFiltered.length === 0 && (
-                          <p className="text-xs text-muted-foreground text-center py-4">No products in this category.</p>
-                        )}
+                        {productsLoading && <p className="text-xs text-muted-foreground text-center py-4">Loading…</p>}
+                        {!productsLoading && viewProducts.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">No products in this category.</p>}
                       </div>
-                      {catalogueSelected.size > 0 && (
-                        <p className="text-xs text-blue-600 font-medium">{catalogueSelected.size} product{catalogueSelected.size !== 1 ? "s" : ""} selected</p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-8 text-sm"
-                        disabled={catalogueSelected.size === 0}
-                        onClick={() => {
-                          const selectedProducts = (products ?? []).filter(p => catalogueSelected.has(p.id));
-                          printCatalogue({
-                            title: catalogueTitle,
-                            clientName: selected.clientName ?? selected.title,
-                            products: selectedProducts,
-                          });
-                        }}>
-                        <Printer className="w-3.5 h-3.5 mr-1.5" />PDF ({catalogueSelected.size})
-                      </Button>
-                      <Button className="flex-1 h-8 text-sm" variant="outline"
-                        disabled={catalogueSelected.size === 0 || shareLoading}
-                        onClick={async () => {
-                          setShareLoading(true);
-                          try {
-                            // Build price map: productId → calculated price (cost + transport + branding + lead margin)
-                            const productPrices: Record<number, number> = {};
-                            for (const p of (products ?? [])) {
-                              if (catalogueSelected.has(p.id)) {
-                                productPrices[p.id] = calcCataloguePrice(p, leadItems);
-                              }
-                            }
-                            const res = await api("/v1/catalogue-shares", {
-                              method: "POST",
-                              body: JSON.stringify({
-                                opportunityTitle: selected.title,
-                                clientName: selected.clientName ?? selected.title,
-                                catalogueType: catalogueTitle,
-                                productIds: Array.from(catalogueSelected),
-                                productPrices,
-                                opportunityId: selected.id,
-                                clientId: selected.clientId ?? null,
-                              }),
-                            });
-                            const { token } = res as { token: string };
-                            const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
-                            const url = `${window.location.origin}${base}/catalogue/${token}`;
-                            setShareUrl(url);
-                            try { await navigator.clipboard.writeText(url); setShareCopied(true); setTimeout(() => setShareCopied(false), 3000); } catch { /* clipboard unavailable */ }
-                          } catch (err: unknown) {
-                            if (err instanceof Error && err.message === "Unauthorized") return;
-                            toast({ title: "Failed to generate link", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
-                          } finally {
-                            setShareLoading(false);
-                          }
-                        }}>
-                        {shareCopied ? <Check className="w-3.5 h-3.5 mr-1.5 text-green-500" /> : <Link2 className="w-3.5 h-3.5 mr-1.5" />}
-                        {shareLoading ? "Generating…" : shareCopied ? "Copied!" : "Share Link"}
-                      </Button>
-                    </div>
-                    {shareUrl && (
-                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
-                        <p className="text-xs font-medium text-blue-700 flex items-center gap-1.5">
-                          <Link2 className="w-3.5 h-3.5" />Shareable link (valid 30 days)
-                        </p>
-                        <div className="flex gap-2 items-center">
-                          <input readOnly value={shareUrl} className="flex-1 text-xs bg-white border rounded px-2 py-1.5 font-mono truncate select-all" onFocus={e => e.target.select()} />
-                          <Button size="sm" variant="outline" className="h-7 text-xs px-2 shrink-0"
-                            onClick={async () => {
-                              try { await navigator.clipboard.writeText(shareUrl); setShareCopied(true); setTimeout(() => setShareCopied(false), 2000); } catch {
-                                const el = document.querySelector<HTMLInputElement>('input[value="' + shareUrl + '"]'); el?.select(); document.execCommand("copy"); setShareCopied(true); setTimeout(() => setShareCopied(false), 2000);
-                              }
-                            }}>
-                            {shareCopied ? <Check className="w-3 h-3 text-green-500" /> : <Link2 className="w-3 h-3" />}
-                            {shareCopied ? "Copied!" : "Copy"}
-                          </Button>
+                      <p className="text-xs text-muted-foreground">{viewProducts.length} product{viewProducts.length !== 1 ? "s" : ""}</p>
+
+                      {/* PDF + Share Link for current category */}
+                      <div className="flex gap-2">
+                        <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-8 text-sm"
+                          disabled={viewProducts.length === 0}
+                          onClick={() => printCatalogue({ title: catalogueTitle, clientName: selected.clientName ?? selected.title, products: viewProducts })}>
+                          <Printer className="w-3.5 h-3.5 mr-1.5" />PDF ({viewProducts.length})
+                        </Button>
+                        <Button className="flex-1 h-8 text-sm" variant="outline"
+                          disabled={viewProducts.length === 0 || shareLoadingCat === catalogueType}
+                          onClick={() => generateLink(catalogueType, viewProducts, catalogueTitle)}>
+                          {shareCopiedCat === catalogueType
+                            ? <><Check className="w-3.5 h-3.5 mr-1.5 text-green-500" />Copied!</>
+                            : shareLoadingCat === catalogueType
+                            ? "Generating…"
+                            : shareUrls[catalogueType]
+                            ? <><Link2 className="w-3.5 h-3.5 mr-1.5" />Regenerate Link</>
+                            : <><Link2 className="w-3.5 h-3.5 mr-1.5" />Share Link</>}
+                        </Button>
+                      </div>
+
+                      {/* All generated links */}
+                      {Object.keys(shareUrls).length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">Generated Links</p>
+                          {Object.entries(shareUrls).map(([cat, url]) => (
+                            <div key={cat} className="rounded-lg border border-blue-200 bg-blue-50 p-2.5 space-y-1.5">
+                              <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+                                <Link2 className="w-3 h-3" />
+                                {cat === "__all__" ? "All Categories" : cat}
+                                <span className="text-blue-400 font-normal ml-auto">valid 30 days</span>
+                              </p>
+                              <div className="flex gap-1.5 items-center">
+                                <input readOnly value={url} className="flex-1 text-xs bg-white border rounded px-2 py-1 font-mono truncate select-all" onFocus={e => e.target.select()} />
+                                <Button size="sm" variant="outline" className="h-6 text-xs px-2 shrink-0"
+                                  onClick={async () => {
+                                    try { await navigator.clipboard.writeText(url); } catch { const el = document.querySelector<HTMLInputElement>(`input[value="${url}"]`); el?.select(); document.execCommand("copy"); }
+                                    setShareCopiedCat(cat); setTimeout(() => setShareCopiedCat(null), 2000);
+                                  }}>
+                                  {shareCopiedCat === cat ? <Check className="w-3 h-3 text-green-500" /> : <Link2 className="w-3 h-3" />}
+                                  {shareCopiedCat === cat ? " Copied" : " Copy"}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <p className="text-xs text-blue-500">Tap the link to select it, then copy & share with your customer.</p>
-                      </div>
-                    )}
-                    </>
-                  );
-                  })()}
+                      )}
+                      </>
+                    );
+                    })()}
                   </div>
                 )}
                 {selected.stage === "shortlisted" && (
