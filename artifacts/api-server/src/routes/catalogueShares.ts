@@ -6,7 +6,7 @@ import crypto from "crypto";
 const router = Router();
 
 router.post("/v1/catalogue-shares", async (req, res): Promise<void> => {
-  const { opportunityTitle, clientName, catalogueType, productIds, opportunityId, clientId } = req.body ?? {};
+  const { opportunityTitle, clientName, catalogueType, productIds, productPrices, opportunityId, clientId } = req.body ?? {};
   if (!opportunityTitle || !catalogueType || !Array.isArray(productIds) || productIds.length === 0) {
     res.status(400).json({ error: "opportunityTitle, catalogueType and productIds are required" });
     return;
@@ -28,6 +28,7 @@ router.post("/v1/catalogue-shares", async (req, res): Promise<void> => {
       clientName: clientName ?? null,
       catalogueType,
       productIds: JSON.stringify(productIds),
+      productPrices: productPrices ? JSON.stringify(productPrices) : null,
       expiresAt,
     });
   } catch (err: unknown) {
@@ -46,6 +47,8 @@ router.get("/v1/public/catalogue/:token", async (req, res): Promise<void> => {
   if (share.expiresAt && share.expiresAt < new Date()) { res.status(410).json({ error: "This catalogue link has expired" }); return; }
 
   const ids: number[] = JSON.parse(share.productIds);
+  const storedPrices: Record<string, number> = share.productPrices ? JSON.parse(share.productPrices) : {};
+
   const products = ids.length > 0
     ? await db.select({
         id: productsTable.id,
@@ -58,6 +61,10 @@ router.get("/v1/public/catalogue/:token", async (req, res): Promise<void> => {
       )
     : [];
 
+  // Preserve original ordering from productIds
+  const productMap = new Map(products.map(p => [p.id, p]));
+  const orderedProducts = ids.map(id => productMap.get(id)).filter(Boolean) as typeof products;
+
   res.json({
     token: share.token,
     companyName: share.companyName,
@@ -69,7 +76,10 @@ router.get("/v1/public/catalogue/:token", async (req, res): Promise<void> => {
     expiresAt: share.expiresAt?.toISOString() ?? null,
     createdAt: share.createdAt.toISOString(),
     alreadySubmitted: !!share.selectedProductIds,
-    products: products.map(p => ({ ...p, sellingPrice: Number(p.sellingPrice) })),
+    products: orderedProducts.map(p => ({
+      ...p,
+      sellingPrice: storedPrices[String(p.id)] !== undefined ? storedPrices[String(p.id)] : Number(p.sellingPrice),
+    })),
   });
 });
 

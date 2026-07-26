@@ -1096,6 +1096,13 @@ export function Opportunities() {
                         onClick={async () => {
                           setShareLoading(true);
                           try {
+                            // Build price map: productId → calculated price (cost + transport + branding + lead margin)
+                            const productPrices: Record<number, number> = {};
+                            for (const p of (products ?? [])) {
+                              if (catalogueSelected.has(p.id)) {
+                                productPrices[p.id] = calcCataloguePrice(p, leadItems);
+                              }
+                            }
                             const res = await api("/v1/catalogue-shares", {
                               method: "POST",
                               body: JSON.stringify({
@@ -1103,6 +1110,7 @@ export function Opportunities() {
                                 clientName: selected.clientName ?? selected.title,
                                 catalogueType: catalogueTitle,
                                 productIds: Array.from(catalogueSelected),
+                                productPrices,
                                 opportunityId: selected.id,
                                 clientId: selected.clientId ?? null,
                               }),
