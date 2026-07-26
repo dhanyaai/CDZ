@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useListClients } from "@workspace/api-client-react";
@@ -215,6 +215,26 @@ export function Opportunities() {
     queryFn: () => api<OppShipment[]>(`/v1/shipments?salesOrderId=${firstSO!.id}`),
     enabled: !!firstSO,
   });
+
+  // Reset catalogue state whenever a different opportunity is opened
+  useEffect(() => {
+    setCatalogueType("__all__");
+    setCatalogueSelected(new Set());
+    setCatalogueSearch("");
+    setShareUrl(null);
+    setShareCopied(false);
+  }, [selected?.id]);
+
+  // Auto-select catalogue type from the lead items' dominant category
+  useEffect(() => {
+    if (!leadItems || leadItems.length === 0) return;
+    const counts: Record<string, number> = {};
+    for (const item of leadItems) {
+      if (item.category) counts[item.category] = (counts[item.category] ?? 0) + 1;
+    }
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    if (top) setCatalogueType(top[0]);
+  }, [leadItems]);
 
   const create = useMutation({
     mutationFn: () => api("/v1/opportunities", {
