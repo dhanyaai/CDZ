@@ -163,12 +163,13 @@ export function Opportunities() {
     queryFn: () => api<SampleOrderSummary[]>(`/v1/sample-orders?opportunityId=${selected!.id}`),
     enabled: !!selected && selected.stage === "samples",
   });
-  type ShortlistedProduct = { id: number; name: string; category: string; sellingPrice: number; imageUrl: string | null };
+  type ShortlistedProduct = { id: number; name: string; category: string; sellingPrice: number; price?: number; imageUrl: string | null };
   type ShortlistedData = { products: ShortlistedProduct[]; shareToken: string | null; catalogueType: string | null };
   const { data: shortlistedData, refetch: refetchShortlisted } = useQuery<ShortlistedData>({
     queryKey: ["opp-shortlisted", selected?.id],
     queryFn: () => api<ShortlistedData>(`/v1/opportunities/${selected!.id}/shortlisted-products`),
-    enabled: !!selected && selected.stage === "shortlisted",
+    // samples stage also shows the shortlist (with Convert to Quote)
+    enabled: !!selected && (selected.stage === "shortlisted" || selected.stage === "samples"),
   });
   const { data: products, isLoading: productsLoading } = useQuery({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products") });
   const { data: leadItems, isLoading: leadItemsLoading } = useQuery<LeadItem[]>({
@@ -362,6 +363,34 @@ export function Opportunities() {
       // Refresh drawer state so a stale card can't invite a duplicate retry
       qc.invalidateQueries({ queryKey: ["opportunities"] });
       qc.invalidateQueries({ queryKey: ["opp-sample-orders"] });
+      qc.invalidateQueries({ queryKey: ["opp-quotes"] });
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      toast({ title: "Convert to quote failed", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
+    },
+  });
+
+  const convertShortlistToQuote = useMutation({
+    mutationFn: async () => {
+      const opp = selected;
+      if (!opp) throw new Error("No opportunity selected");
+      const result = await api<{ quoteId: number; quoteNumber: string; opportunityStage: string | null }>(
+        `/v1/opportunities/${opp.id}/convert-shortlist-to-quote`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      return { ...result, oppId: opp.id };
+    },
+    onSuccess: ({ quoteNumber, opportunityStage, oppId }) => {
+      qc.invalidateQueries({ queryKey: ["opportunities"] });
+      qc.invalidateQueries({ queryKey: ["opp-quotes"] });
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      qc.invalidateQueries({ queryKey: ["opp-shortlisted"] });
+      if (opportunityStage) setSelected(prev => (prev && prev.id === oppId ? { ...prev, stage: opportunityStage } : prev));
+      toast({ title: `Quote ${quoteNumber} created`, description: "Shortlist converted — moved to Quotation Sent" });
+    },
+    onError: (err: unknown) => {
+      // Refresh drawer state so a stale panel can't invite a duplicate retry
+      qc.invalidateQueries({ queryKey: ["opportunities"] });
+      qc.invalidateQueries({ queryKey: ["opp-shortlisted"] });
       qc.invalidateQueries({ queryKey: ["opp-quotes"] });
       qc.invalidateQueries({ queryKey: ["quotes"] });
       toast({ title: "Convert to quote failed", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
@@ -1233,7 +1262,7 @@ export function Opportunities() {
                                 <div className="text-xs font-medium truncate">{p.name}</div>
                                 <div className="text-xs text-muted-foreground">{p.category}</div>
                               </div>
-                              <span className="text-xs font-semibold text-blue-700 shrink-0">₹{Number(p.sellingPrice).toLocaleString("en-IN")}</span>
+                              <span className="text-xs font-semibold text-blue-700 shrink-0">₹{Number(p.price ?? p.sellingPrice).toLocaleString("en-IN")}</span>
                             </div>
                           ))}
                         </div>
@@ -1264,6 +1293,39 @@ export function Opportunities() {
                 )}
                 {selected.stage === "samples" && (
                   <div className="space-y-2" data-testid="section-sample-orders">
+                    {/* Customer shortlist carried over from the previous stage */}
+                    {shortlistedData && shortlistedData.products.length > 0 && (
+                      <div className="space-y-2 border rounded-xl p-3 bg-amber-50/40 mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">📋</span>
+                          <span className="text-sm font-semibold text-amber-700">Customer Shortlist</span>
+                          <span className="ml-auto text-xs text-amber-600 font-medium">
+                            {shortlistedData.products.length} product{shortlistedData.products.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <div className="border rounded-lg bg-background divide-y max-h-48 overflow-y-auto">
+                          {shortlistedData.products.map(p => (
+                            <div key={p.id} className="flex items-center gap-2.5 px-3 py-2">
+                              {p.imageUrl
+                                ? <img src={p.imageUrl} className="w-8 h-8 rounded object-cover border shrink-0" />
+                                : <div className="w-8 h-8 rounded bg-amber-100 flex items-center justify-center shrink-0 text-base">🎁</div>}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium truncate">{p.name}</div>
+                                <div className="text-xs text-muted-foreground">{p.category}</div>
+                              </div>
+                              <span className="text-xs font-semibold text-blue-700 shrink-0">₹{Number(p.price ?? p.sellingPrice).toLocaleString("en-IN")}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <Button
+                          className="w-full h-8 text-sm bg-emerald-600 hover:bg-emerald-700 text-white"
+                          disabled={convertShortlistToQuote.isPending}
+                          onClick={() => convertShortlistToQuote.mutate()}>
+                          <FileText className="w-3.5 h-3.5 mr-1.5" />
+                          {convertShortlistToQuote.isPending ? "Converting…" : "Convert Shortlist to Quote"}
+                        </Button>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-medium flex items-center gap-1.5">
                         <FlaskConical className="w-4 h-4 text-violet-500" />Sample Orders
