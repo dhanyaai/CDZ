@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { and, eq, inArray, SQL } from "drizzle-orm";
-import { db, sampleOrdersTable, sampleOrderItemsTable, clientsTable, productsTable, opportunitiesTable } from "@workspace/db";
+import { db, sampleOrdersTable, sampleOrderItemsTable, clientsTable, productsTable, opportunitiesTable, quotesTable, quoteItemsTable } from "@workspace/db";
 
 const router = Router();
 
@@ -179,6 +179,101 @@ router.patch("/v1/sample-orders/:id/status", async (req, res): Promise<void> => 
   if (!updated) { res.status(404).json({ error: "Sample order not found" }); return; }
   const detail = await getDetail(id, req.companyId);
   res.json(detail);
+});
+
+// POST /v1/sample-orders/:id/convert-to-quote
+// Atomically: create a quote from the sample's items, mark the sample Converted,
+// and advance the linked opportunity samples → quotation_sent. Safe to retry:
+// an already-Converted sample returns 409 instead of creating a duplicate quote.
+router.post("/v1/sample-orders/:id/convert-to-quote", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  if (Number.isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  // Optional frontend-calculated prices (catalogue pricing), keyed by productId
+  const prices = (req.body?.productPrices ?? {}) as Record<string, number>;
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [so] = await tx.select().from(sampleOrdersTable)
+        .where(and(eq(sampleOrdersTable.id, id), eq(sampleOrdersTable.companyId, req.companyId)))
+        .for("update");
+      if (!so) throw Object.assign(new Error("Sample order not found"), { httpStatus: 404 });
+      if (so.status === "Converted") throw Object.assign(new Error("This sample order was already converted to a quote"), { httpStatus: 409 });
+      if (so.status === "Rejected") throw Object.assign(new Error("A rejected sample order cannot be converted"), { httpStatus: 400 });
+
+      const items = await tx
+        .select({ item: sampleOrderItemsTable, product: productsTable })
+        .from(sampleOrderItemsTable)
+        .leftJoin(productsTable, eq(sampleOrderItemsTable.productId, productsTable.id))
+        .where(eq(sampleOrderItemsTable.sampleOrderId, id));
+      if (items.length === 0) throw Object.assign(new Error("This sample order has no items"), { httpStatus: 400 });
+
+      let opportunity: typeof opportunitiesTable.$inferSelect | undefined;
+      if (so.opportunityId != null) {
+        const oppRows = await tx.select().from(opportunitiesTable)
+          .where(and(eq(opportunitiesTable.id, so.opportunityId), eq(opportunitiesTable.companyId, req.companyId)))
+          .for("update");
+        opportunity = oppRows[0];
+      }
+
+      const clientId = so.clientId ?? opportunity?.clientId ?? null;
+      if (!clientId) throw Object.assign(new Error("No client linked — set a client on the opportunity first (Edit → Client)"), { httpStatus: 400 });
+
+      const quoteLines = items.map((r) => {
+        const provided = Number(prices[String(r.item.productId)]);
+        const fallback = r.product ? Number(r.product.sellingPrice) : 0;
+        const unitPrice = Number.isFinite(provided) && provided >= 0
+          ? provided
+          : (Number.isFinite(fallback) ? fallback : 0);
+        return {
+          productId: r.item.productId,
+          description: r.product?.name ?? "Unknown product",
+          quantity: r.item.quantity,
+          unitPrice,
+          imageUrl: r.product?.imageUrl ?? null,
+        };
+      });
+
+      const subtotal = quoteLines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+      const gst = subtotal * 0.18;
+      const total = subtotal + gst;
+
+      const [q] = await tx.insert(quotesTable).values({
+        companyId: req.companyId,
+        quoteNumber: `QT-${Date.now()}`,
+        subject: opportunity?.title ?? `Sample ${so.sampleNumber}`,
+        clientId,
+        opportunityId: so.opportunityId ?? null,
+        subtotal: subtotal.toFixed(2), discountPct: "0.00",
+        gstAmount: gst.toFixed(2), totalAmount: total.toFixed(2),
+        notes: `Created from sample order ${so.sampleNumber}`,
+      }).returning();
+
+      await tx.insert(quoteItemsTable).values(quoteLines.map((l) => ({
+        quoteId: q.id, productId: l.productId, description: l.description,
+        quantity: l.quantity, unitPrice: l.unitPrice.toString(),
+        lineTotal: (l.quantity * l.unitPrice).toString(), imageUrl: l.imageUrl,
+      })));
+
+      await tx.update(sampleOrdersTable).set({ status: "Converted" })
+        .where(eq(sampleOrdersTable.id, so.id));
+
+      let opportunityStage: string | null = null;
+      if (opportunity && opportunity.stage === "samples") {
+        await tx.update(opportunitiesTable).set({ stage: "quotation_sent" })
+          .where(eq(opportunitiesTable.id, opportunity.id));
+        opportunityStage = "quotation_sent";
+      }
+
+      return { quoteId: q.id, quoteNumber: q.quoteNumber, opportunityStage };
+    });
+
+    res.status(201).json(result);
+  } catch (err) {
+    const httpStatus = (err as { httpStatus?: number }).httpStatus;
+    if (httpStatus) { res.status(httpStatus).json({ error: (err as Error).message }); return; }
+    console.error("convert-to-quote failed:", err);
+    res.status(500).json({ error: "Failed to convert sample order to quote" });
+  }
 });
 
 // PATCH /v1/sample-orders/:id/return

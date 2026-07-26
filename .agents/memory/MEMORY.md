@@ -8,3 +8,4 @@
 - [advance receipts pattern](advance-receipts.md) — pre-invoice advance payments live in advance_receipts table (opportunityId, no invoiceId); separate from payments table which requires invoiceId NOT NULL
 - [DO deployment](do-deployment.md) — app/DB ids, sslmode-strip TLS rule, temp firewall whitelist workflow, deploy_on_push enabled, stale DO_DATABASE_URL secret
 - [Drizzle baseline](drizzle-baseline.md) — making migrate() work on push-created DBs: idempotent replay + journal insert; always column-diff vs 0000 snapshot after
+- [Dev API e2e testing](dev-api-testing.md) — auth is Bearer token from /v1/auth/login (NOT cookies); seed creds in scripts/src/seed.ts; base http://localhost:80/api

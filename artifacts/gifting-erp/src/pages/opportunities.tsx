@@ -174,7 +174,8 @@ export function Opportunities() {
   const { data: leadItems, isLoading: leadItemsLoading } = useQuery<LeadItem[]>({
     queryKey: ["lead-items-catalogue", selected?.leadId],
     queryFn: () => api<LeadItem[]>(`/v1/leads/${selected!.leadId}/items`),
-    enabled: !!selected?.leadId && selected.stage === "sent_catalogue",
+    // samples stage also needs lead items: Convert to Quote prices lines with calcCataloguePrice
+    enabled: !!selected?.leadId && (selected.stage === "sent_catalogue" || selected.stage === "samples"),
   });
   const { data: oppQuotes } = useQuery<OppQuote[], Error, OppQuote[]>({
     queryKey: ["opp-quotes", selected?.id],
@@ -325,6 +326,45 @@ export function Opportunities() {
     },
     onError: (err: unknown) => {
       toast({ title: "Failed to create quote", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
+    },
+  });
+
+  const convertSampleToQuote = useMutation({
+    mutationFn: async (so: SampleOrderSummary) => {
+      const opp = selected;
+      if (!opp) throw new Error("No opportunity selected");
+      // Price each sample product the same way the catalogue panel does;
+      // the server converts atomically (quote + sample Converted + stage advance)
+      const productPrices: Record<string, number> = {};
+      for (const item of so.items ?? []) {
+        const product = products?.find(p => p.id === item.productId);
+        if (product) productPrices[String(item.productId)] = calcCataloguePrice(product, leadItems);
+      }
+      const result = await api<{ quoteId: number; quoteNumber: string; opportunityStage: string | null }>(
+        `/v1/sample-orders/${so.id}/convert-to-quote`,
+        { method: "POST", body: JSON.stringify({ productPrices }) },
+      );
+      return { ...result, oppId: opp.id };
+    },
+    onSuccess: ({ quoteNumber, opportunityStage, oppId }) => {
+      qc.invalidateQueries({ queryKey: ["opportunities"] });
+      qc.invalidateQueries({ queryKey: ["opp-quotes"] });
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      qc.invalidateQueries({ queryKey: ["opp-sample-orders"] });
+      qc.invalidateQueries({ queryKey: ["sample-orders"] });
+      if (opportunityStage) setSelected(prev => (prev && prev.id === oppId ? { ...prev, stage: opportunityStage } : prev));
+      toast({
+        title: `Quote ${quoteNumber} created`,
+        description: opportunityStage ? "Sample converted — moved to Quotation Sent" : "Sample converted to quote",
+      });
+    },
+    onError: (err: unknown) => {
+      // Refresh drawer state so a stale card can't invite a duplicate retry
+      qc.invalidateQueries({ queryKey: ["opportunities"] });
+      qc.invalidateQueries({ queryKey: ["opp-sample-orders"] });
+      qc.invalidateQueries({ queryKey: ["opp-quotes"] });
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      toast({ title: "Convert to quote failed", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
     },
   });
 
@@ -1303,6 +1343,15 @@ export function Opportunities() {
                                   className="h-6 text-xs px-2 text-amber-600 border-amber-300 hover:bg-amber-50"
                                   onClick={() => openReturnDialog(so.id)}>
                                   Set Disposition
+                                </Button>
+                              )}
+                              {so.status !== "Converted" && so.status !== "Rejected" && (
+                                <Button size="sm"
+                                  className="h-6 text-xs px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  disabled={convertSampleToQuote.isPending || productsLoading || leadItemsLoading}
+                                  onClick={() => convertSampleToQuote.mutate(so)}>
+                                  <FileText className="w-3 h-3 mr-1" />
+                                  {convertSampleToQuote.isPending && convertSampleToQuote.variables?.id === so.id ? "Converting…" : "Convert to Quote"}
                                 </Button>
                               )}
                               <Button size="sm" variant="ghost" className="h-6 px-2 text-xs ml-auto"
