@@ -783,7 +783,7 @@ export function Opportunities() {
 
       {/* Detail drawer */}
       <Sheet open={!!selected} onOpenChange={o => { if (!o) { setSelected(null); setOppEditMode(false); } }}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
           {selected && (
             <>
               <SheetHeader className="mb-6">
