@@ -1000,38 +1000,39 @@ export function Opportunities() {
                       <BookOpen className="w-4 h-4 text-blue-600" />
                       <span className="text-sm font-semibold text-blue-700">Product Catalogue</span>
                     </div>
-                    {/* Catalogue type */}
+                    {/* Category pill tabs + product list */}
                     {(() => {
-                      const productCategories = Array.from(new Set((leadItems ?? []).map(i => i.category).filter(Boolean))).sort() as string[];
+                      const leadCategories = Array.from(new Set((leadItems ?? []).map(i => i.category).filter(Boolean))).sort() as string[];
+                      const allPills = leadCategories.length > 1 ? ["__all__", ...leadCategories] : leadCategories;
                       const catalogueFiltered = (products ?? []).filter(p =>
-                        (catalogueType === "__all__" || catalogueType === "Custom" || p.category === catalogueType) &&
+                        (catalogueType === "__all__" || p.category === catalogueType) &&
                         (p.name.toLowerCase().includes(catalogueSearch.toLowerCase()) || p.category.toLowerCase().includes(catalogueSearch.toLowerCase()))
                       );
+                      const catalogueTitle = catalogueType === "__all__" ? "All Categories" : catalogueType;
                       return (
                         <>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Catalogue Type</label>
-                      <Select value={catalogueType} onValueChange={v => { setCatalogueType(v); setCatalogueSelected(new Set()); if (v !== "Custom") setCatalogueCustomType(""); }}>
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent position="popper">
-                          {productCategories.map(t => (
-                            <SelectItem key={t} value={t}>{t}</SelectItem>
-                          ))}
-                          <SelectItem value="__all__">All Categories</SelectItem>
-                          <SelectItem value="Custom">Custom Title</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {catalogueType === "Custom" && (
-                        <Input className="h-8 text-sm" placeholder="Enter catalogue title…"
-                          value={catalogueCustomType} onChange={e => setCatalogueCustomType(e.target.value)} />
-                      )}
-                    </div>
-                    {/* Product search */}
+                    {/* Category pills */}
+                    {allPills.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {allPills.map(cat => (
+                          <button key={cat}
+                            onClick={() => { setCatalogueType(cat); setCatalogueSelected(new Set()); }}
+                            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                              catalogueType === cat
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-muted-foreground border-border hover:border-blue-400 hover:text-blue-600"
+                            }`}>
+                            {cat === "__all__" ? "All" : cat}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {/* Product list */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <label className="text-xs font-medium text-muted-foreground">Select Products</label>
+                        <label className="text-xs font-medium text-muted-foreground">
+                          {catalogueType === "__all__" ? "All Products" : catalogueType}
+                        </label>
                         <div className="flex gap-1.5 text-xs text-muted-foreground">
                           <button className="hover:text-foreground underline-offset-2 hover:underline"
                             onClick={() => setCatalogueSelected(new Set(catalogueFiltered.map(p => p.id)))}>All</button>
@@ -1045,27 +1046,27 @@ export function Opportunities() {
                         <Input className="h-8 text-sm pl-8" placeholder="Search products…"
                           value={catalogueSearch} onChange={e => setCatalogueSearch(e.target.value)} />
                       </div>
-                      <div className="border rounded-lg bg-background max-h-48 overflow-y-auto divide-y">
+                      <div className="border rounded-lg bg-background max-h-52 overflow-y-auto divide-y">
                         {catalogueFiltered.map(p => (
-                            <label key={p.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors">
-                              <input type="checkbox" className="accent-blue-600 w-3.5 h-3.5"
-                                checked={catalogueSelected.has(p.id)}
-                                onChange={e => setCatalogueSelected(prev => {
-                                  const next = new Set(prev);
-                                  e.target.checked ? next.add(p.id) : next.delete(p.id);
-                                  return next;
-                                })} />
-                              {p.imageUrl
-                                ? <img src={p.imageUrl} className="w-7 h-7 rounded object-cover border shrink-0" />
-                                : <div className="w-7 h-7 rounded bg-blue-100 flex items-center justify-content-center shrink-0 text-base flex items-center justify-center">🎁</div>
-                              }
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs font-medium truncate">{p.name}</div>
-                                <div className="text-xs text-muted-foreground">{p.category}{p.brand ? ` · ${p.brand}` : ""}</div>
-                              </div>
-                              <span className="text-xs font-semibold text-blue-700 shrink-0">₹{calcCataloguePrice(p, leadItems).toLocaleString("en-IN")}</span>
-                            </label>
-                          ))}
+                          <label key={p.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors">
+                            <input type="checkbox" className="accent-blue-600 w-3.5 h-3.5"
+                              checked={catalogueSelected.has(p.id)}
+                              onChange={e => setCatalogueSelected(prev => {
+                                const next = new Set(prev);
+                                e.target.checked ? next.add(p.id) : next.delete(p.id);
+                                return next;
+                              })} />
+                            {p.imageUrl
+                              ? <img src={p.imageUrl} className="w-7 h-7 rounded object-cover border shrink-0" />
+                              : <div className="w-7 h-7 rounded bg-blue-100 flex items-center justify-center shrink-0 text-base">🎁</div>
+                            }
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium truncate">{p.name}</div>
+                              <div className="text-xs text-muted-foreground">{p.category}{p.brand ? ` · ${p.brand}` : ""}</div>
+                            </div>
+                            <span className="text-xs font-semibold text-blue-700 shrink-0">₹{calcCataloguePrice(p, leadItems).toLocaleString("en-IN")}</span>
+                          </label>
+                        ))}
                         {productsLoading && (
                           <p className="text-xs text-muted-foreground text-center py-4">Loading products…</p>
                         )}
@@ -1079,11 +1080,11 @@ export function Opportunities() {
                     </div>
                     <div className="flex gap-2">
                       <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-8 text-sm"
-                        disabled={catalogueSelected.size === 0 || (catalogueType === "Custom" && !catalogueCustomType.trim())}
+                        disabled={catalogueSelected.size === 0}
                         onClick={() => {
                           const selectedProducts = (products ?? []).filter(p => catalogueSelected.has(p.id));
                           printCatalogue({
-                            title: catalogueType === "Custom" ? catalogueCustomType.trim() : catalogueType,
+                            title: catalogueTitle,
                             clientName: selected.clientName ?? selected.title,
                             products: selectedProducts,
                           });
@@ -1091,7 +1092,7 @@ export function Opportunities() {
                         <Printer className="w-3.5 h-3.5 mr-1.5" />PDF ({catalogueSelected.size})
                       </Button>
                       <Button className="flex-1 h-8 text-sm" variant="outline"
-                        disabled={catalogueSelected.size === 0 || (catalogueType === "Custom" && !catalogueCustomType.trim()) || shareLoading}
+                        disabled={catalogueSelected.size === 0 || shareLoading}
                         onClick={async () => {
                           setShareLoading(true);
                           try {
@@ -1100,7 +1101,7 @@ export function Opportunities() {
                               body: JSON.stringify({
                                 opportunityTitle: selected.title,
                                 clientName: selected.clientName ?? selected.title,
-                                catalogueType: catalogueType === "Custom" ? catalogueCustomType.trim() : catalogueType,
+                                catalogueType: catalogueTitle,
                                 productIds: Array.from(catalogueSelected),
                                 opportunityId: selected.id,
                                 clientId: selected.clientId ?? null,
@@ -1110,9 +1111,9 @@ export function Opportunities() {
                             const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
                             const url = `${window.location.origin}${base}/catalogue/${token}`;
                             setShareUrl(url);
-                            try { await navigator.clipboard.writeText(url); setShareCopied(true); setTimeout(() => setShareCopied(false), 3000); } catch { /* clipboard unavailable — user will copy from dialog */ }
+                            try { await navigator.clipboard.writeText(url); setShareCopied(true); setTimeout(() => setShareCopied(false), 3000); } catch { /* clipboard unavailable */ }
                           } catch (err: unknown) {
-                            if (err instanceof Error && err.message === "Unauthorized") return; // redirect to login already in progress
+                            if (err instanceof Error && err.message === "Unauthorized") return;
                             toast({ title: "Failed to generate link", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
                           } finally {
                             setShareLoading(false);
@@ -1123,12 +1124,12 @@ export function Opportunities() {
                       </Button>
                     </div>
                     {shareUrl && (
-                      <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3 space-y-2">
-                        <p className="text-xs font-medium text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
+                        <p className="text-xs font-medium text-blue-700 flex items-center gap-1.5">
                           <Link2 className="w-3.5 h-3.5" />Shareable link (valid 30 days)
                         </p>
                         <div className="flex gap-2 items-center">
-                          <input readOnly value={shareUrl} className="flex-1 text-xs bg-white dark:bg-background border rounded px-2 py-1.5 font-mono truncate select-all" onFocus={e => e.target.select()} />
+                          <input readOnly value={shareUrl} className="flex-1 text-xs bg-white border rounded px-2 py-1.5 font-mono truncate select-all" onFocus={e => e.target.select()} />
                           <Button size="sm" variant="outline" className="h-7 text-xs px-2 shrink-0"
                             onClick={async () => {
                               try { await navigator.clipboard.writeText(shareUrl); setShareCopied(true); setTimeout(() => setShareCopied(false), 2000); } catch {
@@ -1139,7 +1140,7 @@ export function Opportunities() {
                             {shareCopied ? "Copied!" : "Copy"}
                           </Button>
                         </div>
-                        <p className="text-xs text-blue-500 dark:text-blue-400">Tap the link to select it, then copy & share with your customer.</p>
+                        <p className="text-xs text-blue-500">Tap the link to select it, then copy & share with your customer.</p>
                       </div>
                     )}
                     </>
