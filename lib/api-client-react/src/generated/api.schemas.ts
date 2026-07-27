@@ -157,11 +157,19 @@ export interface Product {
 
 export interface ProductInput {
   name: string;
+  sku?: string;
+  brand?: string;
+  productType?: string;
   category: string;
+  hsnCode?: string;
+  gstRate?: number;
+  uom?: string;
   costPrice: number;
   sellingPrice: number;
   stockLevel?: number;
   lowStockThreshold?: number;
+  reorderQty?: number;
+  brandable?: boolean;
   vendorId?: number;
   imageUrl?: string;
   branding?: number;
@@ -170,11 +178,19 @@ export interface ProductInput {
 
 export interface ProductUpdate {
   name?: string;
+  sku?: string;
+  brand?: string;
+  productType?: string;
   category?: string;
+  hsnCode?: string;
+  gstRate?: number;
+  uom?: string;
   costPrice?: number;
   sellingPrice?: number;
   stockLevel?: number;
   lowStockThreshold?: number;
+  reorderQty?: number;
+  brandable?: boolean;
   vendorId?: number;
   imageUrl?: string;
   branding?: number;

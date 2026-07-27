@@ -12,9 +12,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { useCreateProduct, getListProductsQueryKey } from "@workspace/api-client-react";
+import { useCreateProduct, useListVendors, getListProductsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
@@ -143,13 +144,33 @@ const ITEM_CATEGORIES = [
 
 interface CreateItemForm {
   name: string;
+  sku: string;
+  brand: string;
+  productType: string;
   category: string;
+  hsnCode: string;
+  gstRate: string;
+  uom: string;
   costPrice: string;
   sellingPrice: string;
+  stockLevel: string;
+  lowStockThreshold: string;
+  reorderQty: string;
+  vendorId: string;
+  branding: string;
+  transportation: string;
+  brandable: boolean;
   imageUrl: string;
 }
 
-const EMPTY_ITEM: CreateItemForm = { name: "", category: "", costPrice: "", sellingPrice: "", imageUrl: "" };
+const EMPTY_ITEM: CreateItemForm = {
+  name: "", sku: "", brand: "", productType: "", category: "",
+  hsnCode: "", gstRate: "18", uom: "PCS",
+  costPrice: "", sellingPrice: "",
+  stockLevel: "0", lowStockThreshold: "10", reorderQty: "0",
+  vendorId: "", branding: "", transportation: "",
+  brandable: false, imageUrl: "",
+};
 
 export function PdfExtractor() {
   const [mode, setMode] = useState<Mode>("images");
@@ -178,6 +199,7 @@ export function PdfExtractor() {
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: vendors } = useListVendors();
 
   const createProduct = useCreateProduct({
     mutation: {
@@ -216,7 +238,12 @@ export function PdfExtractor() {
       const thumb = await resizeToThumbnail(img.dataUrl);
       const fd = new FormData();
       fd.append("image", thumb, img.filename.replace(/\.(png|jpg)$/i, ".jpg"));
-      const res = await fetch("/api/v1/uploads/image", { method: "POST", body: fd });
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("/api/v1/uploads/image", {
+        method: "POST",
+        body: fd,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) throw new Error("Upload failed");
       const { url } = await res.json() as { url: string };
       setCreateItemForm(f => ({ ...f, imageUrl: url }));
@@ -233,12 +260,23 @@ export function PdfExtractor() {
     createProduct.mutate({
       data: {
         name: createItemForm.name.trim(),
+        sku: createItemForm.sku.trim() || undefined,
+        brand: createItemForm.brand.trim() || undefined,
+        productType: createItemForm.productType || undefined,
         category: createItemForm.category,
+        hsnCode: createItemForm.hsnCode.trim() || undefined,
+        gstRate: Number(createItemForm.gstRate) || 18,
+        uom: createItemForm.uom || "PCS",
         costPrice: Number(createItemForm.costPrice) || 0,
         sellingPrice: Number(createItemForm.sellingPrice) || 0,
+        stockLevel: Number(createItemForm.stockLevel) || 0,
+        lowStockThreshold: Number(createItemForm.lowStockThreshold) || 10,
+        reorderQty: Number(createItemForm.reorderQty) || 0,
+        vendorId: createItemForm.vendorId ? Number(createItemForm.vendorId) : undefined,
+        branding: createItemForm.branding !== "" ? Number(createItemForm.branding) : undefined,
+        transportation: createItemForm.transportation !== "" ? Number(createItemForm.transportation) : undefined,
+        brandable: createItemForm.brandable,
         imageUrl: createItemForm.imageUrl || undefined,
-        stockLevel: 0,
-        lowStockThreshold: 10,
       },
     });
   };
@@ -762,77 +800,169 @@ export function PdfExtractor() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 max-h-[70vh] overflow-y-auto pr-1">
             {/* Image preview */}
             {(createItemUploading || createItemForm.imageUrl) && (
               <div className="flex justify-center">
                 {createItemUploading ? (
-                  <div className="w-32 h-32 rounded-lg border border-border bg-muted/30 flex flex-col items-center justify-center gap-2 text-muted-foreground text-xs">
+                  <div className="w-28 h-28 rounded-lg border border-border bg-muted/30 flex flex-col items-center justify-center gap-2 text-muted-foreground text-xs">
                     <Loader2 size={20} className="animate-spin text-primary" />
                     Uploading image…
                   </div>
                 ) : (
-                  <img src={createItemForm.imageUrl} alt="Product" className="max-h-32 rounded-lg border border-border object-contain" />
+                  <img src={createItemForm.imageUrl} alt="Product" className="max-h-28 rounded-lg border border-border object-contain" />
                 )}
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="ci-name" className="text-sm">Item Name <span className="text-destructive">*</span></Label>
-              <Input
-                id="ci-name"
-                placeholder="e.g. Leather Laptop Bag"
-                value={createItemForm.name}
-                onChange={e => setCreateItemForm(f => ({ ...f, name: e.target.value }))}
-                className="h-9"
-              />
-            </div>
+            {/* Basic info */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Basic Info</p>
 
-            <div className="space-y-1.5">
-              <Label className="text-sm">Category <span className="text-destructive">*</span></Label>
-              <Select
-                value={createItemForm.category}
-                onValueChange={v => setCreateItemForm(f => ({ ...f, category: v }))}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Select category…" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  {ITEM_CATEGORIES.map(c => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="ci-cost" className="text-sm">Cost Price (₹)</Label>
-                <Input
-                  id="ci-cost"
-                  type="number" min={0} step={0.01}
-                  placeholder="0.00"
-                  value={createItemForm.costPrice}
-                  onChange={e => setCreateItemForm(f => ({ ...f, costPrice: e.target.value }))}
-                  className="h-9"
-                />
+                <Label htmlFor="ci-name" className="text-sm">Item Name <span className="text-destructive">*</span></Label>
+                <Input id="ci-name" placeholder="e.g. Leather Laptop Bag"
+                  value={createItemForm.name} onChange={e => setCreateItemForm(f => ({ ...f, name: e.target.value }))} className="h-9" />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ci-sell" className="text-sm">Selling Price (₹)</Label>
-                <Input
-                  id="ci-sell"
-                  type="number" min={0} step={0.01}
-                  placeholder="0.00"
-                  value={createItemForm.sellingPrice}
-                  onChange={e => setCreateItemForm(f => ({ ...f, sellingPrice: e.target.value }))}
-                  className="h-9"
-                />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ci-sku" className="text-sm">SKU</Label>
+                  <Input id="ci-sku" placeholder="e.g. BAG-001"
+                    value={createItemForm.sku} onChange={e => setCreateItemForm(f => ({ ...f, sku: e.target.value }))} className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ci-brand" className="text-sm">Brand</Label>
+                  <Input id="ci-brand" placeholder="e.g. Nike, Fastrack"
+                    value={createItemForm.brand} onChange={e => setCreateItemForm(f => ({ ...f, brand: e.target.value }))} className="h-9" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-sm">Category <span className="text-destructive">*</span></Label>
+                  <Select value={createItemForm.category} onValueChange={v => setCreateItemForm(f => ({ ...f, category: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Select category…" /></SelectTrigger>
+                    <SelectContent position="popper">
+                      {ITEM_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm">Product Type</Label>
+                  <Select value={createItemForm.productType} onValueChange={v => setCreateItemForm(f => ({ ...f, productType: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Select type…" /></SelectTrigger>
+                    <SelectContent position="popper">
+                      <SelectItem value="finished_good">Finished Good</SelectItem>
+                      <SelectItem value="raw_material">Raw Material</SelectItem>
+                      <SelectItem value="semi_finished">Semi-Finished</SelectItem>
+                      <SelectItem value="packaging">Packaging</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              You can fill in additional details (SKU, HSN, vendors, stock) from the Products page after creation.
-            </p>
+            {/* Pricing & Tax */}
+            <div className="space-y-3 border-t pt-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pricing &amp; Tax</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ci-cost" className="text-sm">Cost Price (₹) <span className="text-destructive">*</span></Label>
+                  <Input id="ci-cost" type="number" min={0} step={0.01} placeholder="0.00"
+                    value={createItemForm.costPrice} onChange={e => setCreateItemForm(f => ({ ...f, costPrice: e.target.value }))} className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ci-sell" className="text-sm">Selling Price (₹) <span className="text-destructive">*</span></Label>
+                  <Input id="ci-sell" type="number" min={0} step={0.01} placeholder="0.00"
+                    value={createItemForm.sellingPrice} onChange={e => setCreateItemForm(f => ({ ...f, sellingPrice: e.target.value }))} className="h-9" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ci-hsn" className="text-sm">HSN Code</Label>
+                  <Input id="ci-hsn" placeholder="e.g. 9608"
+                    value={createItemForm.hsnCode} onChange={e => setCreateItemForm(f => ({ ...f, hsnCode: e.target.value }))} className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm">GST %</Label>
+                  <Select value={createItemForm.gstRate} onValueChange={v => setCreateItemForm(f => ({ ...f, gstRate: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent position="popper">
+                      {[0, 5, 12, 18, 28].map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm">UOM</Label>
+                  <Select value={createItemForm.uom} onValueChange={v => setCreateItemForm(f => ({ ...f, uom: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent position="popper">
+                      {["PCS","SET","BOX","KG","LTR","MTR","DZ","PAC"].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ci-branding" className="text-sm">Branding Cost (₹)</Label>
+                  <Input id="ci-branding" type="number" min={0} step={0.01} placeholder="0"
+                    value={createItemForm.branding} onChange={e => setCreateItemForm(f => ({ ...f, branding: e.target.value }))} className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ci-transport" className="text-sm">Transport Cost (₹)</Label>
+                  <Input id="ci-transport" type="number" min={0} step={0.01} placeholder="0"
+                    value={createItemForm.transportation} onChange={e => setCreateItemForm(f => ({ ...f, transportation: e.target.value }))} className="h-9" />
+                </div>
+              </div>
+            </div>
+
+            {/* Inventory */}
+            <div className="space-y-3 border-t pt-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inventory</p>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ci-stock" className="text-sm">Stock Level</Label>
+                  <Input id="ci-stock" type="number" min={0}
+                    value={createItemForm.stockLevel} onChange={e => setCreateItemForm(f => ({ ...f, stockLevel: e.target.value }))} className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ci-lowstock" className="text-sm">Low Stock Alert</Label>
+                  <Input id="ci-lowstock" type="number" min={0}
+                    value={createItemForm.lowStockThreshold} onChange={e => setCreateItemForm(f => ({ ...f, lowStockThreshold: e.target.value }))} className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ci-reorder" className="text-sm">Reorder Qty</Label>
+                  <Input id="ci-reorder" type="number" min={0}
+                    value={createItemForm.reorderQty} onChange={e => setCreateItemForm(f => ({ ...f, reorderQty: e.target.value }))} className="h-9" />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-sm">Vendor</Label>
+                <Select value={createItemForm.vendorId} onValueChange={v => setCreateItemForm(f => ({ ...f, vendorId: v === "__none__" ? "" : v }))}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="No vendor" /></SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="__none__">No vendor</SelectItem>
+                    {(vendors ?? []).map((v: { id: number; name: string }) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="ci-brandable"
+                  checked={createItemForm.brandable}
+                  onCheckedChange={v => setCreateItemForm(f => ({ ...f, brandable: v }))}
+                />
+                <Label htmlFor="ci-brandable" className="text-sm cursor-pointer font-normal">Brandable (can print client logo)</Label>
+              </div>
+            </div>
           </div>
 
           <DialogFooter className="gap-2">

@@ -1407,11 +1407,19 @@ components:
       required: [name, category, costPrice, sellingPrice]
       properties:
         name: { type: string }
+        sku: { type: string }
+        brand: { type: string }
+        productType: { type: string }
         category: { type: string }
+        hsnCode: { type: string }
+        gstRate: { type: number }
+        uom: { type: string }
         costPrice: { type: number }
         sellingPrice: { type: number }
         stockLevel: { type: integer }
         lowStockThreshold: { type: integer }
+        reorderQty: { type: integer }
+        brandable: { type: boolean }
         vendorId: { type: integer }
         imageUrl: { type: string }
         branding: { type: number }
@@ -1421,11 +1429,19 @@ components:
       type: object
       properties:
         name: { type: string }
+        sku: { type: string }
+        brand: { type: string }
+        productType: { type: string }
         category: { type: string }
+        hsnCode: { type: string }
+        gstRate: { type: number }
+        uom: { type: string }
         costPrice: { type: number }
         sellingPrice: { type: number }
         stockLevel: { type: integer }
         lowStockThreshold: { type: integer }
+        reorderQty: { type: integer }
+        brandable: { type: boolean }
         vendorId: { type: integer }
         imageUrl: { type: string }
         branding: { type: number }
