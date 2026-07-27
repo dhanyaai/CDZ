@@ -222,6 +222,15 @@ router.delete("/v1/quotes/:id/items/:itemId", async (req, res): Promise<void> =>
 
 router.post("/v1/quotes/:id/convert", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
+  const rawPo = (req.body as { poNumber?: unknown } | undefined)?.poNumber;
+  if (rawPo !== undefined && rawPo !== null && typeof rawPo !== "string") {
+    res.status(400).json({ error: "poNumber must be a string" }); return;
+  }
+  const trimmedPo = typeof rawPo === "string" ? rawPo.trim() : "";
+  if (trimmedPo.length > 100) {
+    res.status(400).json({ error: "PO number too long (max 100 characters)" }); return;
+  }
+  const poNumber = trimmedPo || null;
 
   const [quote] = await db.select().from(quotesTable)
     .where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId)));
@@ -253,6 +262,7 @@ router.post("/v1/quotes/:id/convert", async (req, res): Promise<void> => {
         orderNumber,
         clientId: quote.clientId,
         quoteId: quote.id,
+        poNumber,
         status: "Draft",
         totalAmount: quote.subtotal,
         discountPct: quote.discountPct,

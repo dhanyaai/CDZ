@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, ArrowRight, FileSpreadsheet, IndianRupee, Clock, CheckCircle2, XCircle, Printer, Package, Building2, Phone, Mail, CreditCard } from "lucide-react";
 import { printQuote } from "@/lib/print-utils";
+import { ConvertToSalesOrderDialog } from "@/components/convert-so-dialog";
 import { format } from "date-fns";
 
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
@@ -111,11 +112,15 @@ export function Quotes() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["quotes"] }); qc.invalidateQueries({ queryKey: ["quote-detail", selected?.id] }); },
   });
 
+  // PO-number prompt shown before converting an accepted quote into a Sales Order
+  const [convertPoQuoteId, setConvertPoQuoteId] = useState<number | null>(null);
   const convertToOrder = useMutation({
-    mutationFn: (id: number) => api(`/v1/quotes/${id}/convert`, { method: "POST" }),
+    mutationFn: ({ id, poNumber }: { id: number; poNumber: string | null }) =>
+      api(`/v1/quotes/${id}/convert`, { method: "POST", body: JSON.stringify({ poNumber }) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["quotes"] }); qc.invalidateQueries({ queryKey: ["sales-orders"] });
       toast({ title: "Converted to Sales Order" }); setSelected(null);
+      setConvertPoQuoteId(null);
     },
     onError: () => toast({ title: "Conversion failed", variant: "destructive" }),
   });
@@ -468,7 +473,7 @@ export function Quotes() {
                   </Button>
 
                   {selected.status === "accepted" && (
-                    <Button className="w-full" onClick={() => convertToOrder.mutate(selected.id)} disabled={convertToOrder.isPending}>
+                    <Button className="w-full" onClick={() => setConvertPoQuoteId(selected.id)} disabled={convertToOrder.isPending}>
                       <ArrowRight className="w-4 h-4 mr-2" />Convert to Sales Order
                     </Button>
                   )}
@@ -495,6 +500,17 @@ export function Quotes() {
           })()}
         </SheetContent>
       </Sheet>
+
+      {/* PO-number prompt — converting an accepted quote into a Sales Order */}
+      <ConvertToSalesOrderDialog
+        open={convertPoQuoteId !== null}
+        pending={convertToOrder.isPending}
+        onCancel={() => setConvertPoQuoteId(null)}
+        onConfirm={(po) => {
+          if (convertPoQuoteId === null) return;
+          convertToOrder.mutate({ id: convertPoQuoteId, poNumber: po });
+        }}
+      />
     </div>
   );
 }

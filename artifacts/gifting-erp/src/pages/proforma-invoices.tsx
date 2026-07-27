@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { FilePlus2, Trash2, Printer, IndianRupee, FileCheck2, Clock, XCircle, Building2, Phone, Mail, CreditCard, PackageCheck, ArrowRight } from "lucide-react";
 import { printProformaInvoice } from "@/lib/print-utils";
+import { ConvertToSalesOrderDialog } from "@/components/convert-so-dialog";
 import { format } from "date-fns";
 
 type PI = {
@@ -58,13 +59,16 @@ export function ProformaInvoices() {
     enabled: selected != null,
   });
 
+  // PO-number prompt shown before converting the PI's quote into a Sales Order
+  const [convertPoQuoteId, setConvertPoQuoteId] = useState<number | null>(null);
   const convertToSO = useMutation({
-    mutationFn: async (quoteId: number) => {
+    mutationFn: async ({ quoteId, poNumber }: { quoteId: number; poNumber: string | null }) => {
       await api(`/v1/quotes/${quoteId}`, { method: "PATCH", body: JSON.stringify({ status: "accepted" }) });
-      return api<{ salesOrderId: number; orderNumber: string; message: string }>(`/v1/quotes/${quoteId}/convert`, { method: "POST" });
+      return api<{ salesOrderId: number; orderNumber: string; message: string }>(`/v1/quotes/${quoteId}/convert`, { method: "POST", body: JSON.stringify({ poNumber }) });
     },
     onSuccess: (data) => {
       setCreatedSO({ id: data.salesOrderId, orderNumber: data.orderNumber });
+      setConvertPoQuoteId(null);
       toast({ title: "Sales Order Created", description: `${data.orderNumber} has been created from this PI.` });
       qc.invalidateQueries({ queryKey: ["sales-orders"] });
     },
@@ -284,7 +288,7 @@ export function ProformaInvoices() {
                       <Button
                         className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
                         disabled={convertToSO.isPending}
-                        onClick={() => { setCreatedSO(null); convertToSO.mutate(selected.quoteId!); }}
+                        onClick={() => { setCreatedSO(null); setConvertPoQuoteId(selected.quoteId!); }}
                       >
                         <PackageCheck className="w-4 h-4 mr-2" />
                         {convertToSO.isPending ? "Creating Sales Order…" : "Create Sales Order"}
@@ -307,6 +311,17 @@ export function ProformaInvoices() {
           })()}
         </SheetContent>
       </Sheet>
+
+      {/* PO-number prompt — converting the PI's quote into a Sales Order */}
+      <ConvertToSalesOrderDialog
+        open={convertPoQuoteId !== null}
+        pending={convertToSO.isPending}
+        onCancel={() => setConvertPoQuoteId(null)}
+        onConfirm={(po) => {
+          if (convertPoQuoteId === null) return;
+          convertToSO.mutate({ quoteId: convertPoQuoteId, poNumber: po });
+        }}
+      />
     </div>
   );
 }

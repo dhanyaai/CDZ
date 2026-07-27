@@ -17,6 +17,7 @@ import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, Bar
 import { differenceInDays, format } from "date-fns";
 import { useLocation } from "wouter";
 import { printSampleOrder, printReturnNote, printCatalogue, printQuote, printDeliveryChallan, printSalesOrder } from "@/lib/print-utils";
+import { ConvertToSalesOrderDialog } from "@/components/convert-so-dialog";
 
 type Opportunity = {
   id: number; title: string; clientId: number | null; clientName: string | null;
@@ -140,6 +141,8 @@ export function Opportunities() {
   const [pmtShowForm, setPmtShowForm] = useState(false);
   const [pmtForm, setPmtForm] = useState({ amount: "", paymentMode: "", referenceNo: "", paymentDate: new Date().toISOString().slice(0, 10), notes: "" });
   const [convertingQuoteId, setConvertingQuoteId] = useState<number | null>(null);
+  // PO-number prompt shown before converting an accepted quote into a Sales Order
+  const [convertPoDialogQuoteId, setConvertPoDialogQuoteId] = useState<number | null>(null);
   const [expandedQuoteId, setExpandedQuoteId] = useState<number | null>(null);
   const [quoteDetailCache, setQuoteDetailCache] = useState<Map<number, OppQuoteDetail>>(new Map());
   const [shipShowForm, setShipShowForm] = useState(false);
@@ -418,16 +421,17 @@ export function Opportunities() {
   });
 
   const convertQuote = useMutation({
-    mutationFn: async (quoteId: number) => {
+    mutationFn: async ({ quoteId, poNumber }: { quoteId: number; poNumber: string | null }) => {
       // Mark accepted first (convert route requires status=accepted)
       await api(`/v1/quotes/${quoteId}`, { method: "PATCH", body: JSON.stringify({ status: "accepted" }) });
-      return api<{ salesOrderId: number; orderNumber: string }>(`/v1/quotes/${quoteId}/convert`, { method: "POST" });
+      return api<{ salesOrderId: number; orderNumber: string }>(`/v1/quotes/${quoteId}/convert`, { method: "POST", body: JSON.stringify({ poNumber }) });
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["opp-quotes", selected?.id] });
       qc.invalidateQueries({ queryKey: ["quotes"] });
       qc.invalidateQueries({ queryKey: ["opp-sales-orders"] });
       qc.invalidateQueries({ queryKey: ["sales-orders"] });
+      setConvertPoDialogQuoteId(null);
       toast({ title: "Sales Order Created", description: `${data.orderNumber} created from quote` });
     },
     onError: (err: unknown) => {
@@ -1908,7 +1912,7 @@ export function Opportunities() {
                                 size="sm"
                                 className="w-full h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
                                 disabled={convertQuote.isPending}
-                                onClick={() => { setConvertingQuoteId(latestQuote.id); convertQuote.mutate(latestQuote.id); }}>
+                                onClick={() => setConvertPoDialogQuoteId(latestQuote.id)}>
                                 {convertQuote.isPending ? "Creating…" : <><Check className="w-3 h-3 mr-1" />Mark Accepted &amp; Convert to Sales Order</>}
                               </Button>
                             )}
@@ -1917,7 +1921,7 @@ export function Opportunities() {
                                 size="sm"
                                 className="w-full h-7 text-xs"
                                 disabled={convertQuote.isPending}
-                                onClick={() => { setConvertingQuoteId(latestQuote.id); convertQuote.mutate(latestQuote.id); }}>
+                                onClick={() => setConvertPoDialogQuoteId(latestQuote.id)}>
                                 {convertQuote.isPending ? "Creating…" : <><ArrowRight className="w-3 h-3 mr-1" />Convert to Sales Order</>}
                               </Button>
                             )}
@@ -1970,6 +1974,9 @@ export function Opportunities() {
                                 </a>
                               </div>
                             </div>
+                            {linkedSO.poNumber && (
+                              <p className="text-xs text-muted-foreground">Client PO: <span className="font-medium text-foreground">{linkedSO.poNumber}</span></p>
+                            )}
                             {linkedSO.deliveryDate && (
                               <p className="text-xs text-muted-foreground">Delivery: {new Date(linkedSO.deliveryDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
                             )}
@@ -2565,6 +2572,18 @@ export function Opportunities() {
       </Dialog>
 
       {/* ── New Sample Order Dialog ── */}
+      {/* PO-number prompt — converting an accepted quote into a Sales Order */}
+      <ConvertToSalesOrderDialog
+        open={convertPoDialogQuoteId !== null}
+        pending={convertQuote.isPending}
+        onCancel={() => setConvertPoDialogQuoteId(null)}
+        onConfirm={(po) => {
+          if (convertPoDialogQuoteId === null) return;
+          setConvertingQuoteId(convertPoDialogQuoteId);
+          convertQuote.mutate({ quoteId: convertPoDialogQuoteId, poNumber: po });
+        }}
+      />
+
       <Dialog open={sampleDialog} onOpenChange={(o) => { setSampleDialog(o); if (!o) resetSampleForm(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
