@@ -6,6 +6,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { requireAuth } from "./lib/requireAuth";
+import { LOCAL_UPLOADS_DIR } from "./lib/spaces.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -58,6 +59,10 @@ app.use(
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve locally-stored upload files (fallback when DO Spaces is unavailable).
+// Must come BEFORE the requireAuth middleware so images are publicly accessible.
+app.use("/api/uploads", express.static(LOCAL_UPLOADS_DIR, { maxAge: "7d" }));
 
 app.use("/api", requireAuth, router);
 

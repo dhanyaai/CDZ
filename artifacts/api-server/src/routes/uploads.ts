@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { uploadToSpaces } from "../lib/spaces.js";
+import { upload } from "../lib/spaces.js";
 
 const router = Router();
 
@@ -45,7 +45,7 @@ router.post("/v1/uploads/image", imageUpload.single("image"), async (req, res): 
     return;
   }
   try {
-    const url = await uploadToSpaces(
+    const url = await upload(
       req.file.buffer,
       req.file.originalname,
       req.file.mimetype,
@@ -53,7 +53,7 @@ router.post("/v1/uploads/image", imageUpload.single("image"), async (req, res): 
     );
     res.json({ url });
   } catch (err) {
-    req.log.error({ err }, "Failed to upload image to Spaces");
+    req.log.error({ err }, "Failed to upload image");
     res.status(500).json({ error: "Image upload failed" });
   }
 });
@@ -64,7 +64,7 @@ router.post("/v1/uploads/file", fileUpload.single("file"), async (req, res): Pro
     return;
   }
   try {
-    const url = await uploadToSpaces(
+    const url = await upload(
       req.file.buffer,
       req.file.originalname,
       req.file.mimetype,
@@ -72,7 +72,7 @@ router.post("/v1/uploads/file", fileUpload.single("file"), async (req, res): Pro
     );
     res.json({ url, name: req.file.originalname, type: req.file.mimetype });
   } catch (err) {
-    req.log.error({ err }, "Failed to upload file to Spaces");
+    req.log.error({ err }, "Failed to upload file");
     res.status(500).json({ error: "File upload failed" });
   }
 });
