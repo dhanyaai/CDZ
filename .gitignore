@@ -50,3 +50,4 @@ Thumbs.db
 
 # Locally-stored uploads (dev fallback when DO Spaces is unavailable)
 artifacts/api-server/public/uploads/
+artifacts/public/uploads/

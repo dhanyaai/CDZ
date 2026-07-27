@@ -1,8 +1,18 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import multer from "multer";
 import { upload } from "../lib/spaces.js";
 
 const router = Router();
+
+/** Run a multer middleware but convert its errors (bad type, too large) into a 400 JSON response. */
+const withMulter = (mw: RequestHandler): RequestHandler => (req, res, next) =>
+  mw(req, res, (err?: unknown) => {
+    if (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : "Upload rejected" });
+      return;
+    }
+    next();
+  });
 
 const imageUpload = multer({
   storage: multer.memoryStorage(),
@@ -35,11 +45,11 @@ const fileUpload = multer({
       t.endsWith("/") ? file.mimetype.startsWith(t) : file.mimetype === t
     );
     if (ok) cb(null, true);
-    else cb(null, true);
+    else cb(new Error("File type not allowed"));
   },
 });
 
-router.post("/v1/uploads/image", imageUpload.single("image"), async (req, res): Promise<void> => {
+router.post("/v1/uploads/image", withMulter(imageUpload.single("image")), async (req, res): Promise<void> => {
   if (!req.file) {
     res.status(400).json({ error: "No image file provided" });
     return;
@@ -58,7 +68,7 @@ router.post("/v1/uploads/image", imageUpload.single("image"), async (req, res): 
   }
 });
 
-router.post("/v1/uploads/file", fileUpload.single("file"), async (req, res): Promise<void> => {
+router.post("/v1/uploads/file", withMulter(fileUpload.single("file")), async (req, res): Promise<void> => {
   if (!req.file) {
     res.status(400).json({ error: "No file provided" });
     return;

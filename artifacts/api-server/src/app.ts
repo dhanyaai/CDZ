@@ -62,7 +62,20 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve locally-stored upload files (fallback when DO Spaces is unavailable).
 // Must come BEFORE the requireAuth middleware so images are publicly accessible.
-app.use("/api/uploads", express.static(LOCAL_UPLOADS_DIR, { maxAge: "7d" }));
+// nosniff + forced download for non-image types prevents stored uploads from
+// executing as active content (HTML/SVG) on this origin.
+app.use(
+  "/api/uploads",
+  express.static(LOCAL_UPLOADS_DIR, {
+    maxAge: "7d",
+    setHeaders: (res, filePath) => {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      if (!/\.(png|jpe?g|gif|webp)$/i.test(filePath)) {
+        res.setHeader("Content-Disposition", "attachment");
+      }
+    },
+  }),
+);
 
 app.use("/api", requireAuth, router);
 
