@@ -356,7 +356,7 @@ export function Quotes() {
 
       {/* ── Quote Detail Drawer ── */}
       <Sheet open={!!selected} onOpenChange={o => !o && setSelected(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
           {selected && (() => {
             const cfg = STATUS_CONFIG[selected.status] ?? STATUS_CONFIG.draft;
             const detailItems = quoteDetail?.items ?? [];

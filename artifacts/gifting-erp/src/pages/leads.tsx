@@ -568,7 +568,7 @@ export function Leads() {
 
       {/* Lead detail drawer */}
       <Sheet open={!!selected} onOpenChange={o => { if (!o) { setSelected(null); setEditMode(false); } }}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className={editMode ? "w-full sm:max-w-full overflow-y-auto" : "w-full sm:max-w-lg overflow-y-auto"}>
           {selected && (
             <>
               <SheetHeader className="mb-6">
@@ -634,7 +634,8 @@ export function Leads() {
                   });
                 };
                 return (
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-w-6xl mx-auto w-full">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Lead Title *</label>
                       <Input value={editForm.title ?? ""} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} placeholder="Lead title" />
@@ -724,6 +725,7 @@ export function Leads() {
                         <Input className="h-8 text-sm" value={editForm.cityOfDelivery ?? ""} onChange={e => setEditForm(f => ({ ...f, cityOfDelivery: e.target.value || null }))} placeholder="Hyderabad" />
                       </div>
                     </div>
+                    </div>
 
                     {/* Products table */}
                     <div className="space-y-2">
@@ -800,7 +802,7 @@ export function Leads() {
                               </tr>
                             ))}
                             {editItems.length === 0 && (
-                              <tr><td colSpan={7} className="text-center py-3 text-xs text-muted-foreground">No products — click "Add Row"</td></tr>
+                              <tr><td colSpan={9} className="text-center py-3 text-xs text-muted-foreground">No products — click "Add Row"</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -818,9 +820,11 @@ export function Leads() {
                       <Textarea rows={3} value={editForm.notes ?? ""} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value || null }))} placeholder="Additional notes…" />
                     </div>
 
-                    <Button onClick={saveEdit} disabled={!editForm.title?.trim() || update.isPending} className="w-full">
-                      {update.isPending ? "Saving…" : "Save Changes"}
-                    </Button>
+                    <div className="flex justify-end">
+                      <Button onClick={saveEdit} disabled={!editForm.title?.trim() || update.isPending} className="w-full sm:w-auto sm:px-10">
+                        {update.isPending ? "Saving…" : "Save Changes"}
+                      </Button>
+                    </div>
                   </div>
                 );
               })()}
