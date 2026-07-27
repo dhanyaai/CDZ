@@ -144,6 +144,82 @@ router.delete("/v1/quotes/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+// PATCH /v1/quotes/:id/items/:itemId — edit qty and/or unit price for one line
+router.patch("/v1/quotes/:id/items/:itemId", async (req, res): Promise<void> => {
+  const quoteId = parseInt(req.params.id, 10);
+  const itemId  = parseInt(req.params.itemId, 10);
+  const { quantity, unitPrice } = req.body ?? {};
+  if ((quantity !== undefined && (typeof quantity !== "number" || quantity < 1)) ||
+      (unitPrice !== undefined && (typeof unitPrice !== "number" || unitPrice < 0))) {
+    res.status(400).json({ error: "quantity must be ≥ 1 and unitPrice must be ≥ 0" }); return;
+  }
+
+  const [quote] = await db.select().from(quotesTable)
+    .where(and(eq(quotesTable.id, quoteId), eq(quotesTable.companyId, req.companyId)));
+  if (!quote) { res.status(404).json({ error: "Quote not found" }); return; }
+
+  const [item] = await db.select().from(quoteItemsTable)
+    .where(and(eq(quoteItemsTable.id, itemId), eq(quoteItemsTable.quoteId, quoteId)));
+  if (!item) { res.status(404).json({ error: "Line item not found" }); return; }
+
+  const newQty   = quantity  !== undefined ? quantity  : item.quantity;
+  const newPrice = unitPrice !== undefined ? unitPrice : Number(item.unitPrice);
+  const newLine  = newQty * newPrice;
+  const discountPct = Number(quote.discountPct);
+
+  await db.transaction(async (tx) => {
+    await tx.update(quoteItemsTable)
+      .set({ quantity: newQty, unitPrice: newPrice.toFixed(2), lineTotal: newLine.toFixed(2) })
+      .where(eq(quoteItemsTable.id, itemId));
+    // Recompute parent quote totals
+    const allItems = await tx.select().from(quoteItemsTable).where(eq(quoteItemsTable.quoteId, quoteId));
+    const subtotal = allItems.reduce((s, i) => s + Number(i.lineTotal), 0);
+    const afterDisc = subtotal * (1 - discountPct / 100);
+    const gst = afterDisc * 0.18;
+    await tx.update(quotesTable)
+      .set({ subtotal: subtotal.toFixed(2), gstAmount: gst.toFixed(2), totalAmount: (afterDisc + gst).toFixed(2) })
+      .where(eq(quotesTable.id, quoteId));
+  });
+
+  const [updated] = await db.select().from(quoteItemsTable).where(eq(quoteItemsTable.id, itemId));
+  const [updatedQuote] = await db.select().from(quotesTable).where(eq(quotesTable.id, quoteId));
+  res.json({
+    item: { ...updated, unitPrice: Number(updated.unitPrice), lineTotal: Number(updated.lineTotal) },
+    quote: { subtotal: Number(updatedQuote.subtotal), gstAmount: Number(updatedQuote.gstAmount), totalAmount: Number(updatedQuote.totalAmount) },
+  });
+});
+
+// DELETE /v1/quotes/:id/items/:itemId — remove one line (blocked if it's the last item)
+router.delete("/v1/quotes/:id/items/:itemId", async (req, res): Promise<void> => {
+  const quoteId = parseInt(req.params.id, 10);
+  const itemId  = parseInt(req.params.itemId, 10);
+
+  const [quote] = await db.select().from(quotesTable)
+    .where(and(eq(quotesTable.id, quoteId), eq(quotesTable.companyId, req.companyId)));
+  if (!quote) { res.status(404).json({ error: "Quote not found" }); return; }
+
+  const allItems = await db.select().from(quoteItemsTable).where(eq(quoteItemsTable.quoteId, quoteId));
+  if (!allItems.find(i => i.id === itemId)) { res.status(404).json({ error: "Line item not found" }); return; }
+  if (allItems.length <= 1) { res.status(400).json({ error: "Cannot delete the last line item — delete the whole quote instead" }); return; }
+
+  const discountPct = Number(quote.discountPct);
+  await db.transaction(async (tx) => {
+    await tx.delete(quoteItemsTable).where(eq(quoteItemsTable.id, itemId));
+    const remaining = await tx.select().from(quoteItemsTable).where(eq(quoteItemsTable.quoteId, quoteId));
+    const subtotal = remaining.reduce((s, i) => s + Number(i.lineTotal), 0);
+    const afterDisc = subtotal * (1 - discountPct / 100);
+    const gst = afterDisc * 0.18;
+    await tx.update(quotesTable)
+      .set({ subtotal: subtotal.toFixed(2), gstAmount: gst.toFixed(2), totalAmount: (afterDisc + gst).toFixed(2) })
+      .where(eq(quotesTable.id, quoteId));
+  });
+
+  const [updatedQuote] = await db.select().from(quotesTable).where(eq(quotesTable.id, quoteId));
+  res.json({
+    quote: { subtotal: Number(updatedQuote.subtotal), gstAmount: Number(updatedQuote.gstAmount), totalAmount: Number(updatedQuote.totalAmount) },
+  });
+});
+
 router.post("/v1/quotes/:id/convert", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
 

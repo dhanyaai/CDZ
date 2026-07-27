@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check, FileText, ExternalLink, ArrowRight, Truck, PackageCheck, Navigation, XCircle, ClipboardList } from "lucide-react";
+import { Plus, Trash2, Calendar, Building2, IndianRupee, TrendingUp, Target, BarChart3, UserCircle, FlaskConical, Printer, Package, BookOpen, Search, LayoutList, Columns3, Link2, Check, FileText, ExternalLink, ArrowRight, Truck, PackageCheck, Navigation, XCircle, ClipboardList, Pencil, X as XIcon } from "lucide-react";
 import { differenceInDays, format } from "date-fns";
 import { useLocation } from "wouter";
 import { printSampleOrder, printReturnNote, printCatalogue, printQuote, printDeliveryChallan, printSalesOrder } from "@/lib/print-utils";
@@ -38,7 +38,7 @@ type SampleOrderDetail = SampleOrderSummary & {
 type SampleLine = { productId: string; quantity: string };
 type LineItem = { description: string; quantity: number; unitPrice: number; productId?: number; imageUrl?: string | null };
 type OppQuote = { id: number; quoteNumber: string; subject: string | null; status: string; totalAmount: number; opportunityId: number | null; createdAt: string };
-type OppQuoteDetail = { quoteNumber: string; subject: string | null; status: string; subtotal: number; discountPct: number; gstAmount: number; totalAmount: number; validUntil: string | null; notes: string | null; paymentTerms: string | null; clientName: string | null; items: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number; imageUrl: string | null }> };
+type OppQuoteDetail = { quoteNumber: string; subject: string | null; status: string; subtotal: number; discountPct: number; gstAmount: number; totalAmount: number; validUntil: string | null; notes: string | null; paymentTerms: string | null; clientName: string | null; items: Array<{ id: number; description: string; quantity: number; unitPrice: number; lineTotal: number; imageUrl: string | null }> };
 type OppSalesOrder = { id: number; orderNumber: string; clientName: string; quoteId: number | null; status: string; validTransitions: string[]; grandTotal: number; deliveryDate: string | null; poNumber: string | null; createdAt: string };
 type OppShipment = { id: number; shipmentNumber: string; salesOrderId: number; orderNumber: string | null; courierPartner: string; status: string; validTransitions: string[]; trackingNumber: string | null; dispatchDate: string | null; estimatedDelivery: string | null; numberOfBoxes: number | null; totalWeight: number | null; freightCost: number; items: Array<{ id: number; deliveryName: string; address: string; awbNumber: string | null; status: string }>; createdAt: string };
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
@@ -130,6 +130,10 @@ export function Opportunities() {
   const [creatingFromShortlist, setCreatingFromShortlist] = useState(false);
   // Ticked products for "Create Sample Order from Shortlist" (null = all ticked)
   const [shortlistPicked, setShortlistPicked] = useState<Set<number> | null>(null);
+  // Inline line-item editing
+  const [editingItem, setEditingItem] = useState<{ quoteId: number; itemId: number; qty: string; price: string } | null>(null);
+  const [savingItem, setSavingItem] = useState(false);
+  const [deletingItemId, setDeletingItemId] = useState<number | null>(null);
   const [printingQuoteId, setPrintingQuoteId] = useState<number | null>(null);
   const [advShowForm, setAdvShowForm] = useState(false);
   const [advForm, setAdvForm] = useState({ amount: "", paymentMode: "", referenceNo: "", receiptDate: new Date().toISOString().slice(0, 10), notes: "" });
@@ -1553,25 +1557,125 @@ export function Opportunities() {
                                             <thead className="bg-muted/60">
                                               <tr>
                                                 <th className="text-left px-2 py-1.5 font-semibold text-muted-foreground">Product / Description</th>
-                                                <th className="text-center px-2 py-1.5 font-semibold text-muted-foreground w-10">Qty</th>
+                                                <th className="text-center px-2 py-1.5 font-semibold text-muted-foreground w-12">Qty</th>
                                                 <th className="text-right px-2 py-1.5 font-semibold text-muted-foreground w-20">Unit ₹</th>
                                                 <th className="text-right px-2 py-1.5 font-semibold text-muted-foreground w-20">Total ₹</th>
+                                                <th className="w-14"></th>
                                               </tr>
                                             </thead>
                                             <tbody className="divide-y">
-                                              {detail.items.map((item, idx) => (
-                                                <tr key={idx} className="bg-background hover:bg-muted/20">
-                                                  <td className="px-2 py-1.5 flex items-center gap-1.5">
-                                                    {item.imageUrl
-                                                      ? <img src={item.imageUrl} alt={item.description} className="w-6 h-6 rounded object-cover shrink-0 border" />
-                                                      : <Package className="w-4 h-4 text-muted-foreground shrink-0" />}
-                                                    <span className="leading-tight">{item.description}</span>
-                                                  </td>
-                                                  <td className="px-2 py-1.5 text-center text-muted-foreground">{item.quantity}</td>
-                                                  <td className="px-2 py-1.5 text-right text-muted-foreground">{Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                                                  <td className="px-2 py-1.5 text-right font-medium">{Number(item.lineTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                                                </tr>
-                                              ))}
+                                              {detail.items.map((item) => {
+                                                const isEditing = editingItem?.quoteId === q.id && editingItem?.itemId === item.id;
+                                                const isDeleting = deletingItemId === item.id;
+                                                return (
+                                                  <tr key={item.id} className={`bg-background ${isEditing ? "bg-blue-50/60" : "hover:bg-muted/20"}`}>
+                                                    <td className="px-2 py-1.5 flex items-center gap-1.5">
+                                                      {item.imageUrl
+                                                        ? <img src={item.imageUrl} alt={item.description} className="w-6 h-6 rounded object-cover shrink-0 border" />
+                                                        : <Package className="w-4 h-4 text-muted-foreground shrink-0" />}
+                                                      <span className="leading-tight">{item.description}</span>
+                                                    </td>
+                                                    {isEditing ? (
+                                                      <>
+                                                        <td className="px-1 py-1">
+                                                          <input type="number" min="1" className="w-12 border rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                                            value={editingItem.qty}
+                                                            onChange={e => setEditingItem(prev => prev ? { ...prev, qty: e.target.value } : prev)} />
+                                                        </td>
+                                                        <td className="px-1 py-1">
+                                                          <input type="number" min="0" step="0.01" className="w-20 border rounded px-1 py-0.5 text-right text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                                            value={editingItem.price}
+                                                            onChange={e => setEditingItem(prev => prev ? { ...prev, price: e.target.value } : prev)} />
+                                                        </td>
+                                                        <td className="px-1 py-1 text-right text-muted-foreground font-medium">
+                                                          {(Number(editingItem.qty) * Number(editingItem.price)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-1 py-1">
+                                                          <div className="flex gap-0.5 justify-end">
+                                                            <button disabled={savingItem}
+                                                              className="px-1.5 py-0.5 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:opacity-50"
+                                                              onClick={async () => {
+                                                                const qty = parseInt(editingItem.qty, 10);
+                                                                const price = parseFloat(editingItem.price);
+                                                                if (!qty || qty < 1 || isNaN(price) || price < 0) return;
+                                                                setSavingItem(true);
+                                                                try {
+                                                                  const result = await api<{ item: { id: number; quantity: number; unitPrice: number; lineTotal: number }; quote: { subtotal: number; gstAmount: number; totalAmount: number } }>(
+                                                                    `/v1/quotes/${q.id}/items/${item.id}`,
+                                                                    { method: "PATCH", body: JSON.stringify({ quantity: qty, unitPrice: price }) }
+                                                                  );
+                                                                  setQuoteDetailCache(prev => {
+                                                                    const d = prev.get(q.id);
+                                                                    if (!d) return prev;
+                                                                    const updated: OppQuoteDetail = {
+                                                                      ...d,
+                                                                      subtotal: result.quote.subtotal,
+                                                                      gstAmount: result.quote.gstAmount,
+                                                                      totalAmount: result.quote.totalAmount,
+                                                                      items: d.items.map(i => i.id === item.id
+                                                                        ? { ...i, quantity: result.item.quantity, unitPrice: result.item.unitPrice, lineTotal: result.item.lineTotal }
+                                                                        : i),
+                                                                    };
+                                                                    return new Map(prev).set(q.id, updated);
+                                                                  });
+                                                                  qc.invalidateQueries({ queryKey: ["opp-quotes"] });
+                                                                  qc.invalidateQueries({ queryKey: ["quotes"] });
+                                                                  setEditingItem(null);
+                                                                } catch { toast({ title: "Failed to update line", variant: "destructive" }); }
+                                                                finally { setSavingItem(false); }
+                                                              }}>✓</button>
+                                                            <button className="px-1.5 py-0.5 rounded bg-muted text-xs hover:bg-muted/80"
+                                                              onClick={() => setEditingItem(null)}><XIcon className="w-3 h-3" /></button>
+                                                          </div>
+                                                        </td>
+                                                      </>
+                                                    ) : (
+                                                      <>
+                                                        <td className="px-2 py-1.5 text-center text-muted-foreground">{item.quantity}</td>
+                                                        <td className="px-2 py-1.5 text-right text-muted-foreground">{Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                                        <td className="px-2 py-1.5 text-right font-medium">{Number(item.lineTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                                        <td className="px-1 py-1">
+                                                          <div className="flex gap-0.5 justify-end">
+                                                            <button className="p-1 rounded hover:bg-blue-100 text-muted-foreground hover:text-blue-600 transition-colors"
+                                                              onClick={() => setEditingItem({ quoteId: q.id, itemId: item.id, qty: String(item.quantity), price: String(item.unitPrice) })}>
+                                                              <Pencil className="w-3 h-3" />
+                                                            </button>
+                                                            <button disabled={isDeleting || detail.items.length <= 1}
+                                                              title={detail.items.length <= 1 ? "Cannot delete the last line" : "Delete line"}
+                                                              className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-30"
+                                                              onClick={async () => {
+                                                                setDeletingItemId(item.id);
+                                                                try {
+                                                                  const result = await api<{ quote: { subtotal: number; gstAmount: number; totalAmount: number } }>(
+                                                                    `/v1/quotes/${q.id}/items/${item.id}`,
+                                                                    { method: "DELETE" }
+                                                                  );
+                                                                  setQuoteDetailCache(prev => {
+                                                                    const d = prev.get(q.id);
+                                                                    if (!d) return prev;
+                                                                    const updated: OppQuoteDetail = {
+                                                                      ...d,
+                                                                      subtotal: result.quote.subtotal,
+                                                                      gstAmount: result.quote.gstAmount,
+                                                                      totalAmount: result.quote.totalAmount,
+                                                                      items: d.items.filter(i => i.id !== item.id),
+                                                                    };
+                                                                    return new Map(prev).set(q.id, updated);
+                                                                  });
+                                                                  qc.invalidateQueries({ queryKey: ["opp-quotes"] });
+                                                                  qc.invalidateQueries({ queryKey: ["quotes"] });
+                                                                } catch { toast({ title: "Failed to delete line", variant: "destructive" }); }
+                                                                finally { setDeletingItemId(null); }
+                                                              }}>
+                                                              <Trash2 className="w-3 h-3" />
+                                                            </button>
+                                                          </div>
+                                                        </td>
+                                                      </>
+                                                    )}
+                                                  </tr>
+                                                );
+                                              })}
                                             </tbody>
                                           </table>
                                         </div>
