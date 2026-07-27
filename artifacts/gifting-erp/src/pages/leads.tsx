@@ -499,19 +499,19 @@ export function Leads() {
                             onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, customProduct: e.target.value } : i))} />
                         </td>
                         <td className="px-2 py-1.5">
-                          <Input className="h-7 text-xs" type="number" placeholder="0" value={item.qty}
+                          <Input className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" type="number" placeholder="0" value={item.qty}
                             onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, qty: e.target.value } : i))} />
                         </td>
                         <td className="px-2 py-1.5">
-                          <Input className="h-7 text-xs" type="number" placeholder="0" value={item.budget}
+                          <Input className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" type="number" placeholder="0" value={item.budget}
                             onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, budget: e.target.value } : i))} />
                         </td>
                         <td className="px-2 py-1.5">
-                          <Input className="h-7 text-xs" type="number" placeholder="0" value={item.transportation}
+                          <Input className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" type="number" placeholder="0" value={item.transportation}
                             onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, transportation: e.target.value } : i))} />
                         </td>
                         <td className="px-2 py-1.5">
-                          <Input className="h-7 text-xs" type="number" placeholder="0" value={item.margin}
+                          <Input className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" type="number" placeholder="0" value={item.margin}
                             onChange={e => setFormItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, margin: e.target.value } : i))} />
                         </td>
                         <td className="px-2 py-1.5">
@@ -743,11 +743,11 @@ export function Leads() {
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-8">#</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-28">Category</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Product</th>
-                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Custom</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-44">Custom</th>
                               <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-24">Qty</th>
-                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-20">Budget</th>
-                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-20">Transport</th>
-                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-16">Margin%</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-28">Budget</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-28">Transport</th>
+                              <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-24">Margin%</th>
                               <th className="w-6"></th>
                             </tr>
                           </thead>
@@ -778,19 +778,19 @@ export function Leads() {
                                     onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, customProduct: e.target.value } : i))} />
                                 </td>
                                 <td className="px-1 py-1">
-                                  <Input className="h-6 text-xs" type="number" placeholder="0" value={item.qty}
+                                  <Input className="h-6 text-xs px-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" type="number" placeholder="0" value={item.qty}
                                     onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, qty: e.target.value } : i))} />
                                 </td>
                                 <td className="px-1 py-1">
-                                  <Input className="h-6 text-xs" type="number" placeholder="0" value={item.budget}
+                                  <Input className="h-6 text-xs px-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" type="number" placeholder="0" value={item.budget}
                                     onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, budget: e.target.value } : i))} />
                                 </td>
                                 <td className="px-1 py-1">
-                                  <Input className="h-6 text-xs" type="number" placeholder="0" value={item.transportation}
+                                  <Input className="h-6 text-xs px-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" type="number" placeholder="0" value={item.transportation}
                                     onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, transportation: e.target.value } : i))} />
                                 </td>
                                 <td className="px-1 py-1">
-                                  <Input className="h-6 text-xs" type="number" placeholder="0" value={item.margin}
+                                  <Input className="h-6 text-xs px-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" type="number" placeholder="0" value={item.margin}
                                     onChange={e => setEditItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, margin: e.target.value } : i))} />
                                 </td>
                                 <td className="px-1 py-1">
