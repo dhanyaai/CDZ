@@ -1122,7 +1122,7 @@ export function printReturnNote(so: {
       <div class="doc-id">
         <h1>${so.sampleNumber}</h1>
         <div class="date">${new Date(so.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}</div>
-        <span class="${badgeClass(so.status)}">${so.status}</span>
+        <span class="${badgeClass(so.status)}">${so.status === "Received" ? "Accepted" : so.status}</span>
       </div>
     </div>
 
@@ -1192,7 +1192,7 @@ export function printSampleOrder(so: {
       <div class="doc-id">
         <h1>${so.sampleNumber}</h1>
         <div class="date">${new Date(so.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}</div>
-        <span class="${badgeClass(so.status)}">${so.status}</span>
+        <span class="${badgeClass(so.status)}">${so.status === "Received" ? "Accepted" : so.status}</span>
       </div>
     </div>
 
@@ -1207,7 +1207,7 @@ export function printSampleOrder(so: {
         <h3>Sample Details</h3>
         <div class="meta-row"><span class="lbl">Sample #</span><span class="val">${so.sampleNumber}</span></div>
         <div class="meta-row"><span class="lbl">Date</span><span class="val">${new Date(so.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></div>
-        <div class="meta-row"><span class="lbl">Status</span><span class="val">${so.status}</span></div>
+        <div class="meta-row"><span class="lbl">Status</span><span class="val">${so.status === "Received" ? "Accepted" : so.status}</span></div>
         ${so.opportunityTitle ? `<div class="meta-row"><span class="lbl">Opportunity</span><span class="val">${so.opportunityTitle}</span></div>` : ""}
       </div>
     </div>

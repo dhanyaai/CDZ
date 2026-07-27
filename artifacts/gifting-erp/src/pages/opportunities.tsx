@@ -44,6 +44,8 @@ type OppSalesOrder = { id: number; orderNumber: string; clientName: string; quot
 type OppShipment = { id: number; shipmentNumber: string; salesOrderId: number; orderNumber: string | null; courierPartner: string; status: string; validTransitions: string[]; trackingNumber: string | null; dispatchDate: string | null; estimatedDelivery: string | null; numberOfBoxes: number | null; totalWeight: number | null; freightCost: number; items: Array<{ id: number; deliveryName: string; address: string; awbNumber: string | null; status: string }>; createdAt: string };
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
 
+/** Display label for a sample-order status (stored value stays "Received"). */
+const sampleStatusLabel = (s: string) => (s === "Received" ? "Accepted" : s);
 const SAMPLE_STATUS_COLOR: Record<string, string> = {
   Requested: "bg-blue-500/10 text-blue-600 border-blue-500/20",
   Dispatched: "bg-amber-500/10 text-amber-600 border-amber-500/20",
@@ -1381,7 +1383,7 @@ export function Opportunities() {
                             {/* Row 1: number + badge + date */}
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-sm font-semibold">{so.sampleNumber}</span>
-                              <Badge variant="outline" className={`text-xs ${SAMPLE_STATUS_COLOR[so.status] ?? ""}`}>{so.status}</Badge>
+                              <Badge variant="outline" className={`text-xs ${SAMPLE_STATUS_COLOR[so.status] ?? ""}`}>{sampleStatusLabel(so.status)}</Badge>
                               <span className="text-xs text-muted-foreground ml-auto">{format(new Date(so.createdAt), "MMM d")}</span>
                             </div>
                             {/* Item-wise details */}
@@ -1425,7 +1427,7 @@ export function Opportunities() {
                                   className="h-6 text-xs px-2"
                                   disabled={updateSampleStatus.isPending}
                                   onClick={() => updateSampleStatus.mutate({ id: so.id, status: ns })}>
-                                  {ns}
+                                  {sampleStatusLabel(ns)}
                                 </Button>
                               ))}
                               {so.status === "Received" && (
