@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Locally-stored uploads (dev fallback when DO Spaces is unavailable)
+artifacts/api-server/public/uploads/

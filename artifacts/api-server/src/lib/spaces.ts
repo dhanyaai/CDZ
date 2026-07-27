@@ -4,8 +4,8 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const REGION = process.env.DO_SPACES_REGION ?? "blr1";
-const BUCKET = process.env.DO_SPACES_BUCKET ?? "czd";
+const REGION = process.env.DO_SPACES_REGION ?? "sgp1";
+const BUCKET = process.env.DO_SPACES_BUCKET ?? "czd-erp";
 const ENDPOINT = process.env.DO_SPACES_ENDPOINT ?? `https://${REGION}.digitaloceanspaces.com`;
 const CDN = process.env.DO_SPACES_CDN_ENDPOINT ?? `https://${BUCKET}.${REGION}.digitaloceanspaces.com`;
 
@@ -66,8 +66,16 @@ export async function uploadLocal(
   return `${LOCAL_UPLOADS_BASE_URL}/${folder}/${filename}`;
 }
 
+// Local-disk fallback is only safe on a single-instance dev server.
+// Prod runs multiple replicas behind a load balancer — files written to one
+// replica's disk 404 on the others and vanish on redeploy. So in production
+// we fail loudly unless explicitly overridden.
+const LOCAL_FALLBACK_ENABLED =
+  process.env.NODE_ENV !== "production" ||
+  process.env.LOCAL_UPLOADS_ENABLED === "true";
+
 /**
- * Try Spaces first; fall back to local disk on any error.
+ * Try Spaces first; fall back to local disk on any error (dev only).
  * Returns the public URL of the stored file.
  */
 export async function upload(
@@ -84,9 +92,12 @@ export async function upload(
   if (hasCredentials) {
     try {
       return await uploadToSpaces(buffer, originalName, mimeType, folder);
-    } catch {
-      // Fall through to local storage.
+    } catch (err) {
+      if (!LOCAL_FALLBACK_ENABLED) throw err;
+      // Fall through to local storage (dev).
     }
+  } else if (!LOCAL_FALLBACK_ENABLED) {
+    throw new Error("DO Spaces credentials are not configured");
   }
 
   return uploadLocal(buffer, originalName, folder);
