@@ -48,7 +48,11 @@ async function getOrderDetail(id: number, companyId: number) {
       .select({ total: sql<string>`COALESCE(SUM(${advanceReceiptsTable.amount}), 0)` })
       .from(advanceReceiptsTable)
       .innerJoin(quotesTable, eq(advanceReceiptsTable.opportunityId, quotesTable.opportunityId))
-      .where(and(eq(quotesTable.id, order.order.quoteId), eq(advanceReceiptsTable.companyId, companyId)));
+      .where(and(
+        eq(quotesTable.id, order.order.quoteId),
+        eq(quotesTable.companyId, companyId),
+        eq(advanceReceiptsTable.companyId, companyId),
+      ));
     advanceReceived = Number(adv?.total ?? 0);
   }
 
