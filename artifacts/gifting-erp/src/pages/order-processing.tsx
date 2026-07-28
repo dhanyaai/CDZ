@@ -31,6 +31,10 @@ interface SalesOrderDetail {
   id: number;
   orderNumber: string;
   clientName: string;
+  contactPerson?: string | null;
+  clientPhone?: string | null;
+  deliveryDate?: string | null;
+  advanceReceived?: number | null;
   createdAt: string;
   items: SalesOrderItem[];
   gstAmount?: number | null;
@@ -518,12 +522,41 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
     }
   }, [existingForm]);
 
+  // Prefill from the sales order — only fills fields that are still empty,
+  // so saved form data is never overwritten.
   useEffect(() => {
-    if (salesOrder?.createdAt) {
-      const dateStr = salesOrder.createdAt.slice(0, 10);
-      setFormData((prev) => ({ ...prev, confirmedOrderDate: dateStr }));
-    }
-  }, [salesOrder?.createdAt]);
+    if (!salesOrder || isLoading) return;
+    setFormData((prev) => {
+      const next = { ...prev };
+      const fill = (key: keyof OrderFormData, value: string) => {
+        if (value && !(next[key] as string)) (next as Record<string, unknown>)[key] = value;
+      };
+      fill("confirmedOrderDate", salesOrder.createdAt ? salesOrder.createdAt.slice(0, 10) : "");
+      fill("firmName", salesOrder.clientName && salesOrder.clientName !== "Unknown" ? salesOrder.clientName : "");
+      fill("pocName", salesOrder.contactPerson ?? "");
+      fill("pocContact", salesOrder.clientPhone ?? "");
+      const total = Number(salesOrder.grandTotal ?? 0);
+      const advance = Number(salesOrder.advanceReceived ?? 0);
+      fill("totalAmount", total > 0 ? total.toFixed(2) : "");
+      fill("advanceReceived", advance > 0 ? advance.toFixed(2) : "");
+      if (total > 0 && !prev.balanceAmount && !prev.totalAmount && !prev.advanceReceived) {
+        next.balanceAmount = (total - advance).toFixed(2);
+      }
+      // Prefill checklist product names if the checklist is still untouched
+      const untouchedChecklist =
+        (prev.checklistItems ?? []).length <= 1 &&
+        !(prev.checklistItems?.[0]?.productName || prev.checklistItems?.[0]?.inhouseQty || prev.checklistItems?.[0]?.procureQty || prev.checklistItems?.[0]?.totalReceiveNote);
+      if (untouchedChecklist && salesOrder.items.length > 0) {
+        next.checklistItems = salesOrder.items.map((it) => ({
+          productName: it.productName,
+          inhouseQty: "",
+          procureQty: "",
+          totalReceiveNote: "",
+        }));
+      }
+      return next;
+    });
+  }, [salesOrder, isLoading, existingForm]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: OrderFormData) => {
@@ -578,9 +611,9 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
   }
 
   const meta = {
-    orderNumber: existingForm?.orderNumber ?? `SO-${salesOrderId}`,
-    clientName: existingForm?.clientName ?? "",
-    deliveryDate: existingForm?.deliveryDate ? format(new Date(existingForm.deliveryDate), "dd MMM yyyy") : "",
+    orderNumber: existingForm?.orderNumber ?? salesOrder?.orderNumber ?? `SO-${salesOrderId}`,
+    clientName: existingForm?.clientName ?? salesOrder?.clientName ?? "",
+    deliveryDate: (existingForm?.deliveryDate ?? salesOrder?.deliveryDate) ? format(new Date((existingForm?.deliveryDate ?? salesOrder?.deliveryDate) as string), "dd MMM yyyy") : "",
   };
 
   return (
@@ -674,7 +707,7 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
                   <Input value={formData.firmName} placeholder={meta.clientName || "Company name"} onChange={(e) => set("firmName", e.target.value)} />
                 </Field>
                 <Field label="Delivery Date">
-                  <Input type="date" value={existingForm?.deliveryDate ? existingForm.deliveryDate.slice(0, 10) : ""} disabled className="opacity-60" />
+                  <Input type="date" value={(existingForm?.deliveryDate ?? salesOrder?.deliveryDate)?.slice(0, 10) ?? ""} disabled className="opacity-60" />
                 </Field>
                 <Field label="POC Name">
                   <Input value={formData.pocName} placeholder="Point of contact" onChange={(e) => set("pocName", e.target.value)} />

@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { eq, and, SQL, isNull } from "drizzle-orm";
-import { db, salesOrdersTable, salesOrderItemsTable, deliveryAddressesTable, clientsTable, productsTable, companySettingsTable } from "@workspace/db";
+import { eq, and, SQL, isNull, sql } from "drizzle-orm";
+import { db, salesOrdersTable, salesOrderItemsTable, deliveryAddressesTable, clientsTable, productsTable, companySettingsTable, quotesTable, advanceReceiptsTable } from "@workspace/db";
 import { SO_TRANSITIONS, validTransitions, StatusError } from "../services/stateMachine";
 import { confirmSO, cancelSO, advanceSO } from "../services/soService";
 import { nextDocNumber } from "../lib/numberSequence";
@@ -41,6 +41,17 @@ async function getOrderDetail(id: number, companyId: number) {
     .from(deliveryAddressesTable)
     .where(eq(deliveryAddressesTable.salesOrderId, id));
 
+  // Sum any advance receipts recorded against the opportunity this SO's quote came from
+  let advanceReceived = 0;
+  if (order.order.quoteId) {
+    const [adv] = await db
+      .select({ total: sql<string>`COALESCE(SUM(${advanceReceiptsTable.amount}), 0)` })
+      .from(advanceReceiptsTable)
+      .innerJoin(quotesTable, eq(advanceReceiptsTable.opportunityId, quotesTable.opportunityId))
+      .where(and(eq(quotesTable.id, order.order.quoteId), eq(advanceReceiptsTable.companyId, companyId)));
+    advanceReceived = Number(adv?.total ?? 0);
+  }
+
   return {
     id: order.order.id,
     orderNumber: order.order.orderNumber,
@@ -60,6 +71,7 @@ async function getOrderDetail(id: number, companyId: number) {
     paymentTerms: order.order.paymentTerms ?? null,
     deliveryDate: order.order.deliveryDate?.toISOString() ?? null,
     poNumber: order.order.poNumber ?? null,
+    advanceReceived,
     occasion: order.order.occasion ?? null,
     notes: order.order.notes ?? null,
     items: items.map((r) => ({
