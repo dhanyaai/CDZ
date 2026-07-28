@@ -52,6 +52,13 @@ router.post("/v1/advance-receipts", async (req, res): Promise<void> => {
   if (!opportunityId || amount == null || !receiptDate) {
     res.status(400).json({ error: "opportunityId, amount, and receiptDate are required" }); return;
   }
+  const [opp] = await db
+    .select({ id: opportunitiesTable.id })
+    .from(opportunitiesTable)
+    .where(and(eq(opportunitiesTable.id, opportunityId), eq(opportunitiesTable.companyId, req.companyId)));
+  if (!opp) {
+    res.status(404).json({ error: "Opportunity not found" }); return;
+  }
   const [row] = await db.insert(advanceReceiptsTable).values({
     companyId: req.companyId, opportunityId, amount: String(amount),
     paymentMode: paymentMode ?? null, referenceNo: referenceNo ?? null,
