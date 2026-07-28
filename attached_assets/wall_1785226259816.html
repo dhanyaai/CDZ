@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camera Wall</title>
+<style>
+  /* No webfonts on purpose: a TV browser on a LAN may not reach a CDN, and
+     the wall must come up even if the internet is down. */
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #000; overflow: hidden;
+    font-family: "DejaVu Sans Mono", "Liberation Mono", Consolas, monospace;
+    -webkit-user-select: none; user-select: none;
+  }
+  body { cursor: none; }
+  body.hascursor { cursor: default; }
+
+  #wall {
+    display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-flex-wrap: wrap; flex-wrap: wrap;
+    width: 100%; height: 100%;
+    align-content: flex-start;
+  }
+
+  .tile {
+    position: relative;
+    box-sizing: border-box;
+    border: 1px solid #111;
+    background: #060606;
+    overflow: hidden;
+  }
+  .tile img {
+    display: block;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+
+  /* Label sits over the picture, quiet by default. */
+  .tag {
+    position: absolute; left: 0; bottom: 0;
+    max-width: 100%;
+    padding: 2px 6px;
+    background: rgba(0,0,0,0.55);
+    color: #b9b9b9;
+    font-size: 11px; line-height: 1.35;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* The one place colour is allowed: something is wrong.
+     A dead tile becomes a readable slate showing its channel code, so you can
+     identify the failed camera from across the room. */
+  .tile.down { background: #14100c; border-color: #3a2a12; }
+  .tile.down img { display: none; }
+  .down .slate {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    display: -webkit-box; display: flex;
+    -webkit-box-align: center; align-items: center;
+    -webkit-box-pack: center; justify-content: center;
+    -webkit-box-orient: vertical; flex-direction: column;
+  }
+  .slate { display: none; }
+  .slate .code {
+    color: #e0a020; font-size: 22px; letter-spacing: 0.14em; font-weight: bold;
+  }
+  .slate .word {
+    color: #7a5c22; font-size: 10px; letter-spacing: 0.3em; margin-top: 4px;
+  }
+  .tile.down .tag { color: #7a5c22; }
+
+  #bar {
+    position: fixed; top: 10px; right: 14px;
+    color: #6a6a6a; font-size: 12px; letter-spacing: 0.14em;
+    text-transform: uppercase;
+    background: rgba(0,0,0,0.6); padding: 4px 10px;
+    -webkit-transition: opacity .6s; transition: opacity .6s;
+  }
+  #bar.faded { opacity: 0; }
+  #bar .warn { color: #e0a020; }
+
+  #zoom {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: #000; display: none; z-index: 50;
+  }
+  #zoom.on { display: block; }
+  #zoom img { width: 100%; height: 100%; object-fit: contain; }
+  #zoomtag {
+    position: absolute; left: 16px; bottom: 14px;
+    color: #cfcfcf; font-size: 15px; letter-spacing: 0.12em;
+    text-transform: uppercase; background: rgba(0,0,0,0.6); padding: 5px 10px;
+  }
+</style>
+</head>
+<body>
+
+<div id="wall"></div>
+<div id="bar"></div>
+<div id="zoom"><img id="zoomimg" alt=""><div id="zoomtag"></div></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- URL options -------------------------------------------------------
+  // ?per=20      cameras per page (or "all")
+  // ?rotate=15   seconds per page, 0 = no rotation
+  // ?group=yard  show only cameras in a group (matches part of the name)
+  function qs(name, def) {
+    var m = new RegExp("[?&]" + name + "=([^&]*)").exec(window.location.search);
+    return m ? decodeURIComponent(m[1]) : def;
+  }
+
+  var perRaw = qs("per", "20");
+  var rotateSec = parseInt(qs("rotate", "15"), 10);
+  var groupFilter = qs("group", "").toLowerCase();
+
+  var cams = [];
+  var refreshMs = 2000;
+  var slots = [];
+  var page = 0;
+  var pages = 1;
+  var per = 20;
+  var barEl = document.getElementById("bar");
+  var wallEl = document.getElementById("wall");
+  var zoomEl = document.getElementById("zoom");
+  var zoomImg = document.getElementById("zoomimg");
+  var zoomTag = document.getElementById("zoomtag");
+  var zoomCam = null;
+  var zoomNext = 0;
+
+  // ---- Grid shape --------------------------------------------------------
+  // Tiles should be close to 16:9, which happens when the grid is close to
+  // square on a 16:9 screen. Small penalty for empty cells breaks ties.
+  function bestGrid(n) {
+    var best = null;
+    for (var c = 1; c <= n; c++) {
+      var r = Math.ceil(n / c);
+      var score = Math.abs(r / c - 1) + (c * r - n) * 0.02;
+      if (!best || score < best.score) best = { cols: c, rows: r, score: score };
+    }
+    return best;
+  }
+
+  // ---- Build the tiles once, then only reassign cameras to them -----------
+  // Recreating 80 DOM nodes on every page turn leaks memory on TV browsers.
+  function buildSlots(count) {
+    wallEl.innerHTML = "";
+    slots = [];
+    var g = bestGrid(count);
+    var w = (100 / g.cols) + "%";
+    var h = (100 / g.rows) + "%";
+    for (var i = 0; i < count; i++) {
+      var tile = document.createElement("div");
+      tile.className = "tile";
+      tile.style.width = w;
+      tile.style.height = h;
+
+      var img = document.createElement("img");
+      img.alt = "";
+
+      var slate = document.createElement("div");
+      slate.className = "slate";
+      slate.innerHTML = '<div class="code"></div><div class="word">No signal</div>';
+
+      var tag = document.createElement("div");
+      tag.className = "tag";
+
+      tile.appendChild(img);
+      tile.appendChild(slate);
+      tile.appendChild(tag);
+      wallEl.appendChild(tile);
+
+      var slot = {
+        tile: tile, img: img, tag: tag,
+        code: slate.getElementsByTagName("div")[0],
+        cam: null, next: 0
+      };
+      slots.push(slot);
+      bindSlot(slot);
+    }
+  }
+
+  function bindSlot(slot) {
+    slot.img.onload = function () { slot.tile.className = "tile"; };
+    slot.img.onerror = function () { slot.tile.className = "tile down"; };
+    slot.tile.onclick = function () { if (slot.cam) openZoom(slot.cam); };
+  }
+
+  function assignPage(p) {
+    page = p;
+    var start = p * per;
+    for (var i = 0; i < slots.length; i++) {
+      var cam = cams[start + i] || null;
+      var slot = slots[i];
+      slot.cam = cam;
+      if (cam) {
+        slot.tile.style.visibility = "visible";
+        slot.tag.innerHTML = "";
+        slot.tag.appendChild(document.createTextNode(cam.label));
+        slot.code.innerHTML = "";
+        slot.code.appendChild(document.createTextNode(cam.code));
+        // Stagger first loads so 80 requests do not land in the same instant.
+        slot.next = Date.now() + Math.round(i * (refreshMs / slots.length));
+      } else {
+        slot.tile.style.visibility = "hidden";
+        slot.next = Infinity;
+      }
+    }
+    drawBar();
+  }
+
+  function drawBar() {
+    var down = 0;
+    for (var i = 0; i < slots.length; i++) {
+      if (slots[i].cam && slots[i].tile.className.indexOf("down") > -1) down++;
+    }
+    var txt = (pages > 1 ? "Page " + (page + 1) + " / " + pages + "  \u00b7  " : "");
+    txt += cams.length + " cameras";
+    barEl.innerHTML = "";
+    barEl.appendChild(document.createTextNode(txt));
+    if (down > 0) {
+      var s = document.createElement("span");
+      s.className = "warn";
+      s.appendChild(document.createTextNode("  \u00b7  " + down + " down"));
+      barEl.appendChild(s);
+    }
+  }
+
+  // ---- One master ticker drives every refresh -----------------------------
+  function tick() {
+    var now = Date.now();
+    if (zoomCam) {
+      if (now >= zoomNext) {
+        zoomNext = now + 1000;   // zoomed view refreshes faster
+        zoomImg.src = "/snap/" + zoomCam.key + ".jpg?t=" + now;
+      }
+      return;
+    }
+    for (var i = 0; i < slots.length; i++) {
+      var slot = slots[i];
+      if (!slot.cam || now < slot.next) continue;
+      slot.next = now + refreshMs;
+      slot.img.src = "/snap/" + slot.cam.key + ".jpg?t=" + now;
+    }
+  }
+
+  function openZoom(cam) {
+    zoomCam = cam;
+    zoomNext = 0;
+    zoomTag.innerHTML = "";
+    zoomTag.appendChild(document.createTextNode(cam.code + "  \u00b7  " + cam.label));
+    zoomEl.className = "on";
+  }
+
+  function closeZoom() {
+    zoomCam = null;
+    zoomEl.className = "";
+    zoomImg.removeAttribute("src");
+  }
+
+  zoomEl.onclick = closeZoom;
+
+  function turnPage(delta) {
+    if (pages < 2) return;
+    var p = (page + delta + pages) % pages;
+    assignPage(p);
+  }
+
+  document.onkeydown = function (e) {
+    var k = e.keyCode;
+    if (zoomCam && (k === 27 || k === 13 || k === 8)) { closeZoom(); return; }
+    if (k === 37) turnPage(-1);        // left
+    if (k === 39) turnPage(1);         // right
+    document.body.className = "hascursor";
+  };
+  document.onmousemove = function () {
+    document.body.className = "hascursor";
+    barEl.className = "";
+  };
+
+  // ---- Start -------------------------------------------------------------
+  function start(cfg) {
+    refreshMs = Math.round(cfg.refresh * 1000);
+    cams = cfg.cameras;
+    if (groupFilter) {
+      var keep = [];
+      for (var i = 0; i < cams.length; i++) {
+        var g = (cams[i].group || "").toLowerCase();
+        if (g.indexOf(groupFilter) > -1) keep.push(cams[i]);
+      }
+      cams = keep;
+    }
+    if (!cams.length) {
+      barEl.appendChild(document.createTextNode("No cameras configured"));
+      return;
+    }
+    per = (perRaw === "all") ? cams.length : parseInt(perRaw, 10);
+    if (!per || per < 1) per = 20;
+    if (per > cams.length) per = cams.length;
+    pages = Math.ceil(cams.length / per);
+
+    buildSlots(per);
+    assignPage(0);
+
+    setInterval(tick, 150);
+    setInterval(drawBar, 2000);
+    if (rotateSec > 0 && pages > 1) {
+      setInterval(function () { turnPage(1); }, rotateSec * 1000);
+    }
+    setTimeout(function () { barEl.className = "faded"; }, 8000);
+  }
+
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/api/config", true);
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) return;
+    if (xhr.status === 200) {
+      start(JSON.parse(xhr.responseText));
+    } else {
+      barEl.appendChild(document.createTextNode("Cannot reach camwall server"));
+    }
+  };
+  xhr.send();
+})();
+</script>
+</body>
+</html>

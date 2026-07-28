@@ -1,0 +1,13 @@
+camera name,camera ip,nvr,channel,group,user,password
+main floor,10.10.15.50,10.10.15.194,,Ground,admin,Vanto@5252
+G floor lift,10.10.14.127,10.10.15.194,,Ground,admin,Vanto@5252
+Gf reception,10.10.15.44,10.10.15.194,,Ground,admin,Vanto@5252
+outside front cam 2,10.10.13.73,10.10.15.194,,Outside,admin,Vanto@5252
+First floor corner,10.10.15.33,10.10.15.194,,First,admin,Vanto@5252
+Third floor entry 2,10.10.13.185,10.10.15.196,,Third,admin,Vanto@5252
+cellar cafteria,10.10.14.62,10.10.15.134,,Cellar,admin,Vanto@5252
+cellar office 1,10.10.14.13,10.10.15.134,,Cellar,admin,Vanto@5252
+Terrace corner 2,10.10.14.88,10.10.15.134,,Terrace,admin,Vanto@5252
+Sf office,10.10.14.128,10.10.15.198,,Second,admin,Vanto@5252
+sf alzo doors 2,10.10.14.139,10.10.15.198,,Second,admin,Vanto@5252
+sf alzo doors 1,10.10.14.105,10.10.15.198,,Second,admin,Vanto@5252
