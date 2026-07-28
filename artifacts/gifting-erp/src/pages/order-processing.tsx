@@ -579,6 +579,23 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
     setFormData((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  // Update Total/Advance and recompute Balance = total − advance.
+  // Balance stays manually editable via its own input.
+  const setAmount = useCallback((key: "totalAmount" | "advanceReceived", value: string) => {
+    setFormData((prev) => {
+      const next = { ...prev, [key]: value };
+      const total = parseFloat(next.totalAmount);
+      const advance = parseFloat(next.advanceReceived);
+      if (!Number.isNaN(total) || !Number.isNaN(advance)) {
+        const balance = (Number.isNaN(total) ? 0 : total) - (Number.isNaN(advance) ? 0 : advance);
+        next.balanceAmount = balance.toFixed(2);
+      } else {
+        next.balanceAmount = "";
+      }
+      return next;
+    });
+  }, []);
+
   const setChecklist = (index: number, key: keyof ChecklistItem, value: string) => {
     setFormData((prev) => {
       const items = [...prev.checklistItems];
@@ -774,10 +791,10 @@ export function OrderProcessing({ salesOrderId }: { salesOrderId: number }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Field label="Total Amount (₹)">
-                  <Input value={formData.totalAmount} placeholder={existingForm?.totalAmount ?? "0.00"} onChange={(e) => set("totalAmount", e.target.value)} />
+                  <Input value={formData.totalAmount} placeholder={existingForm?.totalAmount ?? "0.00"} onChange={(e) => setAmount("totalAmount", e.target.value)} />
                 </Field>
                 <Field label="Advance Received (₹)">
-                  <Input value={formData.advanceReceived} placeholder="0.00" onChange={(e) => set("advanceReceived", e.target.value)} />
+                  <Input value={formData.advanceReceived} placeholder="0.00" onChange={(e) => setAmount("advanceReceived", e.target.value)} />
                 </Field>
                 <Field label="Balance Amount (₹)">
                   <Input value={formData.balanceAmount} placeholder="0.00" onChange={(e) => set("balanceAmount", e.target.value)} />
