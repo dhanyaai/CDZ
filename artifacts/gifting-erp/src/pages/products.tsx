@@ -252,6 +252,8 @@ export function Products() {
   const [imagePreview, setImagePreview] = useState<string>("");
   const [imageUploading, setImageUploading] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const csvImportRef = useRef<HTMLInputElement>(null);
@@ -478,7 +480,10 @@ export function Products() {
       }, 0) / (allProducts ?? []).length)
     : 0;
 
-  const categoryOptions = Array.from(new Set((allProducts ?? []).map(p => p.category).filter(Boolean))) as string[];
+  const categoryOptions = Array.from(new Set([
+    ...((allProducts ?? []).map(p => p.category).filter(Boolean) as string[]),
+    ...customCategories,
+  ]));
   if (!categoryOptions.length) categoryOptions.push("Electronics","Stationery","Drinkware","Apparel","Bags","Other");
 
   return (
@@ -649,7 +654,7 @@ export function Products() {
         </Table>
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setAddingCategory(false); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit Product" : "New Product"}</DialogTitle>
@@ -717,12 +722,48 @@ export function Products() {
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="category" render={({ field }) => (
                   <FormItem><FormLabel>Category *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        {categoryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    {addingCategory ? (
+                      <div className="flex gap-2">
+                        <FormControl>
+                          <Input
+                            autoFocus
+                            placeholder="New category name"
+                            value={field.value}
+                            onChange={(e) => field.onChange(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const v = (field.value ?? "").trim();
+                                if (v) { setCustomCategories(prev => prev.includes(v) ? prev : [...prev, v]); field.onChange(v); setAddingCategory(false); }
+                              }
+                              if (e.key === "Escape") { field.onChange(""); setAddingCategory(false); }
+                            }}
+                          />
+                        </FormControl>
+                        <Button type="button" variant="secondary" size="sm" className="shrink-0" onClick={() => {
+                          const v = (field.value ?? "").trim();
+                          if (v) { setCustomCategories(prev => prev.includes(v) ? prev : [...prev, v]); field.onChange(v); }
+                          else field.onChange("");
+                          setAddingCategory(false);
+                        }}>
+                          {(field.value ?? "").trim() ? "Add" : "Cancel"}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Select
+                        onValueChange={(v) => {
+                          if (v === "__add_new__") { field.onChange(""); setAddingCategory(true); }
+                          else field.onChange(v);
+                        }}
+                        value={field.value}
+                      >
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          {categoryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                          <SelectItem value="__add_new__" className="text-primary font-medium">+ Add new category…</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   <FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="productType" render={({ field }) => (
