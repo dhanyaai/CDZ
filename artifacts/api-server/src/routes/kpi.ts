@@ -288,12 +288,14 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
     let value = 0;
     if (e.entityType === "lead") {
       const l = lostLeadMap.get(e.entityId);
-      title = l?.title ?? null;
-      value = Number(l?.totalValue ?? l?.estimatedValue ?? 0) || 0;
+      if (!l) continue; // entity was deleted — skip orphan history entries
+      title = l.title;
+      value = Number(l.totalValue ?? l.estimatedValue ?? 0) || 0;
     } else {
       const o = lostOppMap.get(e.entityId);
-      title = o?.title ?? null;
-      value = Number(o?.value ?? 0) || 0;
+      if (!o) continue; // entity was deleted — skip orphan history entries
+      title = o.title;
+      value = Number(o.value ?? 0) || 0;
     }
     lossDetails.push({
       id: e.id, entityType: e.entityType, entityId: e.entityId, title,

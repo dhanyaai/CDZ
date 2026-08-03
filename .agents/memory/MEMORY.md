@@ -11,3 +11,4 @@
 - [Dev API e2e testing](dev-api-testing.md) — auth is Bearer token from /v1/auth/login (NOT cookies); seed creds in scripts/src/seed.ts; base http://localhost:80/api
 - [Status history tracking](status-history.md) — all status mutations must call recordStatusChange (incl. indirect paths); hand-written migration + journal convention (generate is broken)
 - [Print template escaping](print-template-escaping.md) — esc() every string interpolated into print-window HTML; same-origin stored-XSS vector otherwise
+- [Stale lib/db dist after merges](stale-lib-dist.md) — phantom "no exported member" errors post-merge; force rebuild libs; merges can corrupt route files, restore from merged commit

@@ -1,7 +1,7 @@
 import { recordStatusChange } from "../lib/statusHistory";
 import { Router } from "express";
 import { eq, sql, and, inArray, asc } from "drizzle-orm";
-import { db, leadsTable, leadItemsTable, opportunitiesTable, clientsTable, usersTable, quotesTable, salesOrdersTable, shipmentsTable, invoicesTable, activitiesTable } from "@workspace/db";
+import { db, leadsTable, leadItemsTable, opportunitiesTable, clientsTable, usersTable, quotesTable, salesOrdersTable, shipmentsTable, invoicesTable, activitiesTable, statusHistoryTable } from "@workspace/db";
 
 const router = Router();
 
@@ -100,7 +100,15 @@ router.patch("/v1/leads/:id", async (req, res): Promise<void> => {
 
 router.delete("/v1/leads/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  await db.delete(leadsTable).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
+  const deleted = await db.delete(leadsTable).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId))).returning({ id: leadsTable.id });
+  if (deleted.length) {
+    // Remove status history so reports (e.g. recent losses) don't show orphan entries
+    await db.delete(statusHistoryTable).where(and(
+      eq(statusHistoryTable.companyId, req.companyId),
+      eq(statusHistoryTable.entityType, "lead"),
+      eq(statusHistoryTable.entityId, id),
+    ));
+  }
   res.sendStatus(204);
 });
 
@@ -260,7 +268,15 @@ router.patch("/v1/opportunities/:id", async (req, res): Promise<void> => {
 
 router.delete("/v1/opportunities/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  await db.delete(opportunitiesTable).where(and(eq(opportunitiesTable.id, id), eq(opportunitiesTable.companyId, req.companyId)));
+  const deleted = await db.delete(opportunitiesTable).where(and(eq(opportunitiesTable.id, id), eq(opportunitiesTable.companyId, req.companyId))).returning({ id: opportunitiesTable.id });
+  if (deleted.length) {
+    // Remove status history so reports (e.g. recent losses) don't show orphan entries
+    await db.delete(statusHistoryTable).where(and(
+      eq(statusHistoryTable.companyId, req.companyId),
+      eq(statusHistoryTable.entityType, "opportunity"),
+      eq(statusHistoryTable.entityId, id),
+    ));
+  }
   res.sendStatus(204);
 });
 
