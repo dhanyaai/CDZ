@@ -200,11 +200,15 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   const formBySo = new Map(forms.map((f) => [f.salesOrderId, (f.formData ?? {}) as Record<string, unknown>]));
 
   const P = PROCESSING_DEADLINES;
+  // Step dates in formData are date-only strings (YYYY-MM-DD). Compare on
+  // whole calendar days (UTC midnight vs SO creation date) to avoid timezone
+  // drift producing negative/off-by-one deltas for same-day entries.
+  const dayFloor = (d0: Date) => Math.floor(d0.getTime() / DAY_MS);
   const stepCell = (soCreated: Date, raw: unknown, limit: number, open: boolean): StageCell => {
-    const s = typeof raw === "string" && raw ? raw : null;
-    const dt = s ? new Date(s) : null;
+    const s = typeof raw === "string" && /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : null;
+    const dt = s ? new Date(`${s}T00:00:00Z`) : null;
     if (dt && !Number.isNaN(dt.getTime())) {
-      const days = daysBetween(soCreated, dt);
+      const days = Math.max(0, dayFloor(dt) - dayFloor(soCreated));
       return { date: dt.toISOString(), days, overdue: days > limit };
     }
     return { date: null, days: null, overdue: open && daysBetween(soCreated, now) > limit };

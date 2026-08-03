@@ -1,3 +1,4 @@
+import { recordStatusChange } from "../lib/statusHistory";
 import { Router } from "express";
 import { eq, and, SQL, isNull, desc } from "drizzle-orm";
 import { db, creditNotesTable, invoicesTable, clientsTable, paymentsTable } from "@workspace/db";
@@ -125,6 +126,7 @@ router.patch("/v1/credit-notes/:id/apply", async (req, res): Promise<void> => {
 
     if (newInvStatus !== inv.status) {
       await tx.update(invoicesTable).set({ status: newInvStatus }).where(eq(invoicesTable.id, cn.invoiceId!));
+      await recordStatusChange({ companyId: req.companyId, entityType: "invoice", entityId: cn.invoiceId!, fromStatus: inv.status, toStatus: newInvStatus, changedBy: req.userId });
     }
 
     await tx.update(creditNotesTable).set({ status: "Applied" }).where(eq(creditNotesTable.id, id));

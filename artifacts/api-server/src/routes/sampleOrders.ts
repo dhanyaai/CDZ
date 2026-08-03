@@ -260,11 +260,13 @@ router.post("/v1/sample-orders/:id/convert-to-quote", async (req, res): Promise<
 
       await tx.update(sampleOrdersTable).set({ status: "Converted" })
         .where(eq(sampleOrdersTable.id, so.id));
+      await recordStatusChange({ companyId: req.companyId, entityType: "sample_order", entityId: so.id, fromStatus: so.status, toStatus: "Converted", changedBy: req.userId });
 
       let opportunityStage: string | null = null;
       if (opportunity && opportunity.stage === "samples") {
         await tx.update(opportunitiesTable).set({ stage: "quotation_sent" })
           .where(eq(opportunitiesTable.id, opportunity.id));
+        await recordStatusChange({ companyId: req.companyId, entityType: "opportunity", entityId: opportunity.id, fromStatus: "samples", toStatus: "quotation_sent", changedBy: req.userId });
         opportunityStage = "quotation_sent";
       }
 
@@ -318,6 +320,7 @@ router.patch("/v1/sample-orders/:id/return", async (req, res): Promise<void> => 
     if (notes !== undefined) updates.notes = notes;
     await db.update(sampleOrdersTable).set(updates)
       .where(and(eq(sampleOrdersTable.id, id), eq(sampleOrdersTable.companyId, req.companyId)));
+    await recordStatusChange({ companyId: req.companyId, entityType: "sample_order", entityId: id, fromStatus: order.status, toStatus: "Returned", changedBy: req.userId });
   }
 
   const detail = await getDetail(id, req.companyId);

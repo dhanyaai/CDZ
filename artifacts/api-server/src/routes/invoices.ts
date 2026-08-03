@@ -358,6 +358,7 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
 
     if (newStatus !== invoice.status) {
       await tx.update(invoicesTable).set({ status: newStatus }).where(eq(invoicesTable.id, invoiceId));
+      await recordStatusChange({ companyId: req.companyId, entityType: "invoice", entityId: invoiceId, fromStatus: invoice.status, toStatus: newStatus, changedBy: req.userId });
     }
 
     return [p];
