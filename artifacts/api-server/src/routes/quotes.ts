@@ -241,6 +241,8 @@ router.post("/v1/quotes/:id/convert", async (req, res): Promise<void> => {
     res.status(400).json({ error: "PO number too long (max 100 characters)" }); return;
   }
   const poNumber = trimmedPo || null;
+  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
+  const statusReasonNote = typeof req.body?.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null;
 
   const [quote] = await db.select().from(quotesTable)
     .where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId)));
@@ -305,6 +307,9 @@ router.post("/v1/quotes/:id/convert", async (req, res): Promise<void> => {
     res.status(500).json({ error: `Conversion failed: ${msg}` });
     return;
   }
+
+  await recordStatusChange({ companyId: req.companyId, entityType: "quote", entityId: id, fromStatus: "accepted", toStatus: "converted", changedBy: req.userId, reason: statusReason, reasonNote: statusReasonNote });
+  await recordStatusChange({ companyId: req.companyId, entityType: "sales_order", entityId: so.id, fromStatus: null, toStatus: "Draft", changedBy: req.userId });
 
   res.status(201).json({
     salesOrderId: so.id,

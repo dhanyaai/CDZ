@@ -19,6 +19,7 @@ import { Plus, CreditCard, IndianRupee, Banknote, TrendingUp, Building2 } from "
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { api } from "@/lib/api";
+import { DelayReasonDialog, KPI_DELAY_TARGETS, daysSince } from "@/components/delay-reason-dialog";
 
 const PAYMENT_MODES = ["UPI", "NEFT", "RTGS", "IMPS", "Cash", "Cheque", "Bank Transfer"] as const;
 
@@ -72,6 +73,7 @@ export function Payments() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
         setDialogOpen(false);
+        setDelayPaymentFor(null);
         form.reset();
         toast({ title: "Payment recorded successfully" });
       },
@@ -86,8 +88,17 @@ export function Payments() {
     },
   });
 
+  // Invoice past its payment KPI target → ask for a slip reason before recording
+  const [delayPaymentFor, setDelayPaymentFor] = useState<{ data: FormValues; label: string; createdAt: string } | null>(null);
+
   const onSubmit = (data: FormValues) => {
-    createPayment.mutate({ data });
+    const inv = invoices?.find((i) => i.id === data.invoiceId) as any;
+    if (inv?.createdAt && daysSince(inv.createdAt) > KPI_DELAY_TARGETS.invoiceToPayment) {
+      setDialogOpen(false);
+      setDelayPaymentFor({ data, label: inv.invoiceNumber ?? `Invoice #${data.invoiceId}`, createdAt: inv.createdAt });
+    } else {
+      createPayment.mutate({ data });
+    }
   };
 
   const getInvoiceInfo = (invoiceId: number) => invoices?.find((inv) => inv.id === invoiceId);
@@ -386,6 +397,18 @@ export function Payments() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Slip-reason prompt — payment recorded past the invoice's payment target */}
+      <DelayReasonDialog
+        open={delayPaymentFor != null}
+        title="This payment is past the invoice's target"
+        entityLabel={delayPaymentFor?.label ?? ""}
+        daysOverTarget={delayPaymentFor ? Math.max(1, Math.round(daysSince(delayPaymentFor.createdAt) - KPI_DELAY_TARGETS.invoiceToPayment)) : null}
+        pending={createPayment.isPending}
+        onCancel={() => setDelayPaymentFor(null)}
+        onSkip={() => createPayment.mutate({ data: delayPaymentFor!.data })}
+        onConfirm={(reason, note) => createPayment.mutate({ data: { ...delayPaymentFor!.data, statusReason: reason, statusReasonNote: note ?? undefined } as any })}
+      />
     </div>
   );
 }

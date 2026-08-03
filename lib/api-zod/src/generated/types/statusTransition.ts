@@ -9,4 +9,6 @@
 export interface StatusTransition {
   status: string;
   notes?: string;
+  statusReason?: string;
+  statusReasonNote?: string;
 }

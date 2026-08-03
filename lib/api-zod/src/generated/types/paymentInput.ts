@@ -14,4 +14,6 @@ export interface PaymentInput {
   referenceNo?: string;
   paymentDate: string;
   notes?: string;
+  statusReason?: string;
+  statusReasonNote?: string;
 }

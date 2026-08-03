@@ -23,6 +23,7 @@ import { Plus, FileText, CheckCircle2, Clock, AlertTriangle, IndianRupee, SendHo
 import { useToast } from "@/hooks/use-toast";
 import { format, isPast } from "date-fns";
 import { printTaxInvoice } from "@/lib/print-utils";
+import { DelayReasonDialog, KPI_DELAY_TARGETS, daysSince } from "@/components/delay-reason-dialog";
 
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
 
@@ -87,7 +88,7 @@ export function Invoices() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
-        setDialogOpen(false); form.reset();
+        setDialogOpen(false); setDelayInvoiceFor(null); form.reset();
         toast({ title: "Invoice created" });
       },
       onError: (err: any) => {
@@ -97,11 +98,12 @@ export function Invoices() {
   });
 
   const changeStatus = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) =>
-      api(`/v1/invoices/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    mutationFn: ({ id, status, reason, note }: { id: number; status: string; reason?: string | null; note?: string | null }) =>
+      api(`/v1/invoices/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, ...(reason ? { statusReason: reason, statusReasonNote: note ?? null } : {}) }) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
       queryClient.invalidateQueries({ queryKey: ["invoice-detail", selectedId] });
+      setDelayPaidFor(null);
       toast({ title: "Status updated" });
     },
     onError: (err: any) => {
@@ -114,14 +116,41 @@ export function Invoices() {
     defaultValues: { salesOrderId: 0, dueDate: "", paymentTerms: "", notes: "" },
   });
 
-  const onSubmit = (data: FormValues) => createInvoice.mutate({
+  // Overdue sales order → ask for a slip reason before invoicing it
+  const [delayInvoiceFor, setDelayInvoiceFor] = useState<{ form: FormValues; orderNumber: string; createdAt: string } | null>(null);
+  // Invoice past its payment target → ask for a slip reason before marking it Paid
+  const [delayPaidFor, setDelayPaidFor] = useState<{ id: number; label: string; createdAt: string } | null>(null);
+
+  const doCreateInvoice = (data: FormValues, reason?: string | null, note?: string | null) => createInvoice.mutate({
     data: {
       salesOrderId: data.salesOrderId,
       dueDate: data.dueDate || undefined,
       paymentTerms: data.paymentTerms || undefined,
       notes: data.notes || undefined,
+      statusReason: reason || undefined,
+      statusReasonNote: note || undefined,
     } as any,
   });
+
+  const onSubmit = (data: FormValues) => {
+    const order = salesOrders?.find(o => o.id === data.salesOrderId) as any;
+    // Order → invoice KPI target: if the order sat past it, ask why before invoicing
+    if (order?.createdAt && daysSince(order.createdAt) > KPI_DELAY_TARGETS.orderToInvoice) {
+      setDialogOpen(false);
+      setDelayInvoiceFor({ form: data, orderNumber: order.orderNumber, createdAt: order.createdAt });
+    } else {
+      doCreateInvoice(data);
+    }
+  };
+
+  // Intercepts "Mark as Paid" when the invoice blew past the payment KPI target
+  const startChangeStatus = (inv: { id: number; invoiceNumber: string; createdAt?: string }, status: string) => {
+    if (status === "Paid" && inv.createdAt && daysSince(inv.createdAt) > KPI_DELAY_TARGETS.invoiceToPayment) {
+      setDelayPaidFor({ id: inv.id, label: inv.invoiceNumber, createdAt: inv.createdAt });
+    } else {
+      changeStatus.mutate({ id: inv.id, status });
+    }
+  };
 
   const eligibleOrders = salesOrders?.filter(o => o.status !== "Cancelled") || [];
   const totalBilled = (allInvoices ?? []).reduce((s, i) => s + Number((i as any).grandTotal ?? i.totalAmount ?? 0), 0);
@@ -235,7 +264,7 @@ export function Invoices() {
                           </Button>
                         )}
                         {vt.includes("Paid") && (
-                          <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-600 border-emerald-600/30 hover:bg-emerald-500/10" onClick={() => changeStatus.mutate({ id: invoice.id, status: "Paid" })}>
+                          <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-600 border-emerald-600/30 hover:bg-emerald-500/10" onClick={() => startChangeStatus({ id: invoice.id, invoiceNumber: invoice.invoiceNumber, createdAt: inv.createdAt }, "Paid")}>
                             <CheckCircle2 className="w-3 h-3 mr-1" />Paid
                           </Button>
                         )}
@@ -473,7 +502,7 @@ export function Invoices() {
                     };
                     return (
                       <Button key={t} variant={colorMap[t] as any ?? "outline"} size="sm"
-                        onClick={() => changeStatus.mutate({ id: invoiceDetail.id, status: t })}
+                        onClick={() => startChangeStatus(invoiceDetail, t)}
                         disabled={changeStatus.isPending}>
                         {t === "Issued" && <SendHorizontal className="w-4 h-4 mr-2" />}
                         {t === "Paid" && <CheckCircle2 className="w-4 h-4 mr-2" />}
@@ -495,6 +524,30 @@ export function Invoices() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Slip-reason prompt — overdue sales order finally being invoiced */}
+      <DelayReasonDialog
+        open={delayInvoiceFor != null}
+        title="This order is past its invoicing target"
+        entityLabel={delayInvoiceFor?.orderNumber ?? ""}
+        daysOverTarget={delayInvoiceFor ? Math.max(1, Math.round(daysSince(delayInvoiceFor.createdAt) - KPI_DELAY_TARGETS.orderToInvoice)) : null}
+        pending={createInvoice.isPending}
+        onCancel={() => setDelayInvoiceFor(null)}
+        onSkip={() => doCreateInvoice(delayInvoiceFor!.form)}
+        onConfirm={(reason, note) => doCreateInvoice(delayInvoiceFor!.form, reason, note)}
+      />
+
+      {/* Slip-reason prompt — invoice paid past its payment target */}
+      <DelayReasonDialog
+        open={delayPaidFor != null}
+        title="This invoice is past its payment target"
+        entityLabel={delayPaidFor?.label ?? ""}
+        daysOverTarget={delayPaidFor ? Math.max(1, Math.round(daysSince(delayPaidFor.createdAt) - KPI_DELAY_TARGETS.invoiceToPayment)) : null}
+        pending={changeStatus.isPending}
+        onCancel={() => setDelayPaidFor(null)}
+        onSkip={() => changeStatus.mutate({ id: delayPaidFor!.id, status: "Paid" })}
+        onConfirm={(reason, note) => changeStatus.mutate({ id: delayPaidFor!.id, status: "Paid", reason, note })}
+      />
     </div>
   );
 }

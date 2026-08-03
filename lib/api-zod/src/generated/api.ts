@@ -255,11 +255,19 @@ export const ListProductsResponse = zod.array(ListProductsResponseItem)
 
 export const CreateProductBody = zod.object({
   "name": zod.string(),
+  "sku": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "productType": zod.string().optional(),
   "category": zod.string(),
+  "hsnCode": zod.string().optional(),
+  "gstRate": zod.number().optional(),
+  "uom": zod.string().optional(),
   "costPrice": zod.number(),
   "sellingPrice": zod.number(),
   "stockLevel": zod.number().optional(),
   "lowStockThreshold": zod.number().optional(),
+  "reorderQty": zod.number().optional(),
+  "brandable": zod.boolean().optional(),
   "vendorId": zod.number().optional(),
   "imageUrl": zod.string().optional(),
   "branding": zod.number().optional(),
@@ -292,11 +300,19 @@ export const UpdateProductParams = zod.object({
 
 export const UpdateProductBody = zod.object({
   "name": zod.string().optional(),
+  "sku": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "productType": zod.string().optional(),
   "category": zod.string().optional(),
+  "hsnCode": zod.string().optional(),
+  "gstRate": zod.number().optional(),
+  "uom": zod.string().optional(),
   "costPrice": zod.number().optional(),
   "sellingPrice": zod.number().optional(),
   "stockLevel": zod.number().optional(),
   "lowStockThreshold": zod.number().optional(),
+  "reorderQty": zod.number().optional(),
+  "brandable": zod.boolean().optional(),
   "vendorId": zod.number().optional(),
   "imageUrl": zod.string().optional(),
   "branding": zod.number().optional(),
@@ -627,7 +643,9 @@ export const UpdateSalesOrderStatusParams = zod.object({
 
 export const UpdateSalesOrderStatusBody = zod.object({
   "status": zod.string(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "statusReason": zod.string().optional(),
+  "statusReasonNote": zod.string().optional()
 })
 
 export const UpdateSalesOrderStatusResponse = zod.object({
@@ -744,7 +762,9 @@ export const UpdatePurchaseOrderStatusParams = zod.object({
 
 export const UpdatePurchaseOrderStatusBody = zod.object({
   "status": zod.string(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "statusReason": zod.string().optional(),
+  "statusReasonNote": zod.string().optional()
 })
 
 export const UpdatePurchaseOrderStatusResponse = zod.object({
@@ -907,7 +927,9 @@ export const UpdateAssemblyJobStatusParams = zod.object({
 
 export const UpdateAssemblyJobStatusBody = zod.object({
   "status": zod.string(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "statusReason": zod.string().optional(),
+  "statusReasonNote": zod.string().optional()
 })
 
 export const UpdateAssemblyJobStatusResponse = zod.object({
@@ -956,7 +978,9 @@ export const UpdateArtworkStatusParams = zod.object({
 
 export const UpdateArtworkStatusBody = zod.object({
   "status": zod.string(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "statusReason": zod.string().optional(),
+  "statusReasonNote": zod.string().optional()
 })
 
 export const UpdateArtworkStatusResponse = zod.object({
@@ -1060,7 +1084,9 @@ export const UpdateShipmentStatusParams = zod.object({
 
 export const UpdateShipmentStatusBody = zod.object({
   "status": zod.string(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "statusReason": zod.string().optional(),
+  "statusReasonNote": zod.string().optional()
 })
 
 export const UpdateShipmentStatusResponse = zod.object({
@@ -1101,7 +1127,11 @@ export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem)
 export const CreateInvoiceBody = zod.object({
   "salesOrderId": zod.number(),
   "gstPercent": zod.number(),
-  "dueDate": zod.string().optional()
+  "dueDate": zod.string().optional(),
+  "paymentTerms": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "statusReason": zod.string().optional(),
+  "statusReasonNote": zod.string().optional()
 })
 
 
@@ -1150,7 +1180,9 @@ export const CreatePaymentBody = zod.object({
   "paymentMode": zod.string().optional(),
   "referenceNo": zod.string().optional(),
   "paymentDate": zod.string(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "statusReason": zod.string().optional(),
+  "statusReasonNote": zod.string().optional()
 })
 
 

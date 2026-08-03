@@ -6,7 +6,6 @@ import {
   grnTable, vendorsTable, orderProcessingFormsTable, statusHistoryTable,
   salesTargetsTable, companySettingsTable,
 } from "@workspace/db";
-
 import { requireAdmin } from "../lib/requireAdmin";
 
 const router = Router();
@@ -33,6 +32,7 @@ export const PROCESSING_DEADLINES = {
   dispatch: 14,
 };
 
+// Overlay per-company overrides (from Settings) on top of the defaults
 const mergeTargets = <T extends Record<string, number>>(defaults: T, overrides: unknown): T => {
   const out = { ...defaults };
   if (overrides && typeof overrides === "object") {
@@ -43,14 +43,26 @@ const mergeTargets = <T extends Record<string, number>>(defaults: T, overrides: 
   }
   return out;
 };
+
+export async function getCompanyKpiTargets(companyId: number) {
+  const [s] = await db.select({
+    kpiTargets: companySettingsTable.kpiTargets,
+    processingTargets: companySettingsTable.processingTargets,
+  }).from(companySettingsTable).where(eq(companySettingsTable.companyId, companyId)).limit(1);
+  return {
+    deadlines: mergeTargets(KPI_DEADLINES, s?.kpiTargets),
+    processingDeadlines: mergeTargets(PROCESSING_DEADLINES, s?.processingTargets),
+  };
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const daysBetween = (a: Date, b: Date) => Math.round(((b.getTime() - a.getTime()) / DAY_MS) * 10) / 10;
 
 // GET /v1/reports/kpi — funnel timing, team KPIs, purchase timing
 router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   const cid = req.companyId;
-
   const targets = await getCompanyKpiTargets(cid);
+
   const [leads, opps, quotes, orders, invoices, payments, users] = await Promise.all([
     db.select({
       id: leadsTable.id, title: leadsTable.title, companyName: leadsTable.companyName,
@@ -83,13 +95,13 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   const oppByLead = new Map<number, typeof opps[number]>();
   for (const o of opps) {
     if (o.leadId == null) continue;
-    const prev = orderByQuote.get(so.quoteId);
+    const prev = oppByLead.get(o.leadId);
     if (!prev || o.createdAt < prev.createdAt) oppByLead.set(o.leadId, o);
   }
   const quoteByOpp = new Map<number, typeof quotes[number]>();
   for (const q of quotes) {
     if (q.opportunityId == null) continue;
-    const prev = orderByQuote.get(so.quoteId);
+    const prev = quoteByOpp.get(q.opportunityId);
     if (!prev || q.createdAt < prev.createdAt) quoteByOpp.set(q.opportunityId, q);
   }
   const orderByQuote = new Map<number, typeof orders[number]>();
@@ -100,7 +112,7 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   }
   const invoiceByOrder = new Map<number, typeof invoices[number]>();
   for (const inv of invoices) {
-    const prev = orderByQuote.get(so.quoteId);
+    const prev = invoiceByOrder.get(inv.salesOrderId);
     if (!prev || inv.createdAt < prev.createdAt) invoiceByOrder.set(inv.salesOrderId, inv);
   }
   const paymentByInvoice = new Map(payments.map((p) => [p.invoiceId, new Date(p.firstPayment)]));
@@ -155,7 +167,7 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
     orders: number; revenue: number; leadToOrderDaysSum: number; leadToOrderCount: number; overdueStages: number;
   }>();
   for (const row of funnel) {
-    const key = `${e.entityType}:${e.entityId}`;
+    const key = row.owner != null && row.ownerId != null ? row.ownerId : "unassigned";
     let t = team.get(key);
     if (!t) { t = { owner: row.owner ?? "Unassigned", ownerId: key === "unassigned" ? null : key, leads: 0, opportunities: 0, quotes: 0, orders: 0, revenue: 0, leadToOrderDaysSum: 0, leadToOrderCount: 0, overdueStages: 0 }; team.set(key, t); }
     t.leads++;
@@ -319,11 +331,11 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   }
   const reasonAgg = new Map<string, { reason: string; count: number; revenueImpact: number }>();
   for (const l of lossDetails) {
-    let r = delayAgg.get(dd.reason);
-    if (!r) { r = { reason: dd.reason, count: 0 }; delayAgg.set(dd.reason, r); }
+    let r = reasonAgg.get(l.reason);
+    if (!r) { r = { reason: l.reason, count: 0, revenueImpact: 0 }; reasonAgg.set(l.reason, r); }
     r.count++;
+    r.revenueImpact += l.value;
   }
-  const delayReasons = Array.from(delayAgg.values()).sort((a, b) => b.count - a.count);
   const lossReasons = Array.from(reasonAgg.values()).sort((a, b) => b.count - a.count || b.revenueImpact - a.revenueImpact);
 
   // Delay reasons: status_history entries with a reason where the transition
@@ -347,9 +359,55 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
       sql`${statusHistoryTable.toStatus} NOT IN ('lost', 'dropped', 'junk')`,
     ))
     .orderBy(sql`${statusHistoryTable.changedAt} DESC`);
-  const cid = req.companyId;
 
-  const targets = await getCompanyKpiTargets(cid);
+  const idsOf = (t: string) => delayEntries.filter((e) => e.entityType === t).map((e) => e.entityId);
+  const dLeadIds = idsOf("lead"), dOppIds = idsOf("opportunity"), dQuoteIds = idsOf("quote"), dSoIds = idsOf("sales_order"), dInvIds = idsOf("invoice");
+
+  const [dLeads, dOpps, dQuotes, dSos, dInvs] = await Promise.all([
+    dLeadIds.length ? db.select({ id: leadsTable.id, title: leadsTable.title })
+      .from(leadsTable).where(and(eq(leadsTable.companyId, cid), inArray(leadsTable.id, dLeadIds))) : Promise.resolve([]),
+    dOppIds.length ? db.select({ id: opportunitiesTable.id, title: opportunitiesTable.title })
+      .from(opportunitiesTable).where(and(eq(opportunitiesTable.companyId, cid), inArray(opportunitiesTable.id, dOppIds))) : Promise.resolve([]),
+    dQuoteIds.length ? db.select({ id: quotesTable.id, title: quotesTable.quoteNumber })
+      .from(quotesTable).where(and(eq(quotesTable.companyId, cid), inArray(quotesTable.id, dQuoteIds))) : Promise.resolve([]),
+    dSoIds.length ? db.select({ id: salesOrdersTable.id, title: salesOrdersTable.orderNumber })
+      .from(salesOrdersTable).where(and(eq(salesOrdersTable.companyId, cid), inArray(salesOrdersTable.id, dSoIds))) : Promise.resolve([]),
+    dInvIds.length ? db.select({ id: invoicesTable.id, title: invoicesTable.invoiceNumber })
+      .from(invoicesTable).where(and(eq(invoicesTable.companyId, cid), inArray(invoicesTable.id, dInvIds))) : Promise.resolve([]),
+  ]);
+
+  const dTitle = new Map<string, string | null>();
+  for (const [t, rows2] of [["lead", dLeads], ["opportunity", dOpps], ["quote", dQuotes], ["sales_order", dSos], ["invoice", dInvs]] as const) {
+    for (const r of rows2) dTitle.set(`${t}:${r.id}`, r.title);
+  }
+
+  const delayDetails = delayEntries.map((e) => ({
+    id: e.id,
+    entityType: e.entityType,
+    entityId: e.entityId,
+    title: dTitle.get(`${e.entityType}:${e.entityId}`) ?? null,
+    fromStatus: e.fromStatus,
+    toStatus: e.toStatus,
+    reason: e.reason as string,
+    reasonNote: e.reasonNote,
+    changedAt: e.changedAt.toISOString(),
+    changedByName: e.changedByName,
+  }));
+
+  const delayAgg = new Map<string, { reason: string; count: number }>();
+  for (const dd of delayDetails) {
+    let r = delayAgg.get(dd.reason);
+    if (!r) { r = { reason: dd.reason, count: 0 }; delayAgg.set(dd.reason, r); }
+    r.count++;
+  }
+  const delayReasons = Array.from(delayAgg.values()).sort((a, b) => b.count - a.count);
+
+  res.json({ deadlines: D, processingDeadlines: P, funnel, teamKpis, purchases, processing, lossReasons, lossDetails, delayReasons, delayDetails });
+});
+
+// GET /v1/reports/kpi/history?leadId=N — recorded status changes for a lead and its linked documents
+router.get("/v1/reports/kpi/history", async (req, res): Promise<void> => {
+  const cid = req.companyId;
   const leadId = parseInt(String(req.query.leadId ?? ""), 10);
   if (Number.isNaN(leadId)) { res.status(400).json({ error: "leadId is required" }); return; }
 
@@ -375,34 +433,46 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
     invoiceIds.length ? and(eq(statusHistoryTable.entityType, "invoice"), inArray(statusHistoryTable.entityId, invoiceIds)) : null,
   ].filter((c): c is NonNullable<typeof c> => c != null);
 
-  const rows = months.map((month) => {
-    const a = buckets.get(month) ?? { leads: 0, quotes: 0, orders: 0, revenue: 0 };
-    const t = targetByMonth.get(month) ?? null;
-    return {
-      month,
-      actualLeads: a.leads,
-      actualQuotes: a.quotes,
-      actualOrders: a.orders,
-      actualRevenue: a.revenue,
-      targetLeads: t ? t.targetLeads : null,
-      targetQuotes: t ? t.targetQuotes : null,
-      targetRevenue: t ? Number(t.targetRevenue) : null,
-    };
-  });
+  const rows = await db.select({
+    id: statusHistoryTable.id,
+    entityType: statusHistoryTable.entityType,
+    entityId: statusHistoryTable.entityId,
+    fromStatus: statusHistoryTable.fromStatus,
+    toStatus: statusHistoryTable.toStatus,
+    reason: statusHistoryTable.reason,
+    reasonNote: statusHistoryTable.reasonNote,
+    changedAt: statusHistoryTable.changedAt,
+    changedByName: usersTable.name,
+  }).from(statusHistoryTable)
+    .leftJoin(usersTable, eq(statusHistoryTable.changedBy, usersTable.id))
+    .where(and(eq(statusHistoryTable.companyId, cid), or(...conds)))
+    .orderBy(statusHistoryTable.changedAt);
 
-  res.json({ user: { id: user.id, name: user.name }, months: rows });
+  res.json({ history: rows.map((r) => ({ ...r, changedAt: r.changedAt.toISOString() })) });
 });
 
-// PUT /v1/kpi/targets — upsert a monthly target for a user
-router.put("/v1/kpi/targets", requireAdmin, async (req, res): Promise<void> => {
+// GET /v1/reports/kpi/scorecard?userId=N — monthly target vs actual for one salesperson
+// Actuals use the same funnel chain logic as /v1/reports/kpi, bucketed by the month
+// each stage was reached (leads by lead creation, quotes by quote creation, revenue by order creation).
+router.get("/v1/reports/kpi/scorecard", async (req, res): Promise<void> => {
   const cid = req.companyId;
-
-  const targets = await getCompanyKpiTargets(cid);
   const userId = parseInt(String(req.query.userId ?? ""), 10);
+  if (Number.isNaN(userId)) { res.status(400).json({ error: "userId is required" }); return; }
 
+  // Non-admins may only view their own scorecard
   const requesterId = (req as typeof req & { userId?: number }).userId;
-  const [user] = await db.select({ id: usersTable.id }).from(usersTable)
-    .where(and(eq(usersTable.companyId, cid), eq(usersTable.id, uid)));
+  if (requesterId == null) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (requesterId !== userId) {
+    const [requester] = await db.select({ role: usersTable.role, isActive: usersTable.isActive })
+      .from(usersTable).where(eq(usersTable.id, requesterId));
+    if (!requester || !requester.isActive || requester.role !== "Admin") {
+      res.status(403).json({ error: "Admin role required" });
+      return;
+    }
+  }
+
+  const [user] = await db.select({ id: usersTable.id, name: usersTable.name })
+    .from(usersTable).where(and(eq(usersTable.companyId, cid), eq(usersTable.id, userId)));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
   const [leads, opps, quotes, orders, targets] = await Promise.all([
@@ -424,13 +494,13 @@ router.put("/v1/kpi/targets", requireAdmin, async (req, res): Promise<void> => {
   const oppByLead = new Map<number, typeof opps[number]>();
   for (const o of opps) {
     if (o.leadId == null) continue;
-    const prev = orderByQuote.get(so.quoteId);
+    const prev = oppByLead.get(o.leadId);
     if (!prev || o.createdAt < prev.createdAt) oppByLead.set(o.leadId, o);
   }
   const quoteByOpp = new Map<number, typeof quotes[number]>();
   for (const q of quotes) {
     if (q.opportunityId == null) continue;
-    const prev = orderByQuote.get(so.quoteId);
+    const prev = quoteByOpp.get(q.opportunityId);
     if (!prev || q.createdAt < prev.createdAt) quoteByOpp.set(q.opportunityId, q);
   }
   const orderByQuote = new Map<number, typeof orders[number]>();
@@ -501,8 +571,6 @@ router.put("/v1/kpi/targets", requireAdmin, async (req, res): Promise<void> => {
 // PUT /v1/kpi/targets — upsert a monthly target for a user
 router.put("/v1/kpi/targets", requireAdmin, async (req, res): Promise<void> => {
   const cid = req.companyId;
-
-  const targets = await getCompanyKpiTargets(cid);
   const { userId, month, targetLeads, targetQuotes, targetRevenue } = req.body ?? {};
   const uid = parseInt(String(userId ?? ""), 10);
   if (Number.isNaN(uid) || typeof month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
@@ -528,47 +596,3 @@ router.put("/v1/kpi/targets", requireAdmin, async (req, res): Promise<void> => {
 });
 
 export default router;
-  const dLeadIds = delayEntries.filter((e) => e.entityType === "lead").map((e) => e.entityId);
-
-  const delayDetails = delayEntries.map((e) => ({
-    id: e.id,
-    entityType: e.entityType,
-    entityId: e.entityId,
-    title: e.entityType === "lead" ? dLeadTitle.get(e.entityId) ?? null
-      : e.entityType === "opportunity" ? dOppTitle.get(e.entityId) ?? null : null,
-    fromStatus: e.fromStatus,
-    toStatus: e.toStatus,
-    reason: e.reason as string,
-    reasonNote: e.reasonNote,
-    changedAt: e.changedAt.toISOString(),
-    changedByName: e.changedByName,
-  }));
-
-  const dOppIds = delayEntries.filter((e) => e.entityType === "opportunity").map((e) => e.entityId);
-
-  const [dLeads, dOpps] = await Promise.all([
-    dLeadIds.length ? db.select({ id: leadsTable.id, title: leadsTable.title })
-      .from(leadsTable).where(and(eq(leadsTable.companyId, cid), inArray(leadsTable.id, dLeadIds))) : Promise.resolve([]),
-    dOppIds.length ? db.select({ id: opportunitiesTable.id, title: opportunitiesTable.title })
-      .from(opportunitiesTable).where(and(eq(opportunitiesTable.companyId, cid), inArray(opportunitiesTable.id, dOppIds))) : Promise.resolve([]),
-  ]);
-
-  const dOppTitle = new Map(dOpps.map((o) => [o.id, o.title]));
-
-  const delayAgg = new Map<string, { reason: string; count: number }>();
-
-  const dLeadTitle = new Map(dLeads.map((l) => [l.id, l.title]));
-
-export async function getCompanyKpiTargets(companyId: number) {
-  const [s] = await db.select({
-    kpiTargets: companySettingsTable.kpiTargets,
-    processingTargets: companySettingsTable.processingTargets,
-  }).from(companySettingsTable).where(eq(companySettingsTable.companyId, companyId)).limit(1);
-  return {
-    deadlines: mergeTargets(KPI_DEADLINES, s?.kpiTargets),
-    processingDeadlines: mergeTargets(PROCESSING_DEADLINES, s?.processingTargets),
-  };
-}
-
-    const [requester] = await db.select({ role: usersTable.role, isActive: usersTable.isActive })
-      .from(usersTable).where(eq(usersTable.id, requesterId));

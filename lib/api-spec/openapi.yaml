@@ -1983,6 +1983,10 @@ components:
         salesOrderId: { type: integer }
         gstPercent: { type: number }
         dueDate: { type: string }
+        paymentTerms: { type: string }
+        notes: { type: string }
+        statusReason: { type: string }
+        statusReasonNote: { type: string }
 
     # ── Payments ──
     Payment:
@@ -2010,6 +2014,8 @@ components:
         referenceNo: { type: string }
         paymentDate: { type: string }
         notes: { type: string }
+        statusReason: { type: string }
+        statusReasonNote: { type: string }
 
     # ── Shared ──
     StatusTransition:
@@ -2018,6 +2024,8 @@ components:
       properties:
         status: { type: string }
         notes: { type: string }
+        statusReason: { type: string }
+        statusReasonNote: { type: string }
 
     # ── Analytics ──
     DashboardStats:

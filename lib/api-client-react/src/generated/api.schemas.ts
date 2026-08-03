@@ -693,6 +693,10 @@ export interface InvoiceInput {
   salesOrderId: number;
   gstPercent: number;
   dueDate?: string;
+  paymentTerms?: string;
+  notes?: string;
+  statusReason?: string;
+  statusReasonNote?: string;
 }
 
 export interface Payment {
@@ -718,11 +722,15 @@ export interface PaymentInput {
   referenceNo?: string;
   paymentDate: string;
   notes?: string;
+  statusReason?: string;
+  statusReasonNote?: string;
 }
 
 export interface StatusTransition {
   status: string;
   notes?: string;
+  statusReason?: string;
+  statusReasonNote?: string;
 }
 
 export interface DashboardStats {

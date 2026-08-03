@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, ArrowRight, FileSpreadsheet, IndianRupee, Clock, CheckCircle2, XCircle, Printer, Package, Building2, Phone, Mail, CreditCard } from "lucide-react";
 import { printQuote } from "@/lib/print-utils";
 import { ConvertToSalesOrderDialog } from "@/components/convert-so-dialog";
+import { DelayReasonDialog, KPI_DELAY_TARGETS, daysSince } from "@/components/delay-reason-dialog";
 import { format } from "date-fns";
 
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
@@ -114,13 +115,15 @@ export function Quotes() {
 
   // PO-number prompt shown before converting an accepted quote into a Sales Order
   const [convertPoQuoteId, setConvertPoQuoteId] = useState<number | null>(null);
+  // Overdue quote → ask for a slip reason after the PO prompt, before converting
+  const [delayConvert, setDelayConvert] = useState<{ quote: Quote; poNumber: string | null } | null>(null);
   const convertToOrder = useMutation({
-    mutationFn: ({ id, poNumber }: { id: number; poNumber: string | null }) =>
-      api(`/v1/quotes/${id}/convert`, { method: "POST", body: JSON.stringify({ poNumber }) }),
+    mutationFn: ({ id, poNumber, reason, note }: { id: number; poNumber: string | null; reason?: string | null; note?: string | null }) =>
+      api(`/v1/quotes/${id}/convert`, { method: "POST", body: JSON.stringify({ poNumber, ...(reason ? { statusReason: reason, statusReasonNote: note ?? null } : {}) }) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["quotes"] }); qc.invalidateQueries({ queryKey: ["sales-orders"] });
       toast({ title: "Converted to Sales Order" }); setSelected(null);
-      setConvertPoQuoteId(null);
+      setConvertPoQuoteId(null); setDelayConvert(null);
     },
     onError: () => toast({ title: "Conversion failed", variant: "destructive" }),
   });
@@ -508,8 +511,27 @@ export function Quotes() {
         onCancel={() => setConvertPoQuoteId(null)}
         onConfirm={(po) => {
           if (convertPoQuoteId === null) return;
-          convertToOrder.mutate({ id: convertPoQuoteId, poNumber: po });
+          const quote = (quotes ?? []).find(q => q.id === convertPoQuoteId);
+          // Quote → order KPI target: if the quote sat past it, ask why before converting
+          if (quote && daysSince(quote.createdAt) > KPI_DELAY_TARGETS.quoteToOrder) {
+            setConvertPoQuoteId(null);
+            setDelayConvert({ quote, poNumber: po });
+          } else {
+            convertToOrder.mutate({ id: convertPoQuoteId, poNumber: po });
+          }
         }}
+      />
+
+      {/* Slip-reason prompt — overdue quote finally becoming a Sales Order */}
+      <DelayReasonDialog
+        open={delayConvert != null}
+        title="This quote is past its order target"
+        entityLabel={delayConvert ? `${delayConvert.quote.quoteNumber}${delayConvert.quote.subject ? ` — ${delayConvert.quote.subject}` : ""}` : ""}
+        daysOverTarget={delayConvert ? Math.max(1, Math.round(daysSince(delayConvert.quote.createdAt) - KPI_DELAY_TARGETS.quoteToOrder)) : null}
+        pending={convertToOrder.isPending}
+        onCancel={() => setDelayConvert(null)}
+        onSkip={() => convertToOrder.mutate({ id: delayConvert!.quote.id, poNumber: delayConvert!.poNumber })}
+        onConfirm={(reason, note) => convertToOrder.mutate({ id: delayConvert!.quote.id, poNumber: delayConvert!.poNumber, reason, note })}
       />
     </div>
   );

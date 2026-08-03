@@ -231,6 +231,8 @@ router.patch("/v1/sales-orders/:id/status", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const { status } = req.body ?? {};
   if (!status) { res.status(400).json({ error: "status is required" }); return; }
+  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
+  const statusReasonNote = typeof req.body?.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null;
 
   const [curSo] = await db.select({ status: salesOrdersTable.status }).from(salesOrdersTable)
     .where(and(eq(salesOrdersTable.id, id), eq(salesOrdersTable.companyId, req.companyId)));
@@ -243,7 +245,7 @@ router.patch("/v1/sales-orders/:id/status", async (req, res): Promise<void> => {
     } else {
       await advanceSO(id, req.companyId, status);
     }
-    await recordStatusChange({ companyId: req.companyId, entityType: "sales_order", entityId: id, fromStatus: curSo?.status ?? null, toStatus: status, changedBy: req.userId });
+    await recordStatusChange({ companyId: req.companyId, entityType: "sales_order", entityId: id, fromStatus: curSo?.status ?? null, toStatus: status, changedBy: req.userId, reason: statusReason, reasonNote: statusReasonNote });
     const detail = await getOrderDetail(id, req.companyId);
     res.json(detail);
   } catch (err) {

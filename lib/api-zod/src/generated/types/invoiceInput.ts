@@ -10,4 +10,8 @@ export interface InvoiceInput {
   salesOrderId: number;
   gstPercent: number;
   dueDate?: string;
+  paymentTerms?: string;
+  notes?: string;
+  statusReason?: string;
+  statusReasonNote?: string;
 }

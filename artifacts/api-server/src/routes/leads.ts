@@ -8,20 +8,25 @@ const router = Router();
 router.get("/v1/leads", async (req, res): Promise<void> => {
   const rows = await db
     .select({
-      id: opportunitiesTable.id, title: opportunitiesTable.title,
-      clientId: opportunitiesTable.clientId, clientName: clientsTable.companyName,
-      leadId: opportunitiesTable.leadId, stage: opportunitiesTable.stage,
-      value: opportunitiesTable.value, probability: opportunitiesTable.probability,
-      expectedCloseDate: opportunitiesTable.expectedCloseDate,
-      ownerId: opportunitiesTable.ownerId, ownerName: usersTable.name,
-      notes: opportunitiesTable.notes,
-      createdAt: opportunitiesTable.createdAt, updatedAt: opportunitiesTable.updatedAt,
+      id: leadsTable.id, title: leadsTable.title, clientId: leadsTable.clientId,
+      companyName: sql<string>`COALESCE(${leadsTable.companyName}, ${clientsTable.companyName})`,
+      contactName: leadsTable.contactName, email: leadsTable.email, phone: leadsTable.phone,
+      source: leadsTable.source, status: leadsTable.status,
+      estimatedValue: leadsTable.estimatedValue, ownerId: leadsTable.ownerId,
+      ownerName: usersTable.name, notes: leadsTable.notes,
+      qty: leadsTable.qty, budget: leadsTable.budget, products: leadsTable.products,
+      leadDate: leadsTable.leadDate,
+      deliveryTime: leadsTable.deliveryTime, deliveryDate: leadsTable.deliveryDate,
+      cityOfDelivery: leadsTable.cityOfDelivery,
+      branding: leadsTable.branding, percentage: leadsTable.percentage, totalValue: leadsTable.totalValue,
+      customProducts: leadsTable.customProducts,
+      createdAt: leadsTable.createdAt, updatedAt: leadsTable.updatedAt,
     })
-    .from(opportunitiesTable)
-    .leftJoin(clientsTable, eq(opportunitiesTable.clientId, clientsTable.id))
-    .leftJoin(usersTable, eq(opportunitiesTable.ownerId, usersTable.id))
-    .where(eq(opportunitiesTable.companyId, req.companyId))
-    .orderBy(opportunitiesTable.createdAt);
+    .from(leadsTable)
+    .leftJoin(clientsTable, eq(leadsTable.clientId, clientsTable.id))
+    .leftJoin(usersTable, eq(leadsTable.ownerId, usersTable.id))
+    .where(eq(leadsTable.companyId, req.companyId))
+    .orderBy(leadsTable.createdAt);
   res.json(rows.map((r) => ({
     ...r, estimatedValue: r.estimatedValue ? Number(r.estimatedValue) : null,
     budget: r.budget ? Number(r.budget) : null,
@@ -50,24 +55,23 @@ router.post("/v1/leads", async (req, res): Promise<void> => {
   const { title, clientId, companyName, contactName, email, phone, source, status, estimatedValue, ownerId, notes,
     qty, budget, products, customProducts, leadDate, deliveryTime, deliveryDate, cityOfDelivery, branding, percentage, totalValue } = req.body ?? {};
   if (!title) { res.status(400).json({ error: "title is required" }); return; }
-  const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
-    .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
-
-  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
-  if (!lead) { res.status(404).json({ error: "Not found" }); return; }
-  if (req.body.status !== undefined && oldStatus !== null) {
-    await recordStatusChange({
-      companyId: req.companyId, entityType: "lead", entityId: id, fromStatus: oldStatus, toStatus: lead.status, changedBy: req.userId,
-      reason: typeof req.body.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null,
-      reasonNote: typeof req.body.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null,
-    });
-  }
-  res.json(serializeLead(lead));
+  const [lead] = await db.insert(leadsTable).values({
+    companyId: req.companyId, title, clientId, companyName, contactName, email, phone, source,
+    status: status ?? "new", estimatedValue, ownerId, notes,
+    qty, budget, products, customProducts,
+    leadDate: leadDate ? new Date(leadDate) : null,
+    deliveryTime,
+    deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+    cityOfDelivery,
+    branding, percentage, totalValue,
+  }).returning();
+  res.status(201).json(serializeLead(lead));
 });
 
-router.delete("/v1/leads/:id", async (req, res): Promise<void> => {
+router.patch("/v1/leads/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const fields = ["title", "clientId", "stage", "value", "probability", "ownerId", "notes"] as const;
+  const fields = ["title", "clientId", "companyName", "contactName", "email", "phone", "source", "status", "estimatedValue", "ownerId", "notes",
+    "qty", "budget", "products", "customProducts", "deliveryTime", "cityOfDelivery", "branding", "percentage", "totalValue"] as const;
   const updates: Record<string, unknown> = {};
   for (const f of fields) if (req.body[f] !== undefined) updates[f] = req.body[f];
   if (req.body.leadDate !== undefined) {
@@ -78,14 +82,11 @@ router.delete("/v1/leads/:id", async (req, res): Promise<void> => {
   }
   let oldStatus: string | null = null;
   if (req.body.status !== undefined) {
-    const [cur] = await db.select({ stage: opportunitiesTable.stage }).from(opportunitiesTable)
-      .where(and(eq(opportunitiesTable.id, id), eq(opportunitiesTable.companyId, req.companyId)));
+    const [cur] = await db.select({ status: leadsTable.status }).from(leadsTable)
+      .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
     oldStatus = cur?.status ?? null;
   }
-  const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
-    .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
-
-  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
+  const [lead] = await db.update(leadsTable).set(updates).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId))).returning();
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
   if (req.body.status !== undefined && oldStatus !== null) {
     await recordStatusChange({
@@ -99,7 +100,7 @@ router.delete("/v1/leads/:id", async (req, res): Promise<void> => {
 
 router.delete("/v1/leads/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const deleted = await db.delete(opportunitiesTable).where(and(eq(opportunitiesTable.id, id), eq(opportunitiesTable.companyId, req.companyId))).returning({ id: opportunitiesTable.id });
+  const deleted = await db.delete(leadsTable).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId))).returning({ id: leadsTable.id });
   if (deleted.length) {
     // Remove status history so reports (e.g. recent losses) don't show orphan entries
     await db.delete(statusHistoryTable).where(and(
@@ -114,9 +115,7 @@ router.delete("/v1/leads/:id", async (req, res): Promise<void> => {
 router.get("/v1/leads/:id/items", async (req, res): Promise<void> => {
   const leadId = parseInt(req.params.id as string, 10);
   const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
-    .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
-
-  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
+    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.companyId, req.companyId)));
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
   const items = await db.select().from(leadItemsTable)
     .where(eq(leadItemsTable.leadId, leadId))
@@ -133,9 +132,7 @@ router.get("/v1/leads/:id/items", async (req, res): Promise<void> => {
 router.post("/v1/leads/:id/items", async (req, res): Promise<void> => {
   const leadId = parseInt(req.params.id as string, 10);
   const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
-    .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
-
-  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
+    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.companyId, req.companyId)));
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
   const { slNo, productName, customProduct, qty, category, budget, transportation, margin } = req.body ?? {};
   const toNum = (v: unknown) => v != null && v !== "" ? Number(v) : null;
@@ -154,9 +151,7 @@ router.post("/v1/leads/:id/items", async (req, res): Promise<void> => {
 router.delete("/v1/leads/:id/items", async (req, res): Promise<void> => {
   const leadId = parseInt(req.params.id as string, 10);
   const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
-    .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
-
-  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
+    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.companyId, req.companyId)));
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
   await db.delete(leadItemsTable).where(eq(leadItemsTable.leadId, leadId));
   res.sendStatus(204);
@@ -171,10 +166,7 @@ router.delete("/v1/leads/:id/items/:itemId", async (req, res): Promise<void> => 
 
 router.post("/v1/leads/:id/convert-to-client", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
-    .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
-
-  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
+  const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
 
   if (!lead.email) { res.status(400).json({ error: "Lead must have an email address to convert to a client" }); return; }
@@ -200,11 +192,14 @@ router.post("/v1/leads/:id/convert-to-client", async (req, res): Promise<void> =
 
 router.post("/v1/leads/:id/convert", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
-    .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
-
+  const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
+  if (!lead) { res.status(404).json({ error: "Not found" }); return; }
   const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
-  const [opp] = await db.update(opportunitiesTable).set(updates).where(and(eq(opportunitiesTable.id, id), eq(opportunitiesTable.companyId, req.companyId))).returning();
+  const statusReasonNote = typeof req.body?.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null;
+  const [opp] = await db.insert(opportunitiesTable).values({
+    companyId: req.companyId, title: lead.title, clientId: lead.clientId, leadId: lead.id,
+    stage: "enquiry", value: lead.estimatedValue, ownerId: lead.ownerId,
+  }).returning();
   await db.update(leadsTable).set({ status: "converted" }).where(eq(leadsTable.id, id));
   await recordStatusChange({ companyId: req.companyId, entityType: "lead", entityId: id, fromStatus: lead.status, toStatus: "converted", changedBy: req.userId, reason: statusReason, reasonNote: statusReasonNote });
   await recordStatusChange({ companyId: req.companyId, entityType: "opportunity", entityId: opp.id, fromStatus: null, toStatus: "enquiry", changedBy: req.userId });
@@ -238,19 +233,16 @@ router.get("/v1/opportunities", async (req, res): Promise<void> => {
 router.post("/v1/opportunities", async (req, res): Promise<void> => {
   const { title, clientId, leadId, stage, value, probability, expectedCloseDate, ownerId, notes } = req.body ?? {};
   if (!title) { res.status(400).json({ error: "title is required" }); return; }
-  const [opp] = await db.update(opportunitiesTable).set(updates).where(and(eq(opportunitiesTable.id, id), eq(opportunitiesTable.companyId, req.companyId))).returning();
-  if (!opp) { res.status(404).json({ error: "Not found" }); return; }
-  if (req.body.stage !== undefined && oldStage !== null) {
-    await recordStatusChange({
-      companyId: req.companyId, entityType: "opportunity", entityId: id, fromStatus: oldStage, toStatus: opp.stage, changedBy: req.userId,
-      reason: typeof req.body.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null,
-      reasonNote: typeof req.body.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null,
-    });
-  }
-  res.json(opp);
+  const [opp] = await db.insert(opportunitiesTable).values({
+    companyId: req.companyId, title, clientId, leadId, stage: stage ?? "enquiry",
+    value, probability: probability ?? 50,
+    expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null,
+    ownerId, notes,
+  }).returning();
+  res.status(201).json(opp);
 });
 
-router.delete("/v1/opportunities/:id", async (req, res): Promise<void> => {
+router.patch("/v1/opportunities/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const fields = ["title", "clientId", "stage", "value", "probability", "ownerId", "notes"] as const;
   const updates: Record<string, unknown> = {};
@@ -294,8 +286,6 @@ router.get("/v1/leads/:id/history", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const [lead] = await db.select({ id: leadsTable.id }).from(leadsTable)
     .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
-
-  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
 
   const [opportunities, activities] = await Promise.all([
@@ -358,5 +348,3 @@ router.get("/v1/leads/:id/history", async (req, res): Promise<void> => {
 });
 
 export default router;
-
-  const statusReasonNote = typeof req.body?.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null;

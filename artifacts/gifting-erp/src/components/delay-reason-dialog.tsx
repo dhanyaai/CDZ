@@ -20,6 +20,9 @@ export const DELAY_REASONS = [
 export const KPI_DELAY_TARGETS = {
   leadToOpportunity: 1, // days
   opportunityToQuote: 2, // days
+  quoteToOrder: 3, // days
+  orderToInvoice: 7, // days
+  invoiceToPayment: 30, // days
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;

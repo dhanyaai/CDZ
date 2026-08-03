@@ -85,6 +85,8 @@ router.post("/v1/invoices", async (req, res): Promise<void> => {
   if (!salesOrderId) {
     res.status(400).json({ error: "salesOrderId is required" }); return;
   }
+  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
+  const statusReasonNote = typeof req.body?.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null;
 
   const [order] = await db
     .select({ order: salesOrdersTable, clientId: salesOrdersTable.clientId })
@@ -177,6 +179,10 @@ router.post("/v1/invoices", async (req, res): Promise<void> => {
 
     return inv;
   });
+
+  // Record the invoice creation; a slip reason here explains why the order
+  // took longer than the KPI target to get invoiced.
+  await recordStatusChange({ companyId: req.companyId, entityType: "invoice", entityId: invoice.id, fromStatus: null, toStatus: "Draft", changedBy: req.userId, reason: statusReason, reasonNote: statusReasonNote });
 
   const [row] = await db
     .select({
@@ -279,6 +285,8 @@ router.patch("/v1/invoices/:id/status", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const { status } = req.body ?? {};
   if (!status) { res.status(400).json({ error: "status is required" }); return; }
+  const stReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
+  const stReasonNote = typeof req.body?.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null;
 
   const [inv] = await db.select().from(invoicesTable)
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, req.companyId)));
@@ -295,7 +303,7 @@ router.patch("/v1/invoices/:id/status", async (req, res): Promise<void> => {
 
   const [updated] = await db.update(invoicesTable).set({ status })
     .where(eq(invoicesTable.id, id)).returning();
-  await recordStatusChange({ companyId: req.companyId, entityType: "invoice", entityId: id, fromStatus: inv.status, toStatus: status, changedBy: req.userId });
+  await recordStatusChange({ companyId: req.companyId, entityType: "invoice", entityId: id, fromStatus: inv.status, toStatus: status, changedBy: req.userId, reason: stReason, reasonNote: stReasonNote });
 
   const [row] = await db
     .select({
@@ -338,6 +346,8 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
   if (invoice.status === "Paid") {
     res.status(400).json({ error: "Invoice is already fully paid" }); return;
   }
+  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
+  const statusReasonNote = typeof req.body?.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null;
 
   const [payment] = await db.transaction(async (tx) => {
     const [p] = await tx.insert(paymentsTable).values({
@@ -358,7 +368,11 @@ router.post("/v1/payments", async (req, res): Promise<void> => {
 
     if (newStatus !== invoice.status) {
       await tx.update(invoicesTable).set({ status: newStatus }).where(eq(invoicesTable.id, invoiceId));
-      await recordStatusChange({ companyId: req.companyId, entityType: "invoice", entityId: invoiceId, fromStatus: invoice.status, toStatus: newStatus, changedBy: req.userId });
+      await recordStatusChange({ companyId: req.companyId, entityType: "invoice", entityId: invoiceId, fromStatus: invoice.status, toStatus: newStatus, changedBy: req.userId, reason: statusReason, reasonNote: statusReasonNote });
+    } else if (statusReason) {
+      // Late payment that didn't change the invoice status — still record the
+      // slip reason so it shows in the Delay Reasons report.
+      await recordStatusChange({ companyId: req.companyId, entityType: "invoice", entityId: invoiceId, fromStatus: null, toStatus: newStatus, changedBy: req.userId, reason: statusReason, reasonNote: statusReasonNote });
     }
 
     return [p];
