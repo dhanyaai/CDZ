@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   db, leadsTable, opportunitiesTable, quotesTable, salesOrdersTable,
   invoicesTable, paymentsTable, usersTable, purchaseOrdersTable,
@@ -40,11 +40,11 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
     db.select({
       id: salesOrdersTable.id, quoteId: salesOrdersTable.quoteId, orderNumber: salesOrdersTable.orderNumber,
       status: salesOrdersTable.status, grandTotal: salesOrdersTable.grandTotal, createdAt: salesOrdersTable.createdAt,
-    }).from(salesOrdersTable).where(eq(salesOrdersTable.companyId, cid)),
+    }).from(salesOrdersTable).where(and(eq(salesOrdersTable.companyId, cid), isNull(salesOrdersTable.deletedAt))),
     db.select({
       id: invoicesTable.id, salesOrderId: invoicesTable.salesOrderId, status: invoicesTable.status,
       createdAt: invoicesTable.createdAt,
-    }).from(invoicesTable).where(eq(invoicesTable.companyId, cid)),
+    }).from(invoicesTable).where(and(eq(invoicesTable.companyId, cid), isNull(invoicesTable.deletedAt))),
     db.select({
       invoiceId: paymentsTable.invoiceId, firstPayment: sql<string>`MIN(${paymentsTable.paymentDate})`,
     }).from(paymentsTable).where(eq(paymentsTable.companyId, cid)).groupBy(paymentsTable.invoiceId),
@@ -157,7 +157,7 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
     db.select({
       id: purchaseOrdersTable.id, poNumber: purchaseOrdersTable.poNumber, vendorId: purchaseOrdersTable.vendorId,
       status: purchaseOrdersTable.status, createdAt: purchaseOrdersTable.createdAt,
-    }).from(purchaseOrdersTable).where(eq(purchaseOrdersTable.companyId, cid)),
+    }).from(purchaseOrdersTable).where(and(eq(purchaseOrdersTable.companyId, cid), isNull(purchaseOrdersTable.deletedAt))),
     db.select({
       purchaseOrderId: grnTable.purchaseOrderId, firstReceipt: sql<string>`MIN(${grnTable.receivedDate})`,
     }).from(grnTable).where(eq(grnTable.companyId, cid)).groupBy(grnTable.purchaseOrderId),
