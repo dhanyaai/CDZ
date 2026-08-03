@@ -1,3 +1,4 @@
+import { recordStatusChange } from "../lib/statusHistory";
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, proformaInvoicesTable, proformaInvoiceItemsTable, clientsTable, quotesTable, quoteItemsTable, companiesTable } from "@workspace/db";
@@ -83,12 +84,15 @@ router.patch("/v1/proforma-invoices/:id/status", async (req, res): Promise<void>
   const { status } = req.body ?? {};
   if (!status) { res.status(400).json({ error: "status required" }); return; }
 
+  const [curPi] = await db.select({ status: proformaInvoicesTable.status }).from(proformaInvoicesTable)
+    .where(and(eq(proformaInvoicesTable.id, id), eq(proformaInvoicesTable.companyId, req.companyId)));
   const [pi] = await db.update(proformaInvoicesTable)
     .set({ status })
     .where(and(eq(proformaInvoicesTable.id, id), eq(proformaInvoicesTable.companyId, req.companyId)))
     .returning();
 
   if (!pi) { res.status(404).json({ error: "Not found" }); return; }
+  await recordStatusChange({ companyId: req.companyId, entityType: "proforma_invoice", entityId: id, fromStatus: curPi?.status ?? null, toStatus: status, changedBy: req.userId });
   const [row] = await db.select({ pi: proformaInvoicesTable, clientName: clientsTable.companyName })
     .from(proformaInvoicesTable).leftJoin(clientsTable, eq(proformaInvoicesTable.clientId, clientsTable.id))
     .where(eq(proformaInvoicesTable.id, id));

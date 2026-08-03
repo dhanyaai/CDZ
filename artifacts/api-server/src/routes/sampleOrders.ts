@@ -1,3 +1,4 @@
+import { recordStatusChange } from "../lib/statusHistory";
 import { Router } from "express";
 import { and, eq, inArray, SQL } from "drizzle-orm";
 import { db, sampleOrdersTable, sampleOrderItemsTable, clientsTable, productsTable, opportunitiesTable, quotesTable, quoteItemsTable } from "@workspace/db";
@@ -172,11 +173,14 @@ router.patch("/v1/sample-orders/:id/status", async (req, res): Promise<void> => 
   if (!status || !allowed.includes(status)) {
     res.status(400).json({ error: `status must be one of: ${allowed.join(", ")}` }); return;
   }
+  const [cur] = await db.select({ status: sampleOrdersTable.status }).from(sampleOrdersTable)
+    .where(and(eq(sampleOrdersTable.id, id), eq(sampleOrdersTable.companyId, req.companyId)));
   const [updated] = await db.update(sampleOrdersTable)
     .set({ status })
     .where(and(eq(sampleOrdersTable.id, id), eq(sampleOrdersTable.companyId, req.companyId)))
     .returning();
   if (!updated) { res.status(404).json({ error: "Sample order not found" }); return; }
+  await recordStatusChange({ companyId: req.companyId, entityType: "sample_order", entityId: id, fromStatus: cur?.status ?? null, toStatus: status, changedBy: req.userId });
   const detail = await getDetail(id, req.companyId);
   res.json(detail);
 });

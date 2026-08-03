@@ -1,3 +1,4 @@
+import { recordStatusChange } from "../lib/statusHistory";
 import { Router } from "express";
 import { eq, and, SQL, isNull, sql } from "drizzle-orm";
 import { db, salesOrdersTable, salesOrderItemsTable, deliveryAddressesTable, clientsTable, productsTable, companySettingsTable, quotesTable, advanceReceiptsTable } from "@workspace/db";
@@ -231,6 +232,9 @@ router.patch("/v1/sales-orders/:id/status", async (req, res): Promise<void> => {
   const { status } = req.body ?? {};
   if (!status) { res.status(400).json({ error: "status is required" }); return; }
 
+  const [curSo] = await db.select({ status: salesOrdersTable.status }).from(salesOrdersTable)
+    .where(and(eq(salesOrdersTable.id, id), eq(salesOrdersTable.companyId, req.companyId)));
+
   try {
     if (status === "Confirmed") {
       await confirmSO(id, req.companyId);
@@ -239,6 +243,7 @@ router.patch("/v1/sales-orders/:id/status", async (req, res): Promise<void> => {
     } else {
       await advanceSO(id, req.companyId, status);
     }
+    await recordStatusChange({ companyId: req.companyId, entityType: "sales_order", entityId: id, fromStatus: curSo?.status ?? null, toStatus: status, changedBy: req.userId });
     const detail = await getOrderDetail(id, req.companyId);
     res.json(detail);
   } catch (err) {

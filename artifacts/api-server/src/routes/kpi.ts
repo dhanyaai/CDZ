@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db, leadsTable, opportunitiesTable, quotesTable, salesOrdersTable,
   invoicesTable, paymentsTable, usersTable, purchaseOrdersTable,
-  grnTable, vendorsTable,
+  grnTable, vendorsTable, orderProcessingFormsTable, statusHistoryTable,
 } from "@workspace/db";
 
 const router = Router();
@@ -16,6 +16,18 @@ export const KPI_DEADLINES = {
   orderToInvoice: 7,      // invoice within 7 days of order
   invoiceToPayment: 30,   // payment within 30 days of invoice
   poToGrn: 7,             // goods received within 7 days of PO
+};
+
+// Internal order-processing step targets, in days from sales-order creation
+export const PROCESSING_DEADLINES = {
+  procurement: 2,
+  designStart: 2,
+  mockupApproval: 4,
+  preProduction: 6,
+  productionStart: 7,
+  qc: 10,
+  stockUpdate: 12,
+  dispatch: 14,
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -180,7 +192,92 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
     };
   }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  res.json({ deadlines: D, funnel, teamKpis, purchases });
+  // Order processing internal steps (from processing form dates), vs targets in days from SO creation
+  const forms = await db.select({
+    salesOrderId: orderProcessingFormsTable.salesOrderId,
+    formData: orderProcessingFormsTable.formData,
+  }).from(orderProcessingFormsTable).where(eq(orderProcessingFormsTable.companyId, cid));
+  const formBySo = new Map(forms.map((f) => [f.salesOrderId, (f.formData ?? {}) as Record<string, unknown>]));
+
+  const P = PROCESSING_DEADLINES;
+  const stepCell = (soCreated: Date, raw: unknown, limit: number, open: boolean): StageCell => {
+    const s = typeof raw === "string" && raw ? raw : null;
+    const dt = s ? new Date(s) : null;
+    if (dt && !Number.isNaN(dt.getTime())) {
+      const days = daysBetween(soCreated, dt);
+      return { date: dt.toISOString(), days, overdue: days > limit };
+    }
+    return { date: null, days: null, overdue: open && daysBetween(soCreated, now) > limit };
+  };
+
+  const processing = orders
+    .filter((so) => so.status !== "Cancelled")
+    .map((so) => {
+      const fd = formBySo.get(so.id) ?? {};
+      const open = !["Dispatched", "Delivered", "Closed", "Completed"].includes(so.status);
+      return {
+        salesOrderId: so.id,
+        orderNumber: so.orderNumber,
+        status: so.status,
+        orderedAt: so.createdAt.toISOString(),
+        hasForm: formBySo.has(so.id),
+        procurement: stepCell(so.createdAt, fd.procurementDate, P.procurement, open),
+        designStart: stepCell(so.createdAt, fd.designStartDate, P.designStart, open),
+        mockupApproval: stepCell(so.createdAt, fd.mockupApprovalEndDate, P.mockupApproval, open),
+        preProduction: stepCell(so.createdAt, fd.preProductionApprovalEndDate, P.preProduction, open),
+        productionStart: stepCell(so.createdAt, fd.productionInitiateDate, P.productionStart, open),
+        qc: stepCell(so.createdAt, (fd.qc2EndDate as string) || (fd.qc1EndDate as string), P.qc, open),
+        stockUpdate: stepCell(so.createdAt, fd.stockUpdateDate, P.stockUpdate, open),
+        dispatch: stepCell(so.createdAt, fd.dispatchDate, P.dispatch, open),
+      };
+    })
+    .sort((a, b) => b.orderedAt.localeCompare(a.orderedAt));
+
+  res.json({ deadlines: D, processingDeadlines: P, funnel, teamKpis, purchases, processing });
+});
+
+// GET /v1/reports/kpi/history?leadId=N — recorded status changes for a lead and its linked documents
+router.get("/v1/reports/kpi/history", async (req, res): Promise<void> => {
+  const cid = req.companyId;
+  const leadId = parseInt(String(req.query.leadId ?? ""), 10);
+  if (Number.isNaN(leadId)) { res.status(400).json({ error: "leadId is required" }); return; }
+
+  // Resolve the chain: lead -> opportunities -> quotes -> sales orders -> invoices
+  const chainOpps = await db.select({ id: opportunitiesTable.id }).from(opportunitiesTable)
+    .where(and(eq(opportunitiesTable.companyId, cid), eq(opportunitiesTable.leadId, leadId)));
+  const oppIds = chainOpps.map((o) => o.id);
+  const chainQuotes = oppIds.length ? await db.select({ id: quotesTable.id }).from(quotesTable)
+    .where(and(eq(quotesTable.companyId, cid), inArray(quotesTable.opportunityId, oppIds))) : [];
+  const quoteIds = chainQuotes.map((q) => q.id);
+  const chainOrders = quoteIds.length ? await db.select({ id: salesOrdersTable.id }).from(salesOrdersTable)
+    .where(and(eq(salesOrdersTable.companyId, cid), inArray(salesOrdersTable.quoteId, quoteIds))) : [];
+  const orderIds = chainOrders.map((o) => o.id);
+  const chainInvoices = orderIds.length ? await db.select({ id: invoicesTable.id }).from(invoicesTable)
+    .where(and(eq(invoicesTable.companyId, cid), inArray(invoicesTable.salesOrderId, orderIds))) : [];
+  const invoiceIds = chainInvoices.map((i) => i.id);
+
+  const conds = [
+    and(eq(statusHistoryTable.entityType, "lead"), eq(statusHistoryTable.entityId, leadId)),
+    oppIds.length ? and(eq(statusHistoryTable.entityType, "opportunity"), inArray(statusHistoryTable.entityId, oppIds)) : null,
+    quoteIds.length ? and(eq(statusHistoryTable.entityType, "quote"), inArray(statusHistoryTable.entityId, quoteIds)) : null,
+    orderIds.length ? and(eq(statusHistoryTable.entityType, "sales_order"), inArray(statusHistoryTable.entityId, orderIds)) : null,
+    invoiceIds.length ? and(eq(statusHistoryTable.entityType, "invoice"), inArray(statusHistoryTable.entityId, invoiceIds)) : null,
+  ].filter((c): c is NonNullable<typeof c> => c != null);
+
+  const rows = await db.select({
+    id: statusHistoryTable.id,
+    entityType: statusHistoryTable.entityType,
+    entityId: statusHistoryTable.entityId,
+    fromStatus: statusHistoryTable.fromStatus,
+    toStatus: statusHistoryTable.toStatus,
+    changedAt: statusHistoryTable.changedAt,
+    changedByName: usersTable.name,
+  }).from(statusHistoryTable)
+    .leftJoin(usersTable, eq(statusHistoryTable.changedBy, usersTable.id))
+    .where(and(eq(statusHistoryTable.companyId, cid), or(...conds)))
+    .orderBy(statusHistoryTable.changedAt);
+
+  res.json({ history: rows.map((r) => ({ ...r, changedAt: r.changedAt.toISOString() })) });
 });
 
 export default router;

@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
-import { Gauge, Users, ShoppingCart, AlertTriangle, Search, Timer } from "lucide-react";
+import { Gauge, Users, ShoppingCart, AlertTriangle, Search, Timer, History } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface StageCell { date: string | null; days: number | null; overdue: boolean }
 interface FunnelRow {
@@ -27,12 +29,28 @@ interface PurchaseRow {
   poId: number; poNumber: string; vendor: string | null; status: string;
   createdAt: string; receivedAt: string | null; days: number | null; overdue: boolean;
 }
+interface ProcessingRow {
+  salesOrderId: number; orderNumber: string; status: string; orderedAt: string; hasForm: boolean;
+  procurement: StageCell; designStart: StageCell; mockupApproval: StageCell; preProduction: StageCell;
+  productionStart: StageCell; qc: StageCell; stockUpdate: StageCell; dispatch: StageCell;
+}
+interface HistoryEntry {
+  id: number; entityType: string; entityId: number;
+  fromStatus: string | null; toStatus: string; changedAt: string; changedByName: string | null;
+}
 interface KpiResponse {
   deadlines: Record<string, number>;
+  processingDeadlines: Record<string, number>;
   funnel: FunnelRow[];
   teamKpis: TeamKpi[];
   purchases: PurchaseRow[];
+  processing: ProcessingRow[];
 }
+
+const ENTITY_LABELS: Record<string, string> = {
+  lead: "Lead", opportunity: "Opportunity", quote: "Quote", sales_order: "Sales Order",
+  invoice: "Invoice", purchase_order: "Purchase Order", sample_order: "Sample Order", proforma_invoice: "Proforma Invoice",
+};
 
 const inr = (n: number) => "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 const d = (iso: string | null) => (iso ? format(new Date(iso), "dd MMM yy") : null);
@@ -58,10 +76,17 @@ function StageBadge({ cell, notReachedLabel }: { cell: StageCell; notReachedLabe
 export function KpiReports() {
   const [search, setSearch] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [historyLead, setHistoryLead] = useState<FunnelRow | null>(null);
 
   const { data, isLoading } = useQuery<KpiResponse>({
     queryKey: ["kpi-report"],
     queryFn: () => api<KpiResponse>("/v1/reports/kpi"),
+  });
+
+  const { data: historyData, isLoading: historyLoading } = useQuery<{ history: HistoryEntry[] }>({
+    queryKey: ["kpi-history", historyLead?.leadId],
+    queryFn: () => api<{ history: HistoryEntry[] }>(`/v1/reports/kpi/history?leadId=${historyLead!.leadId}`),
+    enabled: historyLead != null,
   });
 
   const dl = data?.deadlines ?? {};
@@ -130,8 +155,65 @@ export function KpiReports() {
         <TabsList>
           <TabsTrigger value="funnel">Lead Funnel &amp; Timelines</TabsTrigger>
           <TabsTrigger value="team">Team KPIs</TabsTrigger>
+          <TabsTrigger value="processing">Order Processing</TabsTrigger>
           <TabsTrigger value="purchases">Purchasing</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="processing" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Internal processing steps per order</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Ordered</TableHead>
+                    <TableHead>Procurement</TableHead>
+                    <TableHead>Design Start</TableHead>
+                    <TableHead>Mockup OK</TableHead>
+                    <TableHead>Pre-Prod OK</TableHead>
+                    <TableHead>Production</TableHead>
+                    <TableHead>QC</TableHead>
+                    <TableHead>Stock Update</TableHead>
+                    <TableHead>Dispatch</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading && <TableRow><TableCell colSpan={10}><Skeleton className="h-6 w-full" /></TableCell></TableRow>}
+                  {!isLoading && (data?.processing ?? []).length === 0 && (
+                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No sales orders yet.</TableCell></TableRow>
+                  )}
+                  {(data?.processing ?? []).map((p) => {
+                    const cells = [p.procurement, p.designStart, p.mockupApproval, p.preProduction, p.productionStart, p.qc, p.stockUpdate, p.dispatch];
+                    const anyOverdue = cells.some((c) => c.overdue);
+                    return (
+                      <TableRow key={p.salesOrderId} className={anyOverdue ? "bg-red-50/50 dark:bg-red-950/10" : ""}>
+                        <TableCell>
+                          <div className="font-medium text-sm">{p.orderNumber}</div>
+                          <div className="text-xs text-muted-foreground">{p.status}{!p.hasForm ? " · no processing form" : ""}</div>
+                        </TableCell>
+                        <TableCell className="text-xs">{d(p.orderedAt)}</TableCell>
+                        {cells.map((c, i) => (
+                          <TableCell key={i}><StageBadge cell={c} notReachedLabel="Pending" /></TableCell>
+                        ))}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+          <p className="text-xs text-muted-foreground">
+            Step dates come from each order's processing form. Days count from the order date; targets:
+            procurement {data?.processingDeadlines?.procurement ?? 2}d · design {data?.processingDeadlines?.designStart ?? 2}d ·
+            mockup {data?.processingDeadlines?.mockupApproval ?? 4}d · pre-production {data?.processingDeadlines?.preProduction ?? 6}d ·
+            production {data?.processingDeadlines?.productionStart ?? 7}d · QC {data?.processingDeadlines?.qc ?? 10}d ·
+            stock {data?.processingDeadlines?.stockUpdate ?? 12}d · dispatch {data?.processingDeadlines?.dispatch ?? 14}d.
+            Red = later than target (or still pending past it).
+          </p>
+        </TabsContent>
 
         <TabsContent value="funnel" className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -160,14 +242,15 @@ export function KpiReports() {
                     <TableHead>Payment</TableHead>
                     <TableHead className="text-right">Order Value</TableHead>
                     <TableHead className="text-right">Full Cycle</TableHead>
+                    <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading && Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}><TableCell colSpan={10}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                    <TableRow key={i}><TableCell colSpan={11}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
                   ))}
                   {!isLoading && funnel.length === 0 && (
-                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                    <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                       {overdueOnly ? "Nothing overdue — all stages are on track." : "No leads yet."}
                     </TableCell></TableRow>
                   )}
@@ -186,6 +269,11 @@ export function KpiReports() {
                       <TableCell><StageBadge cell={r.payment} /></TableCell>
                       <TableCell className="text-right text-sm">{r.orderValue != null ? inr(r.orderValue) : "—"}</TableCell>
                       <TableCell className="text-right text-sm">{r.totalCycleDays != null ? `${r.totalCycleDays}d` : "—"}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Status change history" onClick={() => setHistoryLead(r)}>
+                          <History className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -286,6 +374,42 @@ export function KpiReports() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Status change history dialog */}
+      <Dialog open={historyLead != null} onOpenChange={(o) => !o && setHistoryLead(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-4 h-4" /> Status history — {historyLead?.title}
+            </DialogTitle>
+          </DialogHeader>
+          {historyLoading && <Skeleton className="h-24 w-full" />}
+          {!historyLoading && (historyData?.history ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground py-4">
+              No status changes recorded yet for this lead's chain. Tracking started on 3 Aug 2026 — changes made from now on will appear here.
+            </p>
+          )}
+          {!historyLoading && (historyData?.history ?? []).length > 0 && (
+            <div className="space-y-3">
+              {(historyData?.history ?? []).map((h) => (
+                <div key={h.id} className="flex gap-3 text-sm">
+                  <div className="w-28 shrink-0 text-xs text-muted-foreground pt-0.5">
+                    {format(new Date(h.changedAt), "dd MMM yy, HH:mm")}
+                  </div>
+                  <div>
+                    <div>
+                      <span className="font-medium">{ENTITY_LABELS[h.entityType] ?? h.entityType}</span>{" "}
+                      {h.fromStatus ? <>moved from <Badge variant="outline" className="font-normal">{h.fromStatus}</Badge> to</> : <>set to</>}{" "}
+                      <Badge variant="outline" className="font-normal">{h.toStatus}</Badge>
+                    </div>
+                    {h.changedByName && <div className="text-xs text-muted-foreground">by {h.changedByName}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

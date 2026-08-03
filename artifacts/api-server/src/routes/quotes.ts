@@ -1,3 +1,4 @@
+import { recordStatusChange } from "../lib/statusHistory";
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, quotesTable, quoteItemsTable, clientsTable, salesOrdersTable, salesOrderItemsTable, companySettingsTable } from "@workspace/db";
@@ -128,9 +129,18 @@ router.patch("/v1/quotes/:id", async (req, res): Promise<void> => {
   if (req.body.subject !== undefined) updates.subject = req.body.subject;
   if (req.body.termsAndConditions !== undefined) updates.termsAndConditions = req.body.termsAndConditions;
 
+  let oldStatus: string | null = null;
+  if (req.body.status) {
+    const [cur] = await db.select({ status: quotesTable.status }).from(quotesTable)
+      .where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId)));
+    oldStatus = cur?.status ?? null;
+  }
   const [q] = await db.update(quotesTable).set(updates)
     .where(and(eq(quotesTable.id, id), eq(quotesTable.companyId, req.companyId))).returning();
   if (!q) { res.status(404).json({ error: "Not found" }); return; }
+  if (req.body.status && oldStatus !== null) {
+    await recordStatusChange({ companyId: req.companyId, entityType: "quote", entityId: id, fromStatus: oldStatus, toStatus: q.status, changedBy: req.userId });
+  }
 
   const [row] = await db.select({ q: quotesTable, clientName: clientsTable.companyName })
     .from(quotesTable).leftJoin(clientsTable, eq(quotesTable.clientId, clientsTable.id))

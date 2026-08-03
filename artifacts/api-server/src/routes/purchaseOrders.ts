@@ -1,3 +1,4 @@
+import { recordStatusChange } from "../lib/statusHistory";
 import { Router } from "express";
 import { eq, and, SQL, isNull } from "drizzle-orm";
 import { db, purchaseOrdersTable, purchaseOrderItemsTable, vendorsTable, productsTable, salesOrdersTable, companySettingsTable } from "@workspace/db";
@@ -190,6 +191,7 @@ router.patch("/v1/purchase-orders/:id/status", async (req, res): Promise<void> =
 
     await db.update(purchaseOrdersTable).set({ status })
       .where(eq(purchaseOrdersTable.id, id));
+    await recordStatusChange({ companyId: req.companyId, entityType: "purchase_order", entityId: id, fromStatus: po.status, toStatus: status, changedBy: req.userId });
 
     const detail = await getPODetail(id, req.companyId);
     res.json(detail);
