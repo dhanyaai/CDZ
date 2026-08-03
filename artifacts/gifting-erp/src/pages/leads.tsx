@@ -16,6 +16,7 @@ import { useLocation } from "wouter";
 import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, UserPlus, FileSpreadsheet, X, History, Briefcase, FileText, ShoppingCart, Truck, Receipt, Activity, XCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LossReasonDialog } from "@/components/loss-reason-dialog";
+import { DelayReasonDialog, KPI_DELAY_TARGETS, daysSince } from "@/components/delay-reason-dialog";
 
 type LeadItem = {
   id: number; leadId: number; slNo: number;
@@ -88,6 +89,7 @@ export function Leads() {
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [lossDialogFor, setLossDialogFor] = useState<Lead | null>(null);
+  const [delayConvertFor, setDelayConvertFor] = useState<Lead | null>(null);
   const [detailTab, setDetailTab] = useState<"details" | "history">("details");
 
   const [, navigate] = useLocation();
@@ -188,9 +190,20 @@ export function Leads() {
   });
 
   const convert = useMutation({
-    mutationFn: (id: number) => api(`/v1/leads/${id}/convert`, { method: "POST" }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); qc.invalidateQueries({ queryKey: ["opportunities"] }); toast({ title: "Converted to opportunity" }); setSelected(null); },
+    mutationFn: ({ id, reason, note }: { id: number; reason?: string | null; note?: string | null }) =>
+      api(`/v1/leads/${id}/convert`, {
+        method: "POST",
+        body: JSON.stringify(reason ? { statusReason: reason, statusReasonNote: note ?? null } : {}),
+      }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); qc.invalidateQueries({ queryKey: ["opportunities"] }); toast({ title: "Converted to opportunity" }); setDelayConvertFor(null); setSelected(null); },
   });
+
+  // Lead → opportunity KPI target: if the lead sat past it, ask why before converting
+  const leadConversionOverdue = (lead: Lead) => daysSince(lead.createdAt) > KPI_DELAY_TARGETS.leadToOpportunity;
+  const startConvert = (lead: Lead) => {
+    if (leadConversionOverdue(lead)) setDelayConvertFor(lead);
+    else convert.mutate({ id: lead.id });
+  };
 
   const del = useMutation({
     mutationFn: (id: number) => api(`/v1/leads/${id}`, { method: "DELETE" }),
@@ -1117,7 +1130,7 @@ export function Leads() {
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  <Button className="flex-1" onClick={() => convert.mutate(selected.id)} disabled={convert.isPending || selected.status === "converted"}>
+                  <Button className="flex-1" onClick={() => startConvert(selected)} disabled={convert.isPending || selected.status === "converted"}>
                     <ArrowRight className="w-4 h-4 mr-2" />Convert to Opportunity
                   </Button>
                   <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
@@ -1141,6 +1154,17 @@ export function Leads() {
         pending={markLost.isPending}
         onCancel={() => setLossDialogFor(null)}
         onConfirm={(reason, note) => markLost.mutate({ id: lossDialogFor!.id, reason, note })}
+      />
+
+      <DelayReasonDialog
+        open={delayConvertFor != null}
+        title="This lead is past its follow-up target"
+        entityLabel={delayConvertFor?.title ?? ""}
+        daysOverTarget={delayConvertFor ? Math.max(1, Math.round(daysSince(delayConvertFor.createdAt) - KPI_DELAY_TARGETS.leadToOpportunity)) : null}
+        pending={convert.isPending}
+        onCancel={() => setDelayConvertFor(null)}
+        onSkip={() => convert.mutate({ id: delayConvertFor!.id })}
+        onConfirm={(reason, note) => convert.mutate({ id: delayConvertFor!.id, reason, note })}
       />
     </div>
   );

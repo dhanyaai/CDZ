@@ -70,13 +70,13 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   const oppByLead = new Map<number, typeof opps[number]>();
   for (const o of opps) {
     if (o.leadId == null) continue;
-    const prev = oppByLead.get(o.leadId);
+    const prev = orderByQuote.get(so.quoteId);
     if (!prev || o.createdAt < prev.createdAt) oppByLead.set(o.leadId, o);
   }
   const quoteByOpp = new Map<number, typeof quotes[number]>();
   for (const q of quotes) {
     if (q.opportunityId == null) continue;
-    const prev = quoteByOpp.get(q.opportunityId);
+    const prev = orderByQuote.get(so.quoteId);
     if (!prev || q.createdAt < prev.createdAt) quoteByOpp.set(q.opportunityId, q);
   }
   const orderByQuote = new Map<number, typeof orders[number]>();
@@ -87,7 +87,7 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   }
   const invoiceByOrder = new Map<number, typeof invoices[number]>();
   for (const inv of invoices) {
-    const prev = invoiceByOrder.get(inv.salesOrderId);
+    const prev = orderByQuote.get(so.quoteId);
     if (!prev || inv.createdAt < prev.createdAt) invoiceByOrder.set(inv.salesOrderId, inv);
   }
   const paymentByInvoice = new Map(payments.map((p) => [p.invoiceId, new Date(p.firstPayment)]));
@@ -142,7 +142,7 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
     orders: number; revenue: number; leadToOrderDaysSum: number; leadToOrderCount: number; overdueStages: number;
   }>();
   for (const row of funnel) {
-    const key = row.owner != null && row.ownerId != null ? row.ownerId : "unassigned";
+    const key = `${e.entityType}:${e.entityId}`;
     let t = team.get(key);
     if (!t) { t = { owner: row.owner ?? "Unassigned", ownerId: key === "unassigned" ? null : key, leads: 0, opportunities: 0, quotes: 0, orders: 0, revenue: 0, leadToOrderDaysSum: 0, leadToOrderCount: 0, overdueStages: 0 }; team.set(key, t); }
     t.leads++;
@@ -306,18 +306,34 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   }
   const reasonAgg = new Map<string, { reason: string; count: number; revenueImpact: number }>();
   for (const l of lossDetails) {
-    let r = reasonAgg.get(l.reason);
-    if (!r) { r = { reason: l.reason, count: 0, revenueImpact: 0 }; reasonAgg.set(l.reason, r); }
+    let r = delayAgg.get(dd.reason);
+    if (!r) { r = { reason: dd.reason, count: 0 }; delayAgg.set(dd.reason, r); }
     r.count++;
-    r.revenueImpact += l.value;
   }
+  const delayReasons = Array.from(delayAgg.values()).sort((a, b) => b.count - a.count);
   const lossReasons = Array.from(reasonAgg.values()).sort((a, b) => b.count - a.count || b.revenueImpact - a.revenueImpact);
 
-  res.json({ deadlines: D, processingDeadlines: P, funnel, teamKpis, purchases, processing, lossReasons, lossDetails });
-});
-
-// GET /v1/reports/kpi/history?leadId=N — recorded status changes for a lead and its linked documents
-router.get("/v1/reports/kpi/history", async (req, res): Promise<void> => {
+  // Delay reasons: status_history entries with a reason where the transition
+  // was NOT to a lost state — i.e. slip reasons captured when an overdue stage
+  // finally completed.
+  const delayEntries = await db.select({
+    id: statusHistoryTable.id,
+    entityType: statusHistoryTable.entityType,
+    entityId: statusHistoryTable.entityId,
+    fromStatus: statusHistoryTable.fromStatus,
+    toStatus: statusHistoryTable.toStatus,
+    reason: statusHistoryTable.reason,
+    reasonNote: statusHistoryTable.reasonNote,
+    changedAt: statusHistoryTable.changedAt,
+    changedByName: usersTable.name,
+  }).from(statusHistoryTable)
+    .leftJoin(usersTable, eq(statusHistoryTable.changedBy, usersTable.id))
+    .where(and(
+      eq(statusHistoryTable.companyId, cid),
+      sql`${statusHistoryTable.reason} IS NOT NULL`,
+      sql`${statusHistoryTable.toStatus} NOT IN ('lost', 'dropped', 'junk')`,
+    ))
+    .orderBy(sql`${statusHistoryTable.changedAt} DESC`);
   const cid = req.companyId;
   const leadId = parseInt(String(req.query.leadId ?? ""), 10);
   if (Number.isNaN(leadId)) { res.status(400).json({ error: "leadId is required" }); return; }
@@ -344,34 +360,32 @@ router.get("/v1/reports/kpi/history", async (req, res): Promise<void> => {
     invoiceIds.length ? and(eq(statusHistoryTable.entityType, "invoice"), inArray(statusHistoryTable.entityId, invoiceIds)) : null,
   ].filter((c): c is NonNullable<typeof c> => c != null);
 
-  const rows = await db.select({
-    id: statusHistoryTable.id,
-    entityType: statusHistoryTable.entityType,
-    entityId: statusHistoryTable.entityId,
-    fromStatus: statusHistoryTable.fromStatus,
-    toStatus: statusHistoryTable.toStatus,
-    reason: statusHistoryTable.reason,
-    reasonNote: statusHistoryTable.reasonNote,
-    changedAt: statusHistoryTable.changedAt,
-    changedByName: usersTable.name,
-  }).from(statusHistoryTable)
-    .leftJoin(usersTable, eq(statusHistoryTable.changedBy, usersTable.id))
-    .where(and(eq(statusHistoryTable.companyId, cid), or(...conds)))
-    .orderBy(statusHistoryTable.changedAt);
+  const rows = months.map((month) => {
+    const a = buckets.get(month) ?? { leads: 0, quotes: 0, orders: 0, revenue: 0 };
+    const t = targetByMonth.get(month) ?? null;
+    return {
+      month,
+      actualLeads: a.leads,
+      actualQuotes: a.quotes,
+      actualOrders: a.orders,
+      actualRevenue: a.revenue,
+      targetLeads: t ? t.targetLeads : null,
+      targetQuotes: t ? t.targetQuotes : null,
+      targetRevenue: t ? Number(t.targetRevenue) : null,
+    };
+  });
 
-  res.json({ history: rows.map((r) => ({ ...r, changedAt: r.changedAt.toISOString() })) });
+  res.json({ user: { id: user.id, name: user.name }, months: rows });
 });
 
-// GET /v1/reports/kpi/scorecard?userId=N — monthly target vs actual for one salesperson
-// Actuals use the same funnel chain logic as /v1/reports/kpi, bucketed by the month
-// each stage was reached (leads by lead creation, quotes by quote creation, revenue by order creation).
-router.get("/v1/reports/kpi/scorecard", async (req, res): Promise<void> => {
+// PUT /v1/kpi/targets — upsert a monthly target for a user
+router.put("/v1/kpi/targets", async (req, res): Promise<void> => {
   const cid = req.companyId;
   const userId = parseInt(String(req.query.userId ?? ""), 10);
   if (Number.isNaN(userId)) { res.status(400).json({ error: "userId is required" }); return; }
 
-  const [user] = await db.select({ id: usersTable.id, name: usersTable.name })
-    .from(usersTable).where(and(eq(usersTable.companyId, cid), eq(usersTable.id, userId)));
+  const [user] = await db.select({ id: usersTable.id }).from(usersTable)
+    .where(and(eq(usersTable.companyId, cid), eq(usersTable.id, uid)));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
   const [leads, opps, quotes, orders, targets] = await Promise.all([
@@ -393,13 +407,13 @@ router.get("/v1/reports/kpi/scorecard", async (req, res): Promise<void> => {
   const oppByLead = new Map<number, typeof opps[number]>();
   for (const o of opps) {
     if (o.leadId == null) continue;
-    const prev = oppByLead.get(o.leadId);
+    const prev = orderByQuote.get(so.quoteId);
     if (!prev || o.createdAt < prev.createdAt) oppByLead.set(o.leadId, o);
   }
   const quoteByOpp = new Map<number, typeof quotes[number]>();
   for (const q of quotes) {
     if (q.opportunityId == null) continue;
-    const prev = quoteByOpp.get(q.opportunityId);
+    const prev = orderByQuote.get(so.quoteId);
     if (!prev || q.createdAt < prev.createdAt) quoteByOpp.set(q.opportunityId, q);
   }
   const orderByQuote = new Map<number, typeof orders[number]>();
@@ -495,3 +509,33 @@ router.put("/v1/kpi/targets", async (req, res): Promise<void> => {
 });
 
 export default router;
+  const dLeadIds = delayEntries.filter((e) => e.entityType === "lead").map((e) => e.entityId);
+
+  const delayDetails = delayEntries.map((e) => ({
+    id: e.id,
+    entityType: e.entityType,
+    entityId: e.entityId,
+    title: e.entityType === "lead" ? dLeadTitle.get(e.entityId) ?? null
+      : e.entityType === "opportunity" ? dOppTitle.get(e.entityId) ?? null : null,
+    fromStatus: e.fromStatus,
+    toStatus: e.toStatus,
+    reason: e.reason as string,
+    reasonNote: e.reasonNote,
+    changedAt: e.changedAt.toISOString(),
+    changedByName: e.changedByName,
+  }));
+
+  const dOppIds = delayEntries.filter((e) => e.entityType === "opportunity").map((e) => e.entityId);
+
+  const [dLeads, dOpps] = await Promise.all([
+    dLeadIds.length ? db.select({ id: leadsTable.id, title: leadsTable.title })
+      .from(leadsTable).where(and(eq(leadsTable.companyId, cid), inArray(leadsTable.id, dLeadIds))) : Promise.resolve([]),
+    dOppIds.length ? db.select({ id: opportunitiesTable.id, title: opportunitiesTable.title })
+      .from(opportunitiesTable).where(and(eq(opportunitiesTable.companyId, cid), inArray(opportunitiesTable.id, dOppIds))) : Promise.resolve([]),
+  ]);
+
+  const dOppTitle = new Map(dOpps.map((o) => [o.id, o.title]));
+
+  const delayAgg = new Map<string, { reason: string; count: number }>();
+
+  const dLeadTitle = new Map(dLeads.map((l) => [l.id, l.title]));

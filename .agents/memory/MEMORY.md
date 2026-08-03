@@ -10,5 +10,6 @@
 - [Drizzle baseline](drizzle-baseline.md) — making migrate() work on push-created DBs: idempotent replay + journal insert; always column-diff vs 0000 snapshot after
 - [Dev API e2e testing](dev-api-testing.md) — auth is Bearer token from /v1/auth/login (NOT cookies); seed creds in scripts/src/seed.ts; base http://localhost:80/api
 - [Status history tracking](status-history.md) — all status mutations must call recordStatusChange (incl. indirect paths); hand-written migration + journal convention (generate is broken)
+- [Stale lib/db dist after merges](stale-lib-dist.md) — "column does not exist" typecheck/500s after a merge = rebuild `npx tsc -b lib/db --force` + db push; re-verify merged route files
 - [Print template escaping](print-template-escaping.md) — esc() every string interpolated into print-window HTML; same-origin stored-XSS vector otherwise
 - [Stale lib/db dist after merges](stale-lib-dist.md) — phantom "no exported member" errors post-merge; force rebuild libs; merges can corrupt route files, restore from merged commit

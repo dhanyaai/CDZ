@@ -19,6 +19,7 @@ import { useLocation } from "wouter";
 import { printSampleOrder, printReturnNote, printCatalogue, printQuote, printDeliveryChallan, printSalesOrder } from "@/lib/print-utils";
 import { ConvertToSalesOrderDialog } from "@/components/convert-so-dialog";
 import { LossReasonDialog } from "@/components/loss-reason-dialog";
+import { DelayReasonDialog, KPI_DELAY_TARGETS, daysSince } from "@/components/delay-reason-dialog";
 
 type Opportunity = {
   id: number; title: string; clientId: number | null; clientName: string | null;
@@ -128,6 +129,7 @@ export function Opportunities() {
   const [catalogueSearch, setCatalogueSearch] = useState("");
   const [shareUrls, setShareUrls] = useState<Record<string, string>>({});
   const [lossDialogFor, setLossDialogFor] = useState<Opportunity | null>(null);
+  const [delayStageMove, setDelayStageMove] = useState<{ opp: Opportunity; stage: string } | null>(null);
   const [shareLoadingCat, setShareLoadingCat] = useState<string | null>(null);
   const [shareCopiedCat, setShareCopiedCat] = useState<string | null>(null);
   // null = all products selected (default); a Set = explicit user selection
@@ -1046,7 +1048,18 @@ export function Opportunities() {
                   const idx = MAIN_FLOW.indexOf(selected.stage);
                   const nextStage = idx >= 0 && idx < MAIN_FLOW.length - 1 ? MAIN_FLOW[idx + 1] : null;
                   const prevStage = idx > 0 ? MAIN_FLOW[idx - 1] : null;
-                  const moveToStage = (s: string) => { update.mutate({ id: selected.id, data: { stage: s } }); setSelected({ ...selected, stage: s }); };
+                  const moveToStage = (s: string) => {
+                    // Advancing an opportunity that's still pre-quote and past its
+                    // KPI target (quote within N days)? Ask why it slipped first.
+                    const forward = MAIN_FLOW.indexOf(s) > idx;
+                    const preQuote = idx >= 0 && idx < MAIN_FLOW.indexOf("quotation_sent");
+                    if (forward && preQuote && daysSince(selected.createdAt) > KPI_DELAY_TARGETS.opportunityToQuote) {
+                      setDelayStageMove({ opp: selected, stage: s });
+                      return;
+                    }
+                    update.mutate({ id: selected.id, data: { stage: s } });
+                    setSelected({ ...selected, stage: s });
+                  };
                   return (
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Stage</label>
@@ -2497,6 +2510,27 @@ export function Opportunities() {
           update.mutate({ id: opp.id, data: { stage: "lost", statusReason: reason, statusReasonNote: note } as Partial<Opportunity> });
           setSelected(prev => (prev && prev.id === opp.id ? { ...prev, stage: "lost" } : prev));
           setLossDialogFor(null);
+        }}
+      />
+
+      <DelayReasonDialog
+        open={delayStageMove != null}
+        title="This opportunity is past its quote target"
+        entityLabel={delayStageMove?.opp.title ?? ""}
+        daysOverTarget={delayStageMove ? Math.max(1, Math.round(daysSince(delayStageMove.opp.createdAt) - KPI_DELAY_TARGETS.opportunityToQuote)) : null}
+        pending={update.isPending}
+        onCancel={() => setDelayStageMove(null)}
+        onSkip={() => {
+          const m = delayStageMove!;
+          update.mutate({ id: m.opp.id, data: { stage: m.stage } });
+          setSelected(prev => (prev && prev.id === m.opp.id ? { ...prev, stage: m.stage } : prev));
+          setDelayStageMove(null);
+        }}
+        onConfirm={(reason, note) => {
+          const m = delayStageMove!;
+          update.mutate({ id: m.opp.id, data: { stage: m.stage, statusReason: reason, statusReasonNote: note } as Partial<Opportunity> });
+          setSelected(prev => (prev && prev.id === m.opp.id ? { ...prev, stage: m.stage } : prev));
+          setDelayStageMove(null);
         }}
       />
 

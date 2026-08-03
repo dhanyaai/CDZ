@@ -47,6 +47,8 @@ interface LossDetail {
   reason: string; reasonNote: string | null; toStatus: string; value: number;
   changedAt: string; changedByName: string | null;
 }
+
+interface DelayReason { reason: string; count: number }
 interface KpiResponse {
   deadlines: Record<string, number>;
   processingDeadlines: Record<string, number>;
@@ -56,6 +58,8 @@ interface KpiResponse {
   processing: ProcessingRow[];
   lossReasons: LossReason[];
   lossDetails: LossDetail[];
+  delayReasons: DelayReason[];
+  delayDetails: DelayDetail[];
 }
 
 interface ScorecardMonth {
@@ -343,7 +347,7 @@ export function KpiReports() {
           <TabsTrigger value="team">Team KPIs</TabsTrigger>
           <TabsTrigger value="processing">Order Processing</TabsTrigger>
           <TabsTrigger value="purchases">Purchasing</TabsTrigger>
-          <TabsTrigger value="losses">Loss Reasons</TabsTrigger>
+          <TabsTrigger value="losses">Losses &amp; Delays</TabsTrigger>
         </TabsList>
 
         <TabsContent value="losses" className="space-y-4">
@@ -418,6 +422,76 @@ export function KpiReports() {
           <p className="text-xs text-muted-foreground">
             Reasons are captured when a lead or opportunity is marked lost. Revenue impact uses the record's estimated value.
             Only the most recent loss per record is counted.
+          </p>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader><CardTitle className="text-base">Delay reasons</CardTitle></CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Reason</TableHead>
+                      <TableHead className="text-right">Count</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading && <TableRow><TableCell colSpan={2}><Skeleton className="h-6 w-full" /></TableCell></TableRow>}
+                    {!isLoading && (data?.delayReasons ?? []).length === 0 && (
+                      <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-8">
+                        No delays recorded yet. When an overdue stage is completed, the slip reason captured will show up here.
+                      </TableCell></TableRow>
+                    )}
+                    {(data?.delayReasons ?? []).map((r) => (
+                      <TableRow key={r.reason}>
+                        <TableCell className="font-medium">{r.reason}</TableCell>
+                        <TableCell className="text-right">{r.count}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="text-base">Recent delayed completions</CardTitle></CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Record</TableHead>
+                      <TableHead>Reason</TableHead>
+                      <TableHead>When</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading && <TableRow><TableCell colSpan={3}><Skeleton className="h-6 w-full" /></TableCell></TableRow>}
+                    {!isLoading && (data?.delayDetails ?? []).length === 0 && (
+                      <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">No delays recorded yet.</TableCell></TableRow>
+                    )}
+                    {(data?.delayDetails ?? []).map((l) => (
+                      <TableRow key={l.id}>
+                        <TableCell>
+                          <div className="font-medium text-sm">{l.title ?? `#${l.entityId}`}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {ENTITY_LABELS[l.entityType] ?? l.entityType} · {l.fromStatus ? `${l.fromStatus} → ` : ""}{l.toStatus}
+                            {l.changedByName ? ` · by ${l.changedByName}` : ""}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">{l.reason}</div>
+                          {l.reasonNote && <div className="text-xs text-muted-foreground max-w-[220px] truncate" title={l.reasonNote}>{l.reasonNote}</div>}
+                        </TableCell>
+                        <TableCell className="text-xs">{d(l.changedAt)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Delay reasons are captured when a stage that went past its KPI deadline is finally completed
+            (e.g. converting a lead after the follow-up target, or advancing an overdue opportunity).
           </p>
         </TabsContent>
 
@@ -693,3 +767,9 @@ export function KpiReports() {
 }
 
 export default KpiReports;
+
+interface DelayDetail {
+  id: number; entityType: string; entityId: number; title: string | null;
+  fromStatus: string | null; toStatus: string; reason: string; reasonNote: string | null;
+  changedAt: string; changedByName: string | null;
+}

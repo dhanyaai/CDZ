@@ -1,9 +1,10 @@
 ---
 name: Stale lib/db dist after merges
-description: Phantom TS errors like "no exported member X" after task merges; fix with forced rebuild
+description: Phantom TS errors ("no exported member X", column "does not exist") after task merges mean stale built d.ts, not missing schema.
 ---
-After a sibling task merges into your branch, `lib/db/dist` can be stale, causing api-server typecheck errors like "Module '@workspace/db' has no exported member 'xTable'" even though the schema/index exports exist.
 
-**Why:** tsc --build incremental cache doesn't always rebuild after git updates source files.
+**Rule:** If api-server typecheck says a table/column/export doesn't exist on `@workspace/db` but `lib/db/src/schema` clearly has it, the composite-project output in `lib/db/dist/*.d.ts` is stale. Force a rebuild: `npx tsc -b lib/db --force` (equivalently `pnpm --filter @workspace/db exec tsc --build --force`, or root `typecheck:libs`) — lib/db has no `build` script. Also run `pnpm --filter @workspace/db run push`: the dev database can lag the schema the same way (runtime 500s on missing columns).
 
-**How to apply:** run `pnpm --filter @workspace/db exec tsc --build --force` (or root `typecheck:libs`) before trusting api-server type errors. Also: merges can silently corrupt route files (undefined vars, duplicated routes) — if a file you didn't touch fails typecheck, `git checkout <merged-commit> -- <file>` and re-apply your change.
+**Why:** Task merges land schema changes from sibling tasks without rebuilding dist or pushing the DB, and tsc's `--build` incremental cache doesn't always rebuild after git updates source files.
+
+**How to apply:** After any merge lands underneath your branch (or on fresh task envs), rebuild lib/db and re-run typecheck before trusting errors. Also re-verify route files — auto-merges have scrambled them (undefined vars, duplicated/orphaned blocks); fastest repair is `git checkout <merged-commit> -- <file>` (or restore the merged base version) and re-apply your diff.
