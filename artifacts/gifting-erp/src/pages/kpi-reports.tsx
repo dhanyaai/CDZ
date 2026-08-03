@@ -87,6 +87,9 @@ const DELAY_STAGE_LABELS: Record<string, string> = {
   quote: "Quote → Order",
   sales_order: "Order → Invoice",
   invoice: "Invoice → Payment",
+  purchase_order: "PO → Goods Receipt",
+  sample_order: "Sample → Dispatch",
+  proforma_invoice: "Proforma → Payment",
 };
 
 // Where to navigate when a delay row is clicked
