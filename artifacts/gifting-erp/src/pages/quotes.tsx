@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, ArrowRight, FileSpreadsheet, IndianRupee, Clock, CheckCircle2, XCircle, Printer, Package, Building2, Phone, Mail, CreditCard } from "lucide-react";
 import { printQuote } from "@/lib/print-utils";
 import { ConvertToSalesOrderDialog } from "@/components/convert-so-dialog";
-import { DelayReasonDialog, KPI_DELAY_TARGETS, daysSince } from "@/components/delay-reason-dialog";
+import { DelayReasonDialog, useKpiDelayTargets, daysSince } from "@/components/delay-reason-dialog";
 import { format } from "date-fns";
 
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
@@ -53,6 +53,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 };
 
 export function Quotes() {
+  const kpiTargets = useKpiDelayTargets();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [dialog, setDialog] = useState(false);
@@ -513,7 +514,7 @@ export function Quotes() {
           if (convertPoQuoteId === null) return;
           const quote = (quotes ?? []).find(q => q.id === convertPoQuoteId);
           // Quote → order KPI target: if the quote sat past it, ask why before converting
-          if (quote && daysSince(quote.createdAt) > KPI_DELAY_TARGETS.quoteToOrder) {
+          if (quote && daysSince(quote.createdAt) > kpiTargets.quoteToOrder) {
             setConvertPoQuoteId(null);
             setDelayConvert({ quote, poNumber: po });
           } else {
@@ -527,7 +528,7 @@ export function Quotes() {
         open={delayConvert != null}
         title="This quote is past its order target"
         entityLabel={delayConvert ? `${delayConvert.quote.quoteNumber}${delayConvert.quote.subject ? ` — ${delayConvert.quote.subject}` : ""}` : ""}
-        daysOverTarget={delayConvert ? Math.max(1, Math.round(daysSince(delayConvert.quote.createdAt) - KPI_DELAY_TARGETS.quoteToOrder)) : null}
+        daysOverTarget={delayConvert ? Math.max(1, Math.round(daysSince(delayConvert.quote.createdAt) - kpiTargets.quoteToOrder)) : null}
         pending={convertToOrder.isPending}
         onCancel={() => setDelayConvert(null)}
         onSkip={() => convertToOrder.mutate({ id: delayConvert!.quote.id, poNumber: delayConvert!.poNumber })}

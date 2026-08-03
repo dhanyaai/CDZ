@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,7 +18,8 @@ export const DELAY_REASONS = [
   "Other",
 ] as const;
 
-// Mirrors the server defaults in KPI_DEADLINES (api-server routes/kpi.ts)
+// Mirrors the server defaults in KPI_DEADLINES (api-server routes/kpi.ts).
+// Used only as a fallback until the company's configured targets load.
 export const KPI_DELAY_TARGETS = {
   leadToOpportunity: 1, // days
   opportunityToQuote: 2, // days
@@ -24,6 +27,30 @@ export const KPI_DELAY_TARGETS = {
   orderToInvoice: 7, // days
   invoiceToPayment: 30, // days
 };
+
+export type KpiDelayTargets = typeof KPI_DELAY_TARGETS;
+
+/**
+ * Company KPI deadline targets: the defaults overlaid with any per-company
+ * overrides configured in Settings → KPI Targets. Shares the react-query
+ * cache with the Settings page.
+ */
+export function useKpiDelayTargets(): KpiDelayTargets {
+  const { data } = useQuery<{ kpiTargets: Record<string, number> | null }>({
+    queryKey: ["settings", "company"],
+    queryFn: () => api("/v1/settings/company"),
+    staleTime: 60_000,
+  });
+  const overrides = data?.kpiTargets;
+  const out = { ...KPI_DELAY_TARGETS };
+  if (overrides && typeof overrides === "object") {
+    for (const k of Object.keys(out) as (keyof KpiDelayTargets)[]) {
+      const v = overrides[k];
+      if (typeof v === "number" && Number.isFinite(v) && v > 0) out[k] = v;
+    }
+  }
+  return out;
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Whole days elapsed since an ISO date/Date. */

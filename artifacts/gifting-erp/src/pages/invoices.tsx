@@ -23,7 +23,7 @@ import { Plus, FileText, CheckCircle2, Clock, AlertTriangle, IndianRupee, SendHo
 import { useToast } from "@/hooks/use-toast";
 import { format, isPast } from "date-fns";
 import { printTaxInvoice } from "@/lib/print-utils";
-import { DelayReasonDialog, KPI_DELAY_TARGETS, daysSince } from "@/components/delay-reason-dialog";
+import { DelayReasonDialog, useKpiDelayTargets, daysSince } from "@/components/delay-reason-dialog";
 
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
 
@@ -68,6 +68,7 @@ const INR = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2,
 const INR0 = (n: number) => n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 
 export function Invoices() {
+  const kpiTargets = useKpiDelayTargets();
   const [statusFilter, setStatusFilter] = useState("All");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -135,7 +136,7 @@ export function Invoices() {
   const onSubmit = (data: FormValues) => {
     const order = salesOrders?.find(o => o.id === data.salesOrderId) as any;
     // Order → invoice KPI target: if the order sat past it, ask why before invoicing
-    if (order?.createdAt && daysSince(order.createdAt) > KPI_DELAY_TARGETS.orderToInvoice) {
+    if (order?.createdAt && daysSince(order.createdAt) > kpiTargets.orderToInvoice) {
       setDialogOpen(false);
       setDelayInvoiceFor({ form: data, orderNumber: order.orderNumber, createdAt: order.createdAt });
     } else {
@@ -145,7 +146,7 @@ export function Invoices() {
 
   // Intercepts "Mark as Paid" when the invoice blew past the payment KPI target
   const startChangeStatus = (inv: { id: number; invoiceNumber: string; createdAt?: string }, status: string) => {
-    if (status === "Paid" && inv.createdAt && daysSince(inv.createdAt) > KPI_DELAY_TARGETS.invoiceToPayment) {
+    if (status === "Paid" && inv.createdAt && daysSince(inv.createdAt) > kpiTargets.invoiceToPayment) {
       setDelayPaidFor({ id: inv.id, label: inv.invoiceNumber, createdAt: inv.createdAt });
     } else {
       changeStatus.mutate({ id: inv.id, status });
@@ -530,7 +531,7 @@ export function Invoices() {
         open={delayInvoiceFor != null}
         title="This order is past its invoicing target"
         entityLabel={delayInvoiceFor?.orderNumber ?? ""}
-        daysOverTarget={delayInvoiceFor ? Math.max(1, Math.round(daysSince(delayInvoiceFor.createdAt) - KPI_DELAY_TARGETS.orderToInvoice)) : null}
+        daysOverTarget={delayInvoiceFor ? Math.max(1, Math.round(daysSince(delayInvoiceFor.createdAt) - kpiTargets.orderToInvoice)) : null}
         pending={createInvoice.isPending}
         onCancel={() => setDelayInvoiceFor(null)}
         onSkip={() => doCreateInvoice(delayInvoiceFor!.form)}
@@ -542,7 +543,7 @@ export function Invoices() {
         open={delayPaidFor != null}
         title="This invoice is past its payment target"
         entityLabel={delayPaidFor?.label ?? ""}
-        daysOverTarget={delayPaidFor ? Math.max(1, Math.round(daysSince(delayPaidFor.createdAt) - KPI_DELAY_TARGETS.invoiceToPayment)) : null}
+        daysOverTarget={delayPaidFor ? Math.max(1, Math.round(daysSince(delayPaidFor.createdAt) - kpiTargets.invoiceToPayment)) : null}
         pending={changeStatus.isPending}
         onCancel={() => setDelayPaidFor(null)}
         onSkip={() => changeStatus.mutate({ id: delayPaidFor!.id, status: "Paid" })}

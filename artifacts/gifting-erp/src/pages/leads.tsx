@@ -16,7 +16,7 @@ import { useLocation } from "wouter";
 import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, UserPlus, FileSpreadsheet, X, History, Briefcase, FileText, ShoppingCart, Truck, Receipt, Activity, XCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LossReasonDialog } from "@/components/loss-reason-dialog";
-import { DelayReasonDialog, KPI_DELAY_TARGETS, daysSince } from "@/components/delay-reason-dialog";
+import { DelayReasonDialog, useKpiDelayTargets, daysSince } from "@/components/delay-reason-dialog";
 
 type LeadItem = {
   id: number; leadId: number; slNo: number;
@@ -75,6 +75,7 @@ const BLANK_FORM = {
 };
 
 export function Leads() {
+  const kpiTargets = useKpiDelayTargets();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [dialog, setDialog] = useState(false);
@@ -199,7 +200,7 @@ export function Leads() {
   });
 
   // Lead → opportunity KPI target: if the lead sat past it, ask why before converting
-  const leadConversionOverdue = (lead: Lead) => daysSince(lead.createdAt) > KPI_DELAY_TARGETS.leadToOpportunity;
+  const leadConversionOverdue = (lead: Lead) => daysSince(lead.createdAt) > kpiTargets.leadToOpportunity;
   const startConvert = (lead: Lead) => {
     if (leadConversionOverdue(lead)) setDelayConvertFor(lead);
     else convert.mutate({ id: lead.id });
@@ -1160,7 +1161,7 @@ export function Leads() {
         open={delayConvertFor != null}
         title="This lead is past its follow-up target"
         entityLabel={delayConvertFor?.title ?? ""}
-        daysOverTarget={delayConvertFor ? Math.max(1, Math.round(daysSince(delayConvertFor.createdAt) - KPI_DELAY_TARGETS.leadToOpportunity)) : null}
+        daysOverTarget={delayConvertFor ? Math.max(1, Math.round(daysSince(delayConvertFor.createdAt) - kpiTargets.leadToOpportunity)) : null}
         pending={convert.isPending}
         onCancel={() => setDelayConvertFor(null)}
         onSkip={() => convert.mutate({ id: delayConvertFor!.id })}

@@ -19,7 +19,7 @@ import { useLocation } from "wouter";
 import { printSampleOrder, printReturnNote, printCatalogue, printQuote, printDeliveryChallan, printSalesOrder } from "@/lib/print-utils";
 import { ConvertToSalesOrderDialog } from "@/components/convert-so-dialog";
 import { LossReasonDialog } from "@/components/loss-reason-dialog";
-import { DelayReasonDialog, KPI_DELAY_TARGETS, daysSince } from "@/components/delay-reason-dialog";
+import { DelayReasonDialog, useKpiDelayTargets, daysSince } from "@/components/delay-reason-dialog";
 
 type Opportunity = {
   id: number; title: string; clientId: number | null; clientName: string | null;
@@ -111,6 +111,7 @@ function calcCataloguePrice(product: Product, leadItems: LeadItem[] | undefined)
 }
 
 export function Opportunities() {
+  const kpiTargets = useKpiDelayTargets();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -1053,7 +1054,7 @@ export function Opportunities() {
                     // KPI target (quote within N days)? Ask why it slipped first.
                     const forward = MAIN_FLOW.indexOf(s) > idx;
                     const preQuote = idx >= 0 && idx < MAIN_FLOW.indexOf("quotation_sent");
-                    if (forward && preQuote && daysSince(selected.createdAt) > KPI_DELAY_TARGETS.opportunityToQuote) {
+                    if (forward && preQuote && daysSince(selected.createdAt) > kpiTargets.opportunityToQuote) {
                       setDelayStageMove({ opp: selected, stage: s });
                       return;
                     }
@@ -2517,7 +2518,7 @@ export function Opportunities() {
         open={delayStageMove != null}
         title="This opportunity is past its quote target"
         entityLabel={delayStageMove?.opp.title ?? ""}
-        daysOverTarget={delayStageMove ? Math.max(1, Math.round(daysSince(delayStageMove.opp.createdAt) - KPI_DELAY_TARGETS.opportunityToQuote)) : null}
+        daysOverTarget={delayStageMove ? Math.max(1, Math.round(daysSince(delayStageMove.opp.createdAt) - kpiTargets.opportunityToQuote)) : null}
         pending={update.isPending}
         onCancel={() => setDelayStageMove(null)}
         onSkip={() => {
