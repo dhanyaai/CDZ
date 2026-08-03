@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,6 +78,27 @@ interface ScorecardResponse { user: { id: number; name: string }; months: Scorec
 const ENTITY_LABELS: Record<string, string> = {
   lead: "Lead", opportunity: "Opportunity", quote: "Quote", sales_order: "Sales Order",
   invoice: "Invoice", purchase_order: "Purchase Order", sample_order: "Sample Order", proforma_invoice: "Proforma Invoice",
+};
+
+// Which KPI stage a delayed completion on this entity type represents
+const DELAY_STAGE_LABELS: Record<string, string> = {
+  lead: "Lead → Opportunity",
+  opportunity: "Opportunity → Quote",
+  quote: "Quote → Order",
+  sales_order: "Order → Invoice",
+  invoice: "Invoice → Payment",
+};
+
+// Where to navigate when a delay row is clicked
+const delayEntityLink = (entityType: string, entityId: number): string | null => {
+  switch (entityType) {
+    case "lead": return "/leads";
+    case "opportunity": return "/opportunities";
+    case "quote": return "/quotes";
+    case "sales_order": return `/sales-orders/${entityId}`;
+    case "invoice": return "/invoices";
+    default: return null;
+  }
 };
 
 const inr = (n: number) => "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
@@ -268,6 +290,7 @@ function ScorecardDialog({ person, onClose }: { person: TeamKpi; onClose: () => 
 }
 
 export function KpiReports() {
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [historyLead, setHistoryLead] = useState<FunnelRow | null>(null);
@@ -556,13 +579,25 @@ export function KpiReports() {
                     {!isLoading && (data?.delayDetails ?? []).length === 0 && (
                       <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">No delays recorded yet.</TableCell></TableRow>
                     )}
-                    {(data?.delayDetails ?? []).map((l) => (
-                      <TableRow key={l.id}>
+                    {(data?.delayDetails ?? []).map((l) => {
+                      const link = delayEntityLink(l.entityType, l.entityId);
+                      return (
+                      <TableRow
+                        key={l.id}
+                        className={link ? "cursor-pointer hover:bg-muted/50" : undefined}
+                        onClick={link ? () => navigate(link) : undefined}
+                        title={link ? "Open record" : undefined}
+                      >
                         <TableCell>
-                          <div className="font-medium text-sm">{l.title ?? `#${l.entityId}`}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {ENTITY_LABELS[l.entityType] ?? l.entityType} · {l.fromStatus ? `${l.fromStatus} → ` : ""}{l.toStatus}
-                            {l.changedByName ? ` · by ${l.changedByName}` : ""}
+                          <div className={`font-medium text-sm ${link ? "underline-offset-2 hover:underline" : ""}`}>
+                            {l.title ?? `#${l.entityId}`}
+                          </div>
+                          <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-1.5">
+                            <Badge variant="outline" className="font-normal text-[11px] px-1.5 py-0">
+                              {ENTITY_LABELS[l.entityType] ?? l.entityType}
+                            </Badge>
+                            {DELAY_STAGE_LABELS[l.entityType] && <span>{DELAY_STAGE_LABELS[l.entityType]}</span>}
+                            <span>{l.fromStatus ? `${l.fromStatus} → ` : ""}{l.toStatus}{l.changedByName ? ` · by ${l.changedByName}` : ""}</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -571,7 +606,8 @@ export function KpiReports() {
                         </TableCell>
                         <TableCell className="text-xs">{d(l.changedAt)}</TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>
