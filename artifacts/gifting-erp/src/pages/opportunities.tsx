@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useHighlight } from "@/hooks/use-highlight";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useListClients } from "@workspace/api-client-react";
@@ -171,6 +172,8 @@ export function Opportunities() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const { data: opps, isLoading } = useQuery({ queryKey: ["opportunities"], queryFn: () => api<Opportunity[]>("/v1/opportunities") });
+  // Open the opportunity detail when arriving via ?highlight=<id> (KPI delay drill-down)
+  useHighlight(opps, (opp) => setSelected(opp));
   const { data: clients } = useListClients();
   const { data: leads } = useQuery({ queryKey: ["leads"], queryFn: () => api<Lead[]>("/v1/leads") });
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/v1/users") });

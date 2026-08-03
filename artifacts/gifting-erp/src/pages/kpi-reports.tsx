@@ -92,11 +92,11 @@ const DELAY_STAGE_LABELS: Record<string, string> = {
 // Where to navigate when a delay row is clicked
 const delayEntityLink = (entityType: string, entityId: number): string | null => {
   switch (entityType) {
-    case "lead": return "/leads";
-    case "opportunity": return "/opportunities";
-    case "quote": return "/quotes";
+    case "lead": return `/leads?highlight=${entityId}`;
+    case "opportunity": return `/opportunities?highlight=${entityId}`;
+    case "quote": return `/quotes?highlight=${entityId}`;
     case "sales_order": return `/sales-orders/${entityId}`;
-    case "invoice": return "/invoices";
+    case "invoice": return `/invoices?highlight=${entityId}`;
     default: return null;
   }
 };

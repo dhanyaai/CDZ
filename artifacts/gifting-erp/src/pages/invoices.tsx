@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, isPast } from "date-fns";
 import { printTaxInvoice } from "@/lib/print-utils";
 import { DelayReasonDialog, useKpiDelayTargets, daysSince } from "@/components/delay-reason-dialog";
+import { useHighlight } from "@/hooks/use-highlight";
 
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
 
@@ -75,6 +76,8 @@ export function Invoices() {
 
   const { data: invoices, isLoading } = useListInvoices({ status: statusFilter === "All" ? undefined : statusFilter as any });
   const { data: allInvoices } = useListInvoices();
+  // Open the invoice detail sheet when arriving via ?highlight=<id> (KPI delay drill-down)
+  useHighlight(allInvoices, (inv) => setSelectedId(inv.id));
   const { data: salesOrders } = useListSalesOrders();
   const queryClient = useQueryClient();
   const { toast } = useToast();

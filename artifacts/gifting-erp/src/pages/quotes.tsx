@@ -19,6 +19,7 @@ import { Plus, Trash2, ArrowRight, FileSpreadsheet, IndianRupee, Clock, CheckCir
 import { printQuote } from "@/lib/print-utils";
 import { ConvertToSalesOrderDialog } from "@/components/convert-so-dialog";
 import { DelayReasonDialog, useKpiDelayTargets, daysSince } from "@/components/delay-reason-dialog";
+import { useHighlight } from "@/hooks/use-highlight";
 import { format } from "date-fns";
 
 const PAYMENT_TERMS = ["Immediate", "Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "50% Advance", "100% Advance"];
@@ -71,6 +72,8 @@ export function Quotes() {
   const [items, setItems] = useState<LineItem[]>([{ description: "", quantity: 1, unitPrice: 0 }]);
 
   const { data: quotes, isLoading } = useQuery({ queryKey: ["quotes"], queryFn: () => api<Quote[]>("/v1/quotes") });
+  // Open the quote detail drawer when arriving via ?highlight=<id> (KPI delay drill-down)
+  useHighlight(quotes, (q) => setSelected(q));
   const { data: clients } = useListClients();
   const { data: products } = useQuery<Product[]>({ queryKey: ["products"], queryFn: () => api<Product[]>("/v1/products") });
 

@@ -17,6 +17,7 @@ import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, U
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LossReasonDialog } from "@/components/loss-reason-dialog";
 import { DelayReasonDialog, useKpiDelayTargets, daysSince } from "@/components/delay-reason-dialog";
+import { useHighlight } from "@/hooks/use-highlight";
 
 type LeadItem = {
   id: number; leadId: number; slNo: number;
@@ -95,6 +96,8 @@ export function Leads() {
 
   const [, navigate] = useLocation();
   const { data: leads, isLoading } = useQuery({ queryKey: ["leads"], queryFn: () => api<Lead[]>("/v1/leads") });
+  // Open the lead detail sheet when arriving via ?highlight=<id> (KPI delay drill-down)
+  useHighlight(leads, (lead) => { setSelected(lead); setEditForm({ ...lead }); setDetailTab("details"); });
   const { data: clients } = useListClients();
   const { data: productList } = useListProducts();
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/v1/users") });
