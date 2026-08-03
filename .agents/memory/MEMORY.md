@@ -9,4 +9,5 @@
 - [DO deployment](do-deployment.md) — app/DB ids, sslmode TLS rule, firewall whitelist flow, Spaces bucket czd-erp@sgp1 (blr1 blocked, czd taken), gitPush callback for pushes
 - [Drizzle baseline](drizzle-baseline.md) — making migrate() work on push-created DBs: idempotent replay + journal insert; always column-diff vs 0000 snapshot after
 - [Dev API e2e testing](dev-api-testing.md) — auth is Bearer token from /v1/auth/login (NOT cookies); seed creds in scripts/src/seed.ts; base http://localhost:80/api
+- [Status history tracking](status-history.md) — all status mutations must call recordStatusChange (incl. indirect paths); hand-written migration + journal convention (generate is broken)
 - [Print template escaping](print-template-escaping.md) — esc() every string interpolated into print-window HTML; same-origin stored-XSS vector otherwise
