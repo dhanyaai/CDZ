@@ -1,4 +1,5 @@
 import { useState, Fragment } from "react";
+import { useHighlight } from "@/hooks/use-highlight";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -87,6 +88,8 @@ export function SampleOrders() {
     queryKey: ["sample-orders"],
     queryFn: () => api<SampleOrderSummary[]>("/v1/sample-orders"),
   });
+  useHighlight(orders, (o) => { setSelectedId(o.id); setDetailOpen(true); });
+
   const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ["clients-list"],
     queryFn: () => api<Client[]>("/v1/clients"),

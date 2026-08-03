@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useHighlight } from "@/hooks/use-highlight";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,8 @@ export function ProformaInvoices() {
     queryKey: ["proforma-invoices"],
     queryFn: () => api("/v1/proforma-invoices"),
   });
+
+  useHighlight(piList, (pi) => { setSelected(pi); setCreatedSO(null); });
 
   const { data: detail } = useQuery<PIDetail>({
     queryKey: ["proforma-invoice-detail", selected?.id],

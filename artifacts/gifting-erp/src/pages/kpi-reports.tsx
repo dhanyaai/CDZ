@@ -97,6 +97,9 @@ const delayEntityLink = (entityType: string, entityId: number): string | null =>
     case "quote": return `/quotes?highlight=${entityId}`;
     case "sales_order": return `/sales-orders/${entityId}`;
     case "invoice": return `/invoices?highlight=${entityId}`;
+    case "purchase_order": return `/purchase-orders/${entityId}`;
+    case "sample_order": return `/sample-orders?highlight=${entityId}`;
+    case "proforma_invoice": return `/proforma-invoices?highlight=${entityId}`;
     default: return null;
   }
 };
