@@ -37,6 +37,13 @@ interface ProcessingRow {
 interface HistoryEntry {
   id: number; entityType: string; entityId: number;
   fromStatus: string | null; toStatus: string; changedAt: string; changedByName: string | null;
+  reason: string | null; reasonNote: string | null;
+}
+interface LossReason { reason: string; count: number; revenueImpact: number }
+interface LossDetail {
+  id: number; entityType: string; entityId: number; title: string | null;
+  reason: string; reasonNote: string | null; toStatus: string; value: number;
+  changedAt: string; changedByName: string | null;
 }
 interface KpiResponse {
   deadlines: Record<string, number>;
@@ -45,6 +52,8 @@ interface KpiResponse {
   teamKpis: TeamKpi[];
   purchases: PurchaseRow[];
   processing: ProcessingRow[];
+  lossReasons: LossReason[];
+  lossDetails: LossDetail[];
 }
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -157,7 +166,83 @@ export function KpiReports() {
           <TabsTrigger value="team">Team KPIs</TabsTrigger>
           <TabsTrigger value="processing">Order Processing</TabsTrigger>
           <TabsTrigger value="purchases">Purchasing</TabsTrigger>
+          <TabsTrigger value="losses">Loss Reasons</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="losses" className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader><CardTitle className="text-base">Top loss reasons</CardTitle></CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Reason</TableHead>
+                      <TableHead className="text-right">Count</TableHead>
+                      <TableHead className="text-right">Revenue Impact</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading && <TableRow><TableCell colSpan={3}><Skeleton className="h-6 w-full" /></TableCell></TableRow>}
+                    {!isLoading && (data?.lossReasons ?? []).length === 0 && (
+                      <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                        No losses recorded yet. When a lead or opportunity is marked lost, the reason captured will show up here.
+                      </TableCell></TableRow>
+                    )}
+                    {(data?.lossReasons ?? []).map((r) => (
+                      <TableRow key={r.reason}>
+                        <TableCell className="font-medium">{r.reason}</TableCell>
+                        <TableCell className="text-right">{r.count}</TableCell>
+                        <TableCell className="text-right">{inr(r.revenueImpact)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="text-base">Recent losses</CardTitle></CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Record</TableHead>
+                      <TableHead>Reason</TableHead>
+                      <TableHead>When</TableHead>
+                      <TableHead className="text-right">Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading && <TableRow><TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell></TableRow>}
+                    {!isLoading && (data?.lossDetails ?? []).length === 0 && (
+                      <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No losses recorded yet.</TableCell></TableRow>
+                    )}
+                    {(data?.lossDetails ?? []).map((l) => (
+                      <TableRow key={l.id}>
+                        <TableCell>
+                          <div className="font-medium text-sm">{l.title ?? `#${l.entityId}`}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {ENTITY_LABELS[l.entityType] ?? l.entityType} · {l.toStatus}{l.changedByName ? ` · by ${l.changedByName}` : ""}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">{l.reason}</div>
+                          {l.reasonNote && <div className="text-xs text-muted-foreground max-w-[220px] truncate" title={l.reasonNote}>{l.reasonNote}</div>}
+                        </TableCell>
+                        <TableCell className="text-xs">{d(l.changedAt)}</TableCell>
+                        <TableCell className="text-right text-sm">{l.value ? inr(l.value) : "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Reasons are captured when a lead or opportunity is marked lost. Revenue impact uses the record's estimated value.
+            Only the most recent loss per record is counted.
+          </p>
+        </TabsContent>
 
         <TabsContent value="processing" className="space-y-4">
           <Card>
@@ -402,6 +487,12 @@ export function KpiReports() {
                       {h.fromStatus ? <>moved from <Badge variant="outline" className="font-normal">{h.fromStatus}</Badge> to</> : <>set to</>}{" "}
                       <Badge variant="outline" className="font-normal">{h.toStatus}</Badge>
                     </div>
+                    {h.reason && (
+                      <div className="text-xs mt-0.5">
+                        <span className="text-muted-foreground">Reason:</span> {h.reason}
+                        {h.reasonNote && <span className="text-muted-foreground"> — {h.reasonNote}</span>}
+                      </div>
+                    )}
                     {h.changedByName && <div className="text-xs text-muted-foreground">by {h.changedByName}</div>}
                   </div>
                 </div>

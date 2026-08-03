@@ -18,6 +18,7 @@ import { differenceInDays, format } from "date-fns";
 import { useLocation } from "wouter";
 import { printSampleOrder, printReturnNote, printCatalogue, printQuote, printDeliveryChallan, printSalesOrder } from "@/lib/print-utils";
 import { ConvertToSalesOrderDialog } from "@/components/convert-so-dialog";
+import { LossReasonDialog } from "@/components/loss-reason-dialog";
 
 type Opportunity = {
   id: number; title: string; clientId: number | null; clientName: string | null;
@@ -126,6 +127,7 @@ export function Opportunities() {
   const [catalogueType, setCatalogueType] = useState("__all__");
   const [catalogueSearch, setCatalogueSearch] = useState("");
   const [shareUrls, setShareUrls] = useState<Record<string, string>>({});
+  const [lossDialogFor, setLossDialogFor] = useState<Opportunity | null>(null);
   const [shareLoadingCat, setShareLoadingCat] = useState<string | null>(null);
   const [shareCopiedCat, setShareCopiedCat] = useState<string | null>(null);
   // null = all products selected (default); a Set = explicit user selection
@@ -1086,7 +1088,7 @@ export function Opportunities() {
                           <button
                             className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
                             disabled={update.isPending}
-                            onClick={() => moveToStage("lost")}>
+                            onClick={() => setLossDialogFor(selected)}>
                             Mark as Lost
                           </button>
                         </div>
@@ -2483,6 +2485,20 @@ export function Opportunities() {
           )}
         </SheetContent>
       </Sheet>
+
+      <LossReasonDialog
+        open={lossDialogFor != null}
+        title="Mark opportunity as lost"
+        entityLabel={lossDialogFor?.title ?? ""}
+        pending={update.isPending}
+        onCancel={() => setLossDialogFor(null)}
+        onConfirm={(reason, note) => {
+          const opp = lossDialogFor!;
+          update.mutate({ id: opp.id, data: { stage: "lost", statusReason: reason, statusReasonNote: note } as Partial<Opportunity> });
+          setSelected(prev => (prev && prev.id === opp.id ? { ...prev, stage: "lost" } : prev));
+          setLossDialogFor(null);
+        }}
+      />
 
       {/* ── Return Dialog ── */}
       <Dialog open={returnDialog} onOpenChange={(o) => { setReturnDialog(o); if (!o) setReturningOrder(null); }}>

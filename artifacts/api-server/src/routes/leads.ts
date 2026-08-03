@@ -89,7 +89,11 @@ router.patch("/v1/leads/:id", async (req, res): Promise<void> => {
   const [lead] = await db.update(leadsTable).set(updates).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId))).returning();
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
   if (req.body.status !== undefined && oldStatus !== null) {
-    await recordStatusChange({ companyId: req.companyId, entityType: "lead", entityId: id, fromStatus: oldStatus, toStatus: lead.status, changedBy: req.userId });
+    await recordStatusChange({
+      companyId: req.companyId, entityType: "lead", entityId: id, fromStatus: oldStatus, toStatus: lead.status, changedBy: req.userId,
+      reason: typeof req.body.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null,
+      reasonNote: typeof req.body.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null,
+    });
   }
   res.json(serializeLead(lead));
 });
@@ -245,7 +249,11 @@ router.patch("/v1/opportunities/:id", async (req, res): Promise<void> => {
   const [opp] = await db.update(opportunitiesTable).set(updates).where(and(eq(opportunitiesTable.id, id), eq(opportunitiesTable.companyId, req.companyId))).returning();
   if (!opp) { res.status(404).json({ error: "Not found" }); return; }
   if (req.body.stage !== undefined && oldStage !== null) {
-    await recordStatusChange({ companyId: req.companyId, entityType: "opportunity", entityId: id, fromStatus: oldStage, toStatus: opp.stage, changedBy: req.userId });
+    await recordStatusChange({
+      companyId: req.companyId, entityType: "opportunity", entityId: id, fromStatus: oldStage, toStatus: opp.stage, changedBy: req.userId,
+      reason: typeof req.body.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null,
+      reasonNote: typeof req.body.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null,
+    });
   }
   res.json(opp);
 });

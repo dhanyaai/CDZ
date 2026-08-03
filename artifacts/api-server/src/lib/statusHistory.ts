@@ -15,6 +15,8 @@ export async function recordStatusChange(opts: {
   fromStatus: string | null;
   toStatus: string;
   changedBy?: number | null;
+  reason?: string | null;
+  reasonNote?: string | null;
 }): Promise<void> {
   if (opts.fromStatus === opts.toStatus) return;
   try {
@@ -25,6 +27,8 @@ export async function recordStatusChange(opts: {
       fromStatus: opts.fromStatus,
       toStatus: opts.toStatus,
       changedBy: opts.changedBy ?? null,
+      reason: opts.reason ?? null,
+      reasonNote: opts.reasonNote ?? null,
     });
   } catch (err) {
     console.error("statusHistory: failed to record", err);

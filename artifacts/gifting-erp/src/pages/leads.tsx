@@ -13,8 +13,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, UserPlus, FileSpreadsheet, X, History, Briefcase, FileText, ShoppingCart, Truck, Receipt, Activity } from "lucide-react";
+import { Plus, ArrowRight, Trash2, Search, Mail, Phone, Building2, TrendingUp, Users, Target, Zap, CalendarClock, CheckCircle2, UserCircle, UserPlus, FileSpreadsheet, X, History, Briefcase, FileText, ShoppingCart, Truck, Receipt, Activity, XCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { LossReasonDialog } from "@/components/loss-reason-dialog";
 
 type LeadItem = {
   id: number; leadId: number; slNo: number;
@@ -86,6 +87,7 @@ export function Leads() {
   const [followUpForm, setFollowUpForm] = useState({ subject: "", dueDate: "", description: "" });
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [lossDialogFor, setLossDialogFor] = useState<Lead | null>(null);
   const [detailTab, setDetailTab] = useState<"details" | "history">("details");
 
   const [, navigate] = useLocation();
@@ -193,6 +195,18 @@ export function Leads() {
   const del = useMutation({
     mutationFn: (id: number) => api(`/v1/leads/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["leads"] }); toast({ title: "Lead deleted" }); setSelected(null); },
+  });
+
+  const markLost = useMutation({
+    mutationFn: ({ id, reason, note }: { id: number; reason: string; note: string | null }) =>
+      api<Lead>(`/v1/leads/${id}`, { method: "PATCH", body: JSON.stringify({ status: "lost", statusReason: reason, statusReasonNote: note }) }),
+    onSuccess: (lead) => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      setSelected(prev => (prev && prev.id === lead.id ? { ...prev, status: "lost" } : prev));
+      setLossDialogFor(null);
+      toast({ title: "Lead marked as lost" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to mark as lost", description: e.message, variant: "destructive" }),
   });
 
   const scheduleFollowUp = useMutation({
@@ -1106,6 +1120,11 @@ export function Leads() {
                   <Button className="flex-1" onClick={() => convert.mutate(selected.id)} disabled={convert.isPending || selected.status === "converted"}>
                     <ArrowRight className="w-4 h-4 mr-2" />Convert to Opportunity
                   </Button>
+                  <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => setLossDialogFor(selected)}
+                    disabled={markLost.isPending || ["lost", "converted"].includes(selected.status)}>
+                    <XCircle className="w-4 h-4 mr-1.5" />Mark Lost
+                  </Button>
                   <Button variant="destructive" size="icon" onClick={() => del.mutate(selected.id)} disabled={del.isPending}><Trash2 className="w-4 h-4" /></Button>
                 </div>
                 </>}
@@ -1114,6 +1133,15 @@ export function Leads() {
           )}
         </SheetContent>
       </Sheet>
+
+      <LossReasonDialog
+        open={lossDialogFor != null}
+        title="Mark lead as lost"
+        entityLabel={lossDialogFor?.title ?? ""}
+        pending={markLost.isPending}
+        onCancel={() => setLossDialogFor(null)}
+        onConfirm={(reason, note) => markLost.mutate({ id: lossDialogFor!.id, reason, note })}
+      />
     </div>
   );
 }

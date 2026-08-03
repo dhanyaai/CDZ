@@ -237,7 +237,76 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
     })
     .sort((a, b) => b.orderedAt.localeCompare(a.orderedAt));
 
-  res.json({ deadlines: D, processingDeadlines: P, funnel, teamKpis, purchases, processing });
+  // Loss reasons: status_history entries where a lead/opportunity moved to lost/dropped/junk.
+  // Revenue impact uses the record's current estimated value.
+  const LOST_STATES = ["lost", "dropped", "junk"];
+  const lossEntries = await db.select({
+    id: statusHistoryTable.id,
+    entityType: statusHistoryTable.entityType,
+    entityId: statusHistoryTable.entityId,
+    toStatus: statusHistoryTable.toStatus,
+    reason: statusHistoryTable.reason,
+    reasonNote: statusHistoryTable.reasonNote,
+    changedAt: statusHistoryTable.changedAt,
+    changedByName: usersTable.name,
+  }).from(statusHistoryTable)
+    .leftJoin(usersTable, eq(statusHistoryTable.changedBy, usersTable.id))
+    .where(and(
+      eq(statusHistoryTable.companyId, cid),
+      inArray(statusHistoryTable.entityType, ["lead", "opportunity"]),
+      inArray(statusHistoryTable.toStatus, LOST_STATES),
+    ))
+    .orderBy(sql`${statusHistoryTable.changedAt} DESC`);
+
+  const lostLeadIds = lossEntries.filter((e) => e.entityType === "lead").map((e) => e.entityId);
+  const lostOppIds = lossEntries.filter((e) => e.entityType === "opportunity").map((e) => e.entityId);
+  const [lostLeads, lostOpps] = await Promise.all([
+    lostLeadIds.length ? db.select({
+      id: leadsTable.id, title: leadsTable.title,
+      totalValue: leadsTable.totalValue, estimatedValue: leadsTable.estimatedValue,
+    }).from(leadsTable).where(and(eq(leadsTable.companyId, cid), inArray(leadsTable.id, lostLeadIds))) : Promise.resolve([]),
+    lostOppIds.length ? db.select({
+      id: opportunitiesTable.id, title: opportunitiesTable.title, value: opportunitiesTable.value,
+    }).from(opportunitiesTable).where(and(eq(opportunitiesTable.companyId, cid), inArray(opportunitiesTable.id, lostOppIds))) : Promise.resolve([]),
+  ]);
+  const lostLeadMap = new Map(lostLeads.map((l) => [l.id, l]));
+  const lostOppMap = new Map(lostOpps.map((o) => [o.id, o]));
+
+  // Deduplicate: keep only the most recent loss entry per entity so re-marking doesn't double count
+  const seenEntity = new Set<string>();
+  const lossDetails: { id: number; entityType: string; entityId: number; title: string | null; reason: string; reasonNote: string | null; toStatus: string; value: number; changedAt: string; changedByName: string | null }[] = [];
+  for (const e of lossEntries) {
+    const key = `${e.entityType}:${e.entityId}`;
+    if (seenEntity.has(key)) continue;
+    seenEntity.add(key);
+    let title: string | null = null;
+    let value = 0;
+    if (e.entityType === "lead") {
+      const l = lostLeadMap.get(e.entityId);
+      title = l?.title ?? null;
+      value = Number(l?.totalValue ?? l?.estimatedValue ?? 0) || 0;
+    } else {
+      const o = lostOppMap.get(e.entityId);
+      title = o?.title ?? null;
+      value = Number(o?.value ?? 0) || 0;
+    }
+    lossDetails.push({
+      id: e.id, entityType: e.entityType, entityId: e.entityId, title,
+      reason: e.reason ?? "No reason given", reasonNote: e.reasonNote,
+      toStatus: e.toStatus, value,
+      changedAt: e.changedAt.toISOString(), changedByName: e.changedByName,
+    });
+  }
+  const reasonAgg = new Map<string, { reason: string; count: number; revenueImpact: number }>();
+  for (const l of lossDetails) {
+    let r = reasonAgg.get(l.reason);
+    if (!r) { r = { reason: l.reason, count: 0, revenueImpact: 0 }; reasonAgg.set(l.reason, r); }
+    r.count++;
+    r.revenueImpact += l.value;
+  }
+  const lossReasons = Array.from(reasonAgg.values()).sort((a, b) => b.count - a.count || b.revenueImpact - a.revenueImpact);
+
+  res.json({ deadlines: D, processingDeadlines: P, funnel, teamKpis, purchases, processing, lossReasons, lossDetails });
 });
 
 // GET /v1/reports/kpi/history?leadId=N — recorded status changes for a lead and its linked documents
@@ -274,6 +343,8 @@ router.get("/v1/reports/kpi/history", async (req, res): Promise<void> => {
     entityId: statusHistoryTable.entityId,
     fromStatus: statusHistoryTable.fromStatus,
     toStatus: statusHistoryTable.toStatus,
+    reason: statusHistoryTable.reason,
+    reasonNote: statusHistoryTable.reasonNote,
     changedAt: statusHistoryTable.changedAt,
     changedByName: usersTable.name,
   }).from(statusHistoryTable)

@@ -12,6 +12,8 @@ export const statusHistoryTable = pgTable("status_history", {
   fromStatus: text("from_status"),
   toStatus: text("to_status").notNull(),
   changedBy: integer("changed_by").references(() => usersTable.id, { onDelete: "set null" }),
+  reason: text("reason"), // picklist value, e.g. "Price too high" — set when a lead/opportunity is lost or dropped
+  reasonNote: text("reason_note"), // optional free-text detail accompanying the reason
   changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("status_history_entity_idx").on(t.companyId, t.entityType, t.entityId),
