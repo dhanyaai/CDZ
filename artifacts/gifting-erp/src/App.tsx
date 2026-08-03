@@ -47,6 +47,7 @@ import { ItemLedger } from "@/pages/item-ledger";
 import { FixedAssets } from "@/pages/fixed-assets";
 import { ProductionOrders } from "@/pages/production-orders";
 import { Reports } from "@/pages/reports";
+import { KpiReports } from "@/pages/kpi-reports";
 import { PdfExtractor } from "@/pages/pdf-extractor";
 import { OrderProcessingList } from "@/pages/order-processing-list";
 import { OrderProcessing } from "@/pages/order-processing";
@@ -156,6 +157,7 @@ function Router() {
         <Route path="/fixed-assets" component={() => <ProtectedRoute permission="page.finance" component={FixedAssets} />} />
         <Route path="/production" component={() => <ProtectedRoute permission="page.operations" component={ProductionOrders} />} />
         <Route path="/reports" component={() => <ProtectedRoute permission="page.reports" component={Reports} />} />
+        <Route path="/kpi-reports" component={() => <ProtectedRoute permission="page.reports" component={KpiReports} />} />
         <Route path="/users" component={() => <ProtectedRoute permission="page.admin" component={Users} />} />
         <Route path="/follow-ups" component={() => <ProtectedRoute permission="page.crm" component={FollowUps} />} />
         <Route path="/companies" component={() => <ProtectedRoute permission="page.admin" component={Companies} />} />

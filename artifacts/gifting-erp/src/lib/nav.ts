@@ -33,6 +33,7 @@ import {
   Wrench,
   Calculator,
   FilePlus2,
+  Gauge,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -118,6 +119,7 @@ export function getNavItems(opts: { production?: boolean } = {}): NavGroup[] {
         { label: "Credit Notes", href: "/credit-notes", icon: Receipt,   permission: "page.finance" },
         { label: "Fixed Assets", href: "/fixed-assets", icon: Landmark,  permission: "page.finance" },
         { label: "Reports",      href: "/reports",      icon: BarChart3, permission: "page.reports" },
+        { label: "KPI & KRA",    href: "/kpi-reports",  icon: Gauge,     permission: "page.reports" },
       ],
     },
     {
