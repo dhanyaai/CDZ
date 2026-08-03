@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
 import { companiesTable } from "./companies";
 
 export const companySettingsTable = pgTable("company_settings", {
@@ -28,6 +28,10 @@ export const companySettingsTable = pgTable("company_settings", {
   defaultGstPct: text("default_gst_pct").notNull().default("18"),
   currency: text("currency").notNull().default("INR"),
   assemblyCapacityPerDay: integer("assembly_capacity_per_day").notNull().default(500),
+  // Per-company overrides for KPI deadline targets (days). Partial maps merged
+  // over the defaults in the KPI report route.
+  kpiTargets: jsonb("kpi_targets").$type<Record<string, number>>(),
+  processingTargets: jsonb("processing_targets").$type<Record<string, number>>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

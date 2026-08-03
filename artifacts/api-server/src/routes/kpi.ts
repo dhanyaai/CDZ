@@ -4,8 +4,10 @@ import {
   db, leadsTable, opportunitiesTable, quotesTable, salesOrdersTable,
   invoicesTable, paymentsTable, usersTable, purchaseOrdersTable,
   grnTable, vendorsTable, orderProcessingFormsTable, statusHistoryTable,
-  salesTargetsTable,
+  salesTargetsTable, companySettingsTable,
 } from "@workspace/db";
+
+import { requireAdmin } from "../lib/requireAdmin";
 
 const router = Router();
 
@@ -31,6 +33,16 @@ export const PROCESSING_DEADLINES = {
   dispatch: 14,
 };
 
+const mergeTargets = <T extends Record<string, number>>(defaults: T, overrides: unknown): T => {
+  const out = { ...defaults };
+  if (overrides && typeof overrides === "object") {
+    for (const k of Object.keys(defaults) as (keyof T)[]) {
+      const v = (overrides as Record<string, unknown>)[k as string];
+      if (typeof v === "number" && Number.isFinite(v) && v > 0) out[k] = v as T[keyof T];
+    }
+  }
+  return out;
+};
 const DAY_MS = 24 * 60 * 60 * 1000;
 const daysBetween = (a: Date, b: Date) => Math.round(((b.getTime() - a.getTime()) / DAY_MS) * 10) / 10;
 
@@ -38,6 +50,7 @@ const daysBetween = (a: Date, b: Date) => Math.round(((b.getTime() - a.getTime()
 router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   const cid = req.companyId;
 
+  const targets = await getCompanyKpiTargets(cid);
   const [leads, opps, quotes, orders, invoices, payments, users] = await Promise.all([
     db.select({
       id: leadsTable.id, title: leadsTable.title, companyName: leadsTable.companyName,
@@ -93,7 +106,7 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   const paymentByInvoice = new Map(payments.map((p) => [p.invoiceId, new Date(p.firstPayment)]));
 
   const now = new Date();
-  const D = KPI_DEADLINES;
+  const D = targets.deadlines;
 
   type StageCell = { date: string | null; days: number | null; overdue: boolean };
   const cell = (from: Date | null, to: Date | null, limit: number, stillOpen: boolean): StageCell => {
@@ -204,7 +217,7 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   }).from(orderProcessingFormsTable).where(eq(orderProcessingFormsTable.companyId, cid));
   const formBySo = new Map(forms.map((f) => [f.salesOrderId, (f.formData ?? {}) as Record<string, unknown>]));
 
-  const P = PROCESSING_DEADLINES;
+  const P = targets.processingDeadlines;
   // Step dates in formData are date-only strings (YYYY-MM-DD). Compare on
   // whole calendar days (UTC midnight vs SO creation date) to avoid timezone
   // drift producing negative/off-by-one deltas for same-day entries.
@@ -335,6 +348,8 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
     ))
     .orderBy(sql`${statusHistoryTable.changedAt} DESC`);
   const cid = req.companyId;
+
+  const targets = await getCompanyKpiTargets(cid);
   const leadId = parseInt(String(req.query.leadId ?? ""), 10);
   if (Number.isNaN(leadId)) { res.status(400).json({ error: "leadId is required" }); return; }
 
@@ -379,11 +394,13 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
 });
 
 // PUT /v1/kpi/targets — upsert a monthly target for a user
-router.put("/v1/kpi/targets", async (req, res): Promise<void> => {
+router.put("/v1/kpi/targets", requireAdmin, async (req, res): Promise<void> => {
   const cid = req.companyId;
-  const userId = parseInt(String(req.query.userId ?? ""), 10);
-  if (Number.isNaN(userId)) { res.status(400).json({ error: "userId is required" }); return; }
 
+  const targets = await getCompanyKpiTargets(cid);
+  const userId = parseInt(String(req.query.userId ?? ""), 10);
+
+  const requesterId = (req as typeof req & { userId?: number }).userId;
   const [user] = await db.select({ id: usersTable.id }).from(usersTable)
     .where(and(eq(usersTable.companyId, cid), eq(usersTable.id, uid)));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
@@ -482,8 +499,10 @@ router.put("/v1/kpi/targets", async (req, res): Promise<void> => {
 });
 
 // PUT /v1/kpi/targets — upsert a monthly target for a user
-router.put("/v1/kpi/targets", async (req, res): Promise<void> => {
+router.put("/v1/kpi/targets", requireAdmin, async (req, res): Promise<void> => {
   const cid = req.companyId;
+
+  const targets = await getCompanyKpiTargets(cid);
   const { userId, month, targetLeads, targetQuotes, targetRevenue } = req.body ?? {};
   const uid = parseInt(String(userId ?? ""), 10);
   if (Number.isNaN(uid) || typeof month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
@@ -539,3 +558,17 @@ export default router;
   const delayAgg = new Map<string, { reason: string; count: number }>();
 
   const dLeadTitle = new Map(dLeads.map((l) => [l.id, l.title]));
+
+export async function getCompanyKpiTargets(companyId: number) {
+  const [s] = await db.select({
+    kpiTargets: companySettingsTable.kpiTargets,
+    processingTargets: companySettingsTable.processingTargets,
+  }).from(companySettingsTable).where(eq(companySettingsTable.companyId, companyId)).limit(1);
+  return {
+    deadlines: mergeTargets(KPI_DEADLINES, s?.kpiTargets),
+    processingDeadlines: mergeTargets(PROCESSING_DEADLINES, s?.processingTargets),
+  };
+}
+
+    const [requester] = await db.select({ role: usersTable.role, isActive: usersTable.isActive })
+      .from(usersTable).where(eq(usersTable.id, requesterId));

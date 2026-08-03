@@ -29,6 +29,27 @@ router.patch("/v1/settings/company", requireAdmin, async (req, res): Promise<voi
   ] as const;
   const updates: Record<string, unknown> = {};
   for (const k of allowed) if (req.body?.[k] !== undefined) updates[k] = req.body[k];
+
+  // KPI deadline target overrides: accept objects of positive numbers only
+  for (const key of ["kpiTargets", "processingTargets"] as const) {
+    const raw = req.body?.[key];
+    if (raw === undefined) continue;
+    if (raw === null) { updates[key] = null; continue; }
+    if (typeof raw !== "object" || Array.isArray(raw)) {
+      res.status(400).json({ error: `${key} must be an object of numbers` });
+      return;
+    }
+    const clean: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const n = typeof v === "string" ? Number(v) : v;
+      if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) {
+        res.status(400).json({ error: `${key}.${k} must be a positive number of days` });
+        return;
+      }
+      clean[k] = n;
+    }
+    updates[key] = clean;
+  }
   const [updated] = await db
     .update(companySettingsTable)
     .set(updates)

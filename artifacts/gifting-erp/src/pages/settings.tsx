@@ -8,7 +8,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Lock, User as UserIcon } from "lucide-react";
+import { Building2, Lock, User as UserIcon, Gauge } from "lucide-react";
+
+const KPI_TARGET_FIELDS: { key: string; label: string; def: number }[] = [
+  { key: "leadToOpportunity", label: "Lead → Opportunity", def: 1 },
+  { key: "opportunityToQuote", label: "Opportunity → Quote", def: 2 },
+  { key: "quoteToOrder", label: "Quote → Order", def: 3 },
+  { key: "orderToInvoice", label: "Order → Invoice", def: 7 },
+  { key: "invoiceToPayment", label: "Invoice → Payment", def: 30 },
+  { key: "poToGrn", label: "PO → Goods Receipt", def: 7 },
+];
+
+const PROCESSING_TARGET_FIELDS: { key: string; label: string; def: number }[] = [
+  { key: "procurement", label: "Procurement", def: 2 },
+  { key: "designStart", label: "Design Start", def: 2 },
+  { key: "mockupApproval", label: "Mockup Approval", def: 4 },
+  { key: "preProduction", label: "Pre-Production Approval", def: 6 },
+  { key: "productionStart", label: "Production Start", def: 7 },
+  { key: "qc", label: "Quality Check", def: 10 },
+  { key: "stockUpdate", label: "Stock Update", def: 12 },
+  { key: "dispatch", label: "Dispatch", def: 14 },
+];
 
 type Settings = {
   id: number;
@@ -35,6 +55,8 @@ type Settings = {
   defaultGstPct: string;
   currency: string;
   fyStartMonth: number;
+  kpiTargets: Record<string, number> | null;
+  processingTargets: Record<string, number> | null;
 };
 
 export function Settings() {
@@ -61,6 +83,45 @@ export function Settings() {
     },
     onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
+
+  // KPI target editing state — strings while typing, validated on save
+  const [kpiForm, setKpiForm] = useState<Record<string, string>>({});
+  const [procForm, setProcForm] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!settings) return;
+    setKpiForm(Object.fromEntries(KPI_TARGET_FIELDS.map((f) => [f.key, String(settings.kpiTargets?.[f.key] ?? f.def)])));
+    setProcForm(Object.fromEntries(PROCESSING_TARGET_FIELDS.map((f) => [f.key, String(settings.processingTargets?.[f.key] ?? f.def)])));
+  }, [settings]);
+
+  const saveKpiTargets = useMutation({
+    mutationFn: (data: { kpiTargets: Record<string, number>; processingTargets: Record<string, number> }) =>
+      api("/v1/settings/company", { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["settings", "company"] });
+      qc.invalidateQueries({ queryKey: ["kpi-report"] });
+      toast({ title: "KPI targets saved", description: "The KPI & KRA report now uses the new deadlines." });
+    },
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  const onSaveKpiTargets = () => {
+    const parse = (form: Record<string, string>, fields: typeof KPI_TARGET_FIELDS) => {
+      const out: Record<string, number> = {};
+      for (const f of fields) {
+        const n = Number(form[f.key]);
+        if (!Number.isFinite(n) || n <= 0) return { error: `${f.label} must be a positive number of days` };
+        out[f.key] = n;
+      }
+      return { value: out };
+    };
+    const k = parse(kpiForm, KPI_TARGET_FIELDS);
+    const p = parse(procForm, PROCESSING_TARGET_FIELDS);
+    if ("error" in k || "error" in p) {
+      toast({ title: "Invalid value", description: ("error" in k ? k.error : (p as { error: string }).error), variant: "destructive" });
+      return;
+    }
+    saveKpiTargets.mutate({ kpiTargets: k.value!, processingTargets: p.value! });
+  };
 
   const [pwd, setPwd] = useState({ current: "", next: "", confirm: "" });
   const changePassword = useMutation({
@@ -110,6 +171,7 @@ export function Settings() {
           <TabsTrigger value="profile"><UserIcon className="w-4 h-4 mr-2" />Profile</TabsTrigger>
           <TabsTrigger value="security"><Lock className="w-4 h-4 mr-2" />Security</TabsTrigger>
           <TabsTrigger value="company"><Building2 className="w-4 h-4 mr-2" />Company</TabsTrigger>
+          <TabsTrigger value="kpi"><Gauge className="w-4 h-4 mr-2" />KPI Targets</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-4">
@@ -215,6 +277,64 @@ export function Settings() {
               )}
               <Button onClick={() => saveCompany.mutate(form)} disabled={saveCompany.isPending || !isAdmin}>
                 {saveCompany.isPending ? "Saving..." : "Save company settings"}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="kpi" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Sales funnel deadlines</CardTitle>
+              <CardDescription>Target days per stage — the KPI &amp; KRA report flags anything slower as overdue</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {KPI_TARGET_FIELDS.map((f) => (
+                  <div key={f.key} className="space-y-1.5">
+                    <Label htmlFor={`kpi-${f.key}`}>{f.label} (days)</Label>
+                    <Input
+                      id={`kpi-${f.key}`}
+                      type="number"
+                      min={0.5}
+                      step="0.5"
+                      value={kpiForm[f.key] ?? ""}
+                      onChange={(e) => setKpiForm({ ...kpiForm, [f.key]: e.target.value })}
+                      disabled={!isAdmin}
+                    />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Order processing step deadlines</CardTitle>
+              <CardDescription>Target days from sales-order creation for each internal step</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {PROCESSING_TARGET_FIELDS.map((f) => (
+                  <div key={f.key} className="space-y-1.5">
+                    <Label htmlFor={`proc-${f.key}`}>{f.label} (days)</Label>
+                    <Input
+                      id={`proc-${f.key}`}
+                      type="number"
+                      min={0.5}
+                      step="0.5"
+                      value={procForm[f.key] ?? ""}
+                      onChange={(e) => setProcForm({ ...procForm, [f.key]: e.target.value })}
+                      disabled={!isAdmin}
+                    />
+                  </div>
+                ))}
+              </div>
+              {!isAdmin && (
+                <p className="text-xs text-amber-600">Read-only — only Admin users can edit KPI targets.</p>
+              )}
+              <Button onClick={onSaveKpiTargets} disabled={saveKpiTargets.isPending || !isAdmin}>
+                {saveKpiTargets.isPending ? "Saving..." : "Save KPI targets"}
               </Button>
             </CardContent>
           </Card>
