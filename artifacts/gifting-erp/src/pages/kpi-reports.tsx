@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { useToast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface StageCell { date: string | null; days: number | null; overdue: boolean }
 interface FunnelRow {
@@ -43,10 +44,12 @@ interface HistoryEntry {
 }
 interface LossReason { reason: string; count: number; revenueImpact: number }
 interface LossDetail {
-  id: number; entityType: string; entityId: number; title: string | null;
+  id: number; entityType: string; entityId: number; title: string | null; owner: string | null;
   reason: string; reasonNote: string | null; toStatus: string; value: number;
   changedAt: string; changedByName: string | null;
 }
+
+interface LossByOwner { owner: string; count: number; revenueImpact: number; reasons: LossReason[] }
 
 interface DelayReason { reason: string; count: number }
 interface KpiResponse {
@@ -60,6 +63,8 @@ interface KpiResponse {
   lossDetails: LossDetail[];
   delayReasons: DelayReason[];
   delayDetails: DelayDetail[];
+  lossByOwner: LossByOwner[];
+  lossOwners: string[];
 }
 
 interface ScorecardMonth {
@@ -267,10 +272,20 @@ export function KpiReports() {
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [historyLead, setHistoryLead] = useState<FunnelRow | null>(null);
   const [scorecardPerson, setScorecardPerson] = useState<TeamKpi | null>(null);
+  const [lossOwner, setLossOwner] = useState<string>("__all__");
+  const [lossFrom, setLossFrom] = useState("");
+  const [lossTo, setLossTo] = useState("");
+
+  const lossParams = new URLSearchParams();
+  if (lossOwner !== "__all__") lossParams.set("lossOwner", lossOwner);
+  if (lossFrom) lossParams.set("lossFrom", lossFrom);
+  if (lossTo) lossParams.set("lossTo", lossTo);
+  const lossQs = lossParams.toString();
 
   const { data, isLoading } = useQuery<KpiResponse>({
-    queryKey: ["kpi-report"],
-    queryFn: () => api<KpiResponse>("/v1/reports/kpi"),
+    queryKey: ["kpi-report", lossQs],
+    queryFn: () => api<KpiResponse>(`/v1/reports/kpi${lossQs ? `?${lossQs}` : ""}`),
+    placeholderData: (prev) => prev,
   });
 
   const { data: historyData, isLoading: historyLoading } = useQuery<{ history: HistoryEntry[] }>({
@@ -351,6 +366,77 @@ export function KpiReports() {
         </TabsList>
 
         <TabsContent value="losses" className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-end flex-wrap">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Salesperson</Label>
+              <Select value={lossOwner} onValueChange={setLossOwner}>
+                <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All salespeople</SelectItem>
+                  {(data?.lossOwners ?? []).map((o) => (
+                    <SelectItem key={o} value={o}>{o}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">From</Label>
+              <Input type="date" value={lossFrom} onChange={(e) => setLossFrom(e.target.value)} className="w-40" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">To</Label>
+              <Input type="date" value={lossTo} onChange={(e) => setLossTo(e.target.value)} className="w-40" />
+            </div>
+            {(lossOwner !== "__all__" || lossFrom || lossTo) && (
+              <Button variant="ghost" size="sm" onClick={() => { setLossOwner("__all__"); setLossFrom(""); setLossTo(""); }}>
+                Clear filters
+              </Button>
+            )}
+          </div>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Losses by salesperson</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Salesperson</TableHead>
+                    <TableHead className="text-right">Losses</TableHead>
+                    <TableHead className="text-right">Revenue Impact</TableHead>
+                    <TableHead>Top Reasons</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading && <TableRow><TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell></TableRow>}
+                  {!isLoading && (data?.lossByOwner ?? []).length === 0 && (
+                    <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                      No losses match the current filters.
+                    </TableCell></TableRow>
+                  )}
+                  {(data?.lossByOwner ?? []).map((o) => (
+                    <TableRow key={o.owner}>
+                      <TableCell className="font-medium">{o.owner}</TableCell>
+                      <TableCell className="text-right">{o.count}</TableCell>
+                      <TableCell className="text-right">{inr(o.revenueImpact)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1.5">
+                          {o.reasons.slice(0, 4).map((r) => (
+                            <Badge key={r.reason} variant="outline" className="font-normal">
+                              {r.reason} × {r.count}
+                            </Badge>
+                          ))}
+                          {o.reasons.length > 4 && (
+                            <span className="text-xs text-muted-foreground">+{o.reasons.length - 4} more</span>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader><CardTitle className="text-base">Top loss reasons</CardTitle></CardHeader>
@@ -367,7 +453,9 @@ export function KpiReports() {
                     {isLoading && <TableRow><TableCell colSpan={3}><Skeleton className="h-6 w-full" /></TableCell></TableRow>}
                     {!isLoading && (data?.lossReasons ?? []).length === 0 && (
                       <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                        No losses recorded yet. When a lead or opportunity is marked lost, the reason captured will show up here.
+                        {lossOwner !== "__all__" || lossFrom || lossTo
+                          ? "No losses match the current filters."
+                          : "No losses recorded yet. When a lead or opportunity is marked lost, the reason captured will show up here."}
                       </TableCell></TableRow>
                     )}
                     {(data?.lossReasons ?? []).map((r) => (
@@ -403,7 +491,7 @@ export function KpiReports() {
                         <TableCell>
                           <div className="font-medium text-sm">{l.title ?? `#${l.entityId}`}</div>
                           <div className="text-xs text-muted-foreground">
-                            {ENTITY_LABELS[l.entityType] ?? l.entityType} · {l.toStatus}{l.changedByName ? ` · by ${l.changedByName}` : ""}
+                            {ENTITY_LABELS[l.entityType] ?? l.entityType} · {l.toStatus} · {l.owner ?? "Unassigned"}
                           </div>
                         </TableCell>
                         <TableCell>

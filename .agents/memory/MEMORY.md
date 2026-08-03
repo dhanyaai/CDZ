@@ -11,5 +11,5 @@
 - [Dev API e2e testing](dev-api-testing.md) — auth is Bearer token from /v1/auth/login (NOT cookies); seed creds in scripts/src/seed.ts; base http://localhost:80/api
 - [Status history tracking](status-history.md) — all status mutations must call recordStatusChange (incl. indirect paths); hand-written migration + journal convention (generate is broken)
 - [Stale lib/db dist after merges](stale-lib-dist.md) — "column does not exist" typecheck/500s or phantom "no exported member" post-merge = rebuild `npx tsc -b lib/db --force` + db push; merges can commit scrambled route files — typecheck HEAD, restore clean version, re-apply intent
-- [Task env DNS failure](task-env-dns.md) — markTaskComplete "UNAUTHENTICATED" fetch can really be DNS failure for ssh.sisko.replit.dev; fix via ~/.ssh/config HostName override
 - [Print template escaping](print-template-escaping.md) — esc() every string interpolated into print-window HTML; same-origin stored-XSS vector otherwise
+- [Rebase auto-merge scrambling](rebase-automerge-scrambling.md) — completion rebase silently corrupts large route files; reconstruct from known-good commit, typecheck whole server each round

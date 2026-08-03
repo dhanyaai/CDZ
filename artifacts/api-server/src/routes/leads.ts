@@ -194,14 +194,12 @@ router.post("/v1/leads/:id/convert", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, req.companyId)));
   if (!lead) { res.status(404).json({ error: "Not found" }); return; }
-  const statusReason = typeof req.body?.statusReason === "string" && req.body.statusReason.trim() ? req.body.statusReason.trim() : null;
-  const statusReasonNote = typeof req.body?.statusReasonNote === "string" && req.body.statusReasonNote.trim() ? req.body.statusReasonNote.trim() : null;
   const [opp] = await db.insert(opportunitiesTable).values({
     companyId: req.companyId, title: lead.title, clientId: lead.clientId, leadId: lead.id,
     stage: "enquiry", value: lead.estimatedValue, ownerId: lead.ownerId,
   }).returning();
   await db.update(leadsTable).set({ status: "converted" }).where(eq(leadsTable.id, id));
-  await recordStatusChange({ companyId: req.companyId, entityType: "lead", entityId: id, fromStatus: lead.status, toStatus: "converted", changedBy: req.userId, reason: statusReason, reasonNote: statusReasonNote });
+  await recordStatusChange({ companyId: req.companyId, entityType: "lead", entityId: id, fromStatus: lead.status, toStatus: "converted", changedBy: req.userId });
   await recordStatusChange({ companyId: req.companyId, entityType: "opportunity", entityId: opp.id, fromStatus: null, toStatus: "enquiry", changedBy: req.userId });
   res.status(201).json(opp);
 });

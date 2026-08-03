@@ -292,11 +292,12 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   const lostOppIds = lossEntries.filter((e) => e.entityType === "opportunity").map((e) => e.entityId);
   const [lostLeads, lostOpps] = await Promise.all([
     lostLeadIds.length ? db.select({
-      id: leadsTable.id, title: leadsTable.title,
+      id: leadsTable.id, title: leadsTable.title, ownerId: leadsTable.ownerId,
       totalValue: leadsTable.totalValue, estimatedValue: leadsTable.estimatedValue,
     }).from(leadsTable).where(and(eq(leadsTable.companyId, cid), inArray(leadsTable.id, lostLeadIds))) : Promise.resolve([]),
     lostOppIds.length ? db.select({
       id: opportunitiesTable.id, title: opportunitiesTable.title, value: opportunitiesTable.value,
+      ownerId: opportunitiesTable.ownerId,
     }).from(opportunitiesTable).where(and(eq(opportunitiesTable.companyId, cid), inArray(opportunitiesTable.id, lostOppIds))) : Promise.resolve([]),
   ]);
   const lostLeadMap = new Map(lostLeads.map((l) => [l.id, l]));
@@ -304,31 +305,54 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
 
   // Deduplicate: keep only the most recent loss entry per entity so re-marking doesn't double count
   const seenEntity = new Set<string>();
-  const lossDetails: { id: number; entityType: string; entityId: number; title: string | null; reason: string; reasonNote: string | null; toStatus: string; value: number; changedAt: string; changedByName: string | null }[] = [];
+  type LossDetail = { id: number; entityType: string; entityId: number; title: string | null; owner: string | null; reason: string; reasonNote: string | null; toStatus: string; value: number; changedAt: string; changedByName: string | null };
+  const allLossDetails: LossDetail[] = [];
   for (const e of lossEntries) {
     const key = `${e.entityType}:${e.entityId}`;
     if (seenEntity.has(key)) continue;
     seenEntity.add(key);
     let title: string | null = null;
     let value = 0;
+    let owner: string | null = null;
     if (e.entityType === "lead") {
       const l = lostLeadMap.get(e.entityId);
       if (!l) continue; // entity was deleted — skip orphan history entries
       title = l.title;
       value = Number(l.totalValue ?? l.estimatedValue ?? 0) || 0;
+      owner = l.ownerId != null ? userMap.get(l.ownerId) ?? null : null;
     } else {
       const o = lostOppMap.get(e.entityId);
       if (!o) continue; // entity was deleted — skip orphan history entries
       title = o.title;
       value = Number(o.value ?? 0) || 0;
+      owner = o.ownerId != null ? userMap.get(o.ownerId) ?? null : null;
     }
-    lossDetails.push({
-      id: e.id, entityType: e.entityType, entityId: e.entityId, title,
+    allLossDetails.push({
+      id: e.id, entityType: e.entityType, entityId: e.entityId, title, owner,
       reason: e.reason ?? "No reason given", reasonNote: e.reasonNote,
       toStatus: e.toStatus, value,
       changedAt: e.changedAt.toISOString(), changedByName: e.changedByName,
     });
   }
+
+  // Distinct owners across all losses (unfiltered) — keeps the filter dropdown stable
+  const lossOwners = Array.from(new Set(allLossDetails.map((l) => l.owner ?? "Unassigned"))).sort();
+
+  // Loss filters: ?lossOwner=<name|Unassigned> &lossFrom=YYYY-MM-DD &lossTo=YYYY-MM-DD
+  const lossOwner = typeof req.query.lossOwner === "string" && req.query.lossOwner ? req.query.lossOwner : null;
+  const parseDay = (v: unknown): string | null =>
+    typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+  const lossFrom = parseDay(req.query.lossFrom);
+  const lossTo = parseDay(req.query.lossTo);
+
+  const lossDetails = allLossDetails.filter((l) => {
+    if (lossOwner && (l.owner ?? "Unassigned") !== lossOwner) return false;
+    const day = l.changedAt.slice(0, 10);
+    if (lossFrom && day < lossFrom) return false;
+    if (lossTo && day > lossTo) return false;
+    return true;
+  });
+
   const reasonAgg = new Map<string, { reason: string; count: number; revenueImpact: number }>();
   for (const l of lossDetails) {
     let r = reasonAgg.get(l.reason);
@@ -337,6 +361,28 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
     r.revenueImpact += l.value;
   }
   const lossReasons = Array.from(reasonAgg.values()).sort((a, b) => b.count - a.count || b.revenueImpact - a.revenueImpact);
+
+  // Per-salesperson breakdown (within current filters)
+  const ownerAgg = new Map<string, { owner: string; count: number; revenueImpact: number; reasons: Map<string, { reason: string; count: number; revenueImpact: number }> }>();
+  for (const l of lossDetails) {
+    const key = l.owner ?? "Unassigned";
+    let o = ownerAgg.get(key);
+    if (!o) { o = { owner: key, count: 0, revenueImpact: 0, reasons: new Map() }; ownerAgg.set(key, o); }
+    o.count++;
+    o.revenueImpact += l.value;
+    let r = o.reasons.get(l.reason);
+    if (!r) { r = { reason: l.reason, count: 0, revenueImpact: 0 }; o.reasons.set(l.reason, r); }
+    r.count++;
+    r.revenueImpact += l.value;
+  }
+  const lossByOwner = Array.from(ownerAgg.values())
+    .map((o) => ({
+      owner: o.owner,
+      count: o.count,
+      revenueImpact: o.revenueImpact,
+      reasons: Array.from(o.reasons.values()).sort((a, b) => b.count - a.count || b.revenueImpact - a.revenueImpact),
+    }))
+    .sort((a, b) => b.count - a.count || b.revenueImpact - a.revenueImpact);
 
   // Delay reasons: status_history entries with a reason where the transition
   // was NOT to a lost state — i.e. slip reasons captured when an overdue stage
@@ -402,7 +448,7 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   }
   const delayReasons = Array.from(delayAgg.values()).sort((a, b) => b.count - a.count);
 
-  res.json({ deadlines: D, processingDeadlines: P, funnel, teamKpis, purchases, processing, lossReasons, lossDetails, delayReasons, delayDetails });
+  res.json({ deadlines: D, processingDeadlines: P, funnel, teamKpis, purchases, processing, lossReasons, lossDetails, lossByOwner, lossOwners, delayReasons, delayDetails });
 });
 
 // GET /v1/reports/kpi/history?leadId=N — recorded status changes for a lead and its linked documents
