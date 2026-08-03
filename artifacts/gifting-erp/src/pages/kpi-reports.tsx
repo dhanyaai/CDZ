@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,9 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
-import { Gauge, Users, ShoppingCart, AlertTriangle, Search, Timer, History } from "lucide-react";
+import { Gauge, Users, ShoppingCart, AlertTriangle, Search, Timer, History, BarChart3, Pencil, Check, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
+import { useToast } from "@/hooks/use-toast";
 
 interface StageCell { date: string | null; days: number | null; overdue: boolean }
 interface FunnelRow {
@@ -22,7 +24,7 @@ interface FunnelRow {
   orderNumber: string | null; orderValue: number | null; totalCycleDays: number | null;
 }
 interface TeamKpi {
-  owner: string; leads: number; opportunities: number; quotes: number; orders: number;
+  owner: string; ownerId: number | null; leads: number; opportunities: number; quotes: number; orders: number;
   revenue: number; conversionPct: number; avgLeadToOrderDays: number | null; overdueStages: number;
 }
 interface PurchaseRow {
@@ -56,6 +58,13 @@ interface KpiResponse {
   lossDetails: LossDetail[];
 }
 
+interface ScorecardMonth {
+  month: string;
+  actualLeads: number; actualQuotes: number; actualOrders: number; actualRevenue: number;
+  targetLeads: number | null; targetQuotes: number | null; targetRevenue: number | null;
+}
+interface ScorecardResponse { user: { id: number; name: string }; months: ScorecardMonth[] }
+
 const ENTITY_LABELS: Record<string, string> = {
   lead: "Lead", opportunity: "Opportunity", quote: "Quote", sales_order: "Sales Order",
   invoice: "Invoice", purchase_order: "Purchase Order", sample_order: "Sample Order", proforma_invoice: "Proforma Invoice",
@@ -82,10 +91,178 @@ function StageBadge({ cell, notReachedLabel }: { cell: StageCell; notReachedLabe
   );
 }
 
+const monthLabel = (ym: string) => format(new Date(`${ym}-01T00:00:00`), "MMM yyyy");
+
+function TargetVsActual({ actual, target, money }: { actual: number; target: number | null; money?: boolean }) {
+  const fmt = (n: number) => (money ? inr(n) : String(n));
+  if (target == null || target === 0) {
+    return <span className="text-sm">{fmt(actual)} <span className="text-muted-foreground text-xs">/ —</span></span>;
+  }
+  const met = actual >= target;
+  return (
+    <span className={`text-sm font-medium ${met ? "text-green-600" : "text-red-600"}`}>
+      {fmt(actual)} <span className="font-normal text-muted-foreground text-xs">/ {fmt(target)}</span>
+    </span>
+  );
+}
+
+function ScorecardDialog({ person, onClose }: { person: TeamKpi; onClose: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editingMonth, setEditingMonth] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ leads: "", quotes: "", revenue: "" });
+
+  const { data, isLoading } = useQuery<ScorecardResponse>({
+    queryKey: ["kpi-scorecard", person.ownerId],
+    queryFn: () => api<ScorecardResponse>(`/v1/reports/kpi/scorecard?userId=${person.ownerId}`),
+    enabled: person.ownerId != null,
+  });
+
+  const saveTarget = useMutation({
+    mutationFn: (body: { userId: number; month: string; targetLeads: number; targetQuotes: number; targetRevenue: number }) =>
+      api("/v1/kpi/targets", { method: "PUT", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["kpi-scorecard", person.ownerId] });
+      setEditingMonth(null);
+      toast({ title: "Target saved" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to save target", description: e.message, variant: "destructive" }),
+  });
+
+  const startEdit = (m: ScorecardMonth) => {
+    setEditingMonth(m.month);
+    setDraft({
+      leads: String(m.targetLeads ?? ""),
+      quotes: String(m.targetQuotes ?? ""),
+      revenue: String(m.targetRevenue ?? ""),
+    });
+  };
+  const submitEdit = (month: string) => {
+    saveTarget.mutate({
+      userId: person.ownerId!,
+      month,
+      targetLeads: parseInt(draft.leads, 10) || 0,
+      targetQuotes: parseInt(draft.quotes, 10) || 0,
+      targetRevenue: Number(draft.revenue) || 0,
+    });
+  };
+
+  const months = data?.months ?? [];
+  const chartData = months.map((m) => ({
+    name: monthLabel(m.month),
+    Revenue: m.actualRevenue,
+    "Revenue Target": m.targetRevenue ?? 0,
+    Leads: m.actualLeads,
+    Quotes: m.actualQuotes,
+  }));
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4" /> Monthly scorecard — {person.owner}
+          </DialogTitle>
+        </DialogHeader>
+
+        {isLoading && <Skeleton className="h-48 w-full" />}
+
+        {!isLoading && months.length > 0 && (
+          <>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="opacity-40" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="rev" tick={{ fontSize: 11 }} tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))} />
+                  <YAxis yAxisId="cnt" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip formatter={(value: number, name: string) => (name.startsWith("Revenue") ? inr(value) : value)} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar yAxisId="rev" dataKey="Revenue" fill="#16a34a" radius={[3, 3, 0, 0]} />
+                  <Line yAxisId="rev" dataKey="Revenue Target" stroke="#dc2626" strokeDasharray="5 3" dot={false} type="monotone" />
+                  <Line yAxisId="cnt" dataKey="Leads" stroke="#2563eb" dot={{ r: 2 }} type="monotone" />
+                  <Line yAxisId="cnt" dataKey="Quotes" stroke="#9333ea" dot={{ r: 2 }} type="monotone" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month</TableHead>
+                  <TableHead>Leads (actual / target)</TableHead>
+                  <TableHead>Quotes (actual / target)</TableHead>
+                  <TableHead className="text-right">Orders</TableHead>
+                  <TableHead className="text-right">Revenue (actual / target)</TableHead>
+                  <TableHead className="w-24" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...months].reverse().map((m) => (
+                  <TableRow key={m.month}>
+                    <TableCell className="font-medium text-sm">{monthLabel(m.month)}</TableCell>
+                    {editingMonth === m.month ? (
+                      <>
+                        <TableCell>
+                          <Input type="number" min={0} className="h-8 w-20" value={draft.leads}
+                            onChange={(e) => setDraft((d0) => ({ ...d0, leads: e.target.value }))} placeholder="Leads" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" min={0} className="h-8 w-20" value={draft.quotes}
+                            onChange={(e) => setDraft((d0) => ({ ...d0, quotes: e.target.value }))} placeholder="Quotes" />
+                        </TableCell>
+                        <TableCell className="text-right text-sm">{m.actualOrders}</TableCell>
+                        <TableCell className="text-right">
+                          <Input type="number" min={0} className="h-8 w-32 ml-auto" value={draft.revenue}
+                            onChange={(e) => setDraft((d0) => ({ ...d0, revenue: e.target.value }))} placeholder="Revenue ₹" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1 justify-end">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" disabled={saveTarget.isPending}
+                              onClick={() => submitEdit(m.month)} title="Save targets">
+                              <Check className="w-4 h-4 text-green-600" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingMonth(null)} title="Cancel">
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell><TargetVsActual actual={m.actualLeads} target={m.targetLeads} /></TableCell>
+                        <TableCell><TargetVsActual actual={m.actualQuotes} target={m.targetQuotes} /></TableCell>
+                        <TableCell className="text-right text-sm">{m.actualOrders}</TableCell>
+                        <TableCell className="text-right"><TargetVsActual actual={m.actualRevenue} target={m.targetRevenue} money /></TableCell>
+                        <TableCell>
+                          <div className="flex justify-end">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(m)} title="Set monthly targets">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <p className="text-xs text-muted-foreground">
+              Green = target met, red = below target. Leads count by lead creation month; quotes and revenue by the month
+              the quote/order was created, following the same lead → order chain as the funnel report. Click the pencil to set targets.
+            </p>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function KpiReports() {
   const [search, setSearch] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [historyLead, setHistoryLead] = useState<FunnelRow | null>(null);
+  const [scorecardPerson, setScorecardPerson] = useState<TeamKpi | null>(null);
 
   const { data, isLoading } = useQuery<KpiResponse>({
     queryKey: ["kpi-report"],
@@ -387,15 +564,16 @@ export function KpiReports() {
                     <TableHead className="text-right">Avg Lead → Order</TableHead>
                     <TableHead className="text-right">Revenue</TableHead>
                     <TableHead className="text-right">Overdue Stages</TableHead>
+                    <TableHead className="w-28" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isLoading && <TableRow><TableCell colSpan={9}><Skeleton className="h-6 w-full" /></TableCell></TableRow>}
+                  {isLoading && <TableRow><TableCell colSpan={10}><Skeleton className="h-6 w-full" /></TableCell></TableRow>}
                   {!isLoading && (data?.teamKpis ?? []).length === 0 && (
-                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No data yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No data yet.</TableCell></TableRow>
                   )}
                   {(data?.teamKpis ?? []).map((t) => (
-                    <TableRow key={t.owner}>
+                    <TableRow key={t.ownerId ?? "unassigned"}>
                       <TableCell className="font-medium">{t.owner}</TableCell>
                       <TableCell className="text-right">{t.leads}</TableCell>
                       <TableCell className="text-right">{t.opportunities}</TableCell>
@@ -408,6 +586,13 @@ export function KpiReports() {
                         {t.overdueStages > 0
                           ? <Badge variant="destructive" className="font-normal">{t.overdueStages}</Badge>
                           : <span className="text-muted-foreground">0</span>}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {t.ownerId != null && (
+                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setScorecardPerson(t)}>
+                            <BarChart3 className="w-3.5 h-3.5 mr-1" /> Scorecard
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -459,6 +644,8 @@ export function KpiReports() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {scorecardPerson && <ScorecardDialog person={scorecardPerson} onClose={() => setScorecardPerson(null)} />}
 
       {/* Status change history dialog */}
       <Dialog open={historyLead != null} onOpenChange={(o) => !o && setHistoryLead(null)}>

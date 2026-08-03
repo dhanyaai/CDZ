@@ -3,6 +3,6 @@ name: Status history tracking
 description: How status/stage transitions are recorded and the migration convention for new tables.
 ---
 
-- Every status/stage change should go through `recordStatusChange` (api-server lib/statusHistory.ts) — including indirect paths (payment-driven invoice status, credit-note apply, sample convert-to-quote/return, lead convert). When adding any new route that mutates a status column, instrument it too or the KPI history view silently misses it.
-- **Migration convention:** `drizzle-kit generate` is broken here (meta snapshots stop at 0005 while sql files go beyond). New schema = hand-write `lib/db/migrations/NNNN_*.sql` (idempotent: IF NOT EXISTS / duplicate_object guards) + append entry to `meta/_journal.json` (idx, version "7", when=now ms, tag). Dev applies via `pnpm --filter @workspace/db run push`; prod applies via startup migrate().
-- Order-processing form step dates in `order_processing_forms.formData` are date-only strings (YYYY-MM-DD); compare on calendar days, never `new Date(str)` vs timestamptz directly (timezone off-by-one).
+- Every status/stage change must be recorded through the shared status-history helper — including indirect paths (payment-driven invoice status, credit-note apply, sample conversions, lead convert). **Why:** the KPI history view silently misses changes otherwise. **How to apply:** when adding any route that mutates a status column, instrument it too.
+- **Migration convention:** auto-generation of migrations is broken in this repo (meta snapshots are stale). New schema changes need a hand-written idempotent SQL migration (IF NOT EXISTS / duplicate_object guards) plus a matching journal entry, so startup migrate() applies it cleanly in prod while dev uses push.
+- Order-processing form step dates are date-only strings (YYYY-MM-DD); compare on calendar days, never directly against timestamptz values (timezone off-by-one).

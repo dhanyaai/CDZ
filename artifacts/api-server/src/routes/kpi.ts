@@ -4,6 +4,7 @@ import {
   db, leadsTable, opportunitiesTable, quotesTable, salesOrdersTable,
   invoicesTable, paymentsTable, usersTable, purchaseOrdersTable,
   grnTable, vendorsTable, orderProcessingFormsTable, statusHistoryTable,
+  salesTargetsTable,
 } from "@workspace/db";
 
 const router = Router();
@@ -116,6 +117,7 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
 
     return {
       leadId: lead.id,
+      ownerId: lead.ownerId,
       title: lead.title,
       companyName: lead.companyName,
       owner: lead.ownerId != null ? userMap.get(lead.ownerId) ?? null : null,
@@ -133,14 +135,16 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   }).sort((a, b) => b.leadCreatedAt.localeCompare(a.leadCreatedAt));
 
   // Team KPIs (per lead owner)
-  const team = new Map<string, {
-    owner: string; leads: number; opportunities: number; quotes: number;
+  // Keyed by owner ID (stable identity), not display name — two users with the
+  // same name must not be merged. Leads without a resolvable owner go to "unassigned".
+  const team = new Map<number | "unassigned", {
+    owner: string; ownerId: number | null; leads: number; opportunities: number; quotes: number;
     orders: number; revenue: number; leadToOrderDaysSum: number; leadToOrderCount: number; overdueStages: number;
   }>();
   for (const row of funnel) {
-    const key = row.owner ?? "Unassigned";
+    const key = row.owner != null && row.ownerId != null ? row.ownerId : "unassigned";
     let t = team.get(key);
-    if (!t) { t = { owner: key, leads: 0, opportunities: 0, quotes: 0, orders: 0, revenue: 0, leadToOrderDaysSum: 0, leadToOrderCount: 0, overdueStages: 0 }; team.set(key, t); }
+    if (!t) { t = { owner: row.owner ?? "Unassigned", ownerId: key === "unassigned" ? null : key, leads: 0, opportunities: 0, quotes: 0, orders: 0, revenue: 0, leadToOrderDaysSum: 0, leadToOrderCount: 0, overdueStages: 0 }; team.set(key, t); }
     t.leads++;
     if (row.opportunity.date) t.opportunities++;
     if (row.quote.date) t.quotes++;
@@ -154,6 +158,7 @@ router.get("/v1/reports/kpi", async (req, res): Promise<void> => {
   }
   const teamKpis = Array.from(team.values()).map((t) => ({
     owner: t.owner,
+    ownerId: t.ownerId,
     leads: t.leads,
     opportunities: t.opportunities,
     quotes: t.quotes,
@@ -353,6 +358,138 @@ router.get("/v1/reports/kpi/history", async (req, res): Promise<void> => {
     .orderBy(statusHistoryTable.changedAt);
 
   res.json({ history: rows.map((r) => ({ ...r, changedAt: r.changedAt.toISOString() })) });
+});
+
+// GET /v1/reports/kpi/scorecard?userId=N — monthly target vs actual for one salesperson
+// Actuals use the same funnel chain logic as /v1/reports/kpi, bucketed by the month
+// each stage was reached (leads by lead creation, quotes by quote creation, revenue by order creation).
+router.get("/v1/reports/kpi/scorecard", async (req, res): Promise<void> => {
+  const cid = req.companyId;
+  const userId = parseInt(String(req.query.userId ?? ""), 10);
+  if (Number.isNaN(userId)) { res.status(400).json({ error: "userId is required" }); return; }
+
+  const [user] = await db.select({ id: usersTable.id, name: usersTable.name })
+    .from(usersTable).where(and(eq(usersTable.companyId, cid), eq(usersTable.id, userId)));
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+  const [leads, opps, quotes, orders, targets] = await Promise.all([
+    db.select({ id: leadsTable.id, createdAt: leadsTable.createdAt })
+      .from(leadsTable).where(and(eq(leadsTable.companyId, cid), eq(leadsTable.ownerId, userId))),
+    db.select({ id: opportunitiesTable.id, leadId: opportunitiesTable.leadId, createdAt: opportunitiesTable.createdAt })
+      .from(opportunitiesTable).where(eq(opportunitiesTable.companyId, cid)),
+    db.select({ id: quotesTable.id, opportunityId: quotesTable.opportunityId, createdAt: quotesTable.createdAt })
+      .from(quotesTable).where(eq(quotesTable.companyId, cid)),
+    db.select({
+      id: salesOrdersTable.id, quoteId: salesOrdersTable.quoteId,
+      grandTotal: salesOrdersTable.grandTotal, createdAt: salesOrdersTable.createdAt, status: salesOrdersTable.status,
+    }).from(salesOrdersTable).where(and(eq(salesOrdersTable.companyId, cid), isNull(salesOrdersTable.deletedAt))),
+    db.select().from(salesTargetsTable)
+      .where(and(eq(salesTargetsTable.companyId, cid), eq(salesTargetsTable.userId, userId))),
+  ]);
+
+  // Earliest linked record per parent (same chain logic as the main report)
+  const oppByLead = new Map<number, typeof opps[number]>();
+  for (const o of opps) {
+    if (o.leadId == null) continue;
+    const prev = oppByLead.get(o.leadId);
+    if (!prev || o.createdAt < prev.createdAt) oppByLead.set(o.leadId, o);
+  }
+  const quoteByOpp = new Map<number, typeof quotes[number]>();
+  for (const q of quotes) {
+    if (q.opportunityId == null) continue;
+    const prev = quoteByOpp.get(q.opportunityId);
+    if (!prev || q.createdAt < prev.createdAt) quoteByOpp.set(q.opportunityId, q);
+  }
+  const orderByQuote = new Map<number, typeof orders[number]>();
+  for (const so of orders) {
+    if (so.quoteId == null) continue;
+    const prev = orderByQuote.get(so.quoteId);
+    if (!prev || so.createdAt < prev.createdAt) orderByQuote.set(so.quoteId, so);
+  }
+
+  const ym = (dt: Date) => `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
+  type Bucket = { leads: number; quotes: number; orders: number; revenue: number };
+  const buckets = new Map<string, Bucket>();
+  const bucket = (m: string): Bucket => {
+    let b = buckets.get(m);
+    if (!b) { b = { leads: 0, quotes: 0, orders: 0, revenue: 0 }; buckets.set(m, b); }
+    return b;
+  };
+
+  for (const lead of leads) {
+    bucket(ym(lead.createdAt)).leads++;
+    const opp = oppByLead.get(lead.id);
+    const quote = opp ? quoteByOpp.get(opp.id) : undefined;
+    if (quote) bucket(ym(quote.createdAt)).quotes++;
+    const order = quote ? orderByQuote.get(quote.id) : undefined;
+    if (order && order.status !== "Cancelled") {
+      const b = bucket(ym(order.createdAt));
+      b.orders++;
+      b.revenue += Number(order.grandTotal ?? 0);
+    }
+  }
+
+  const targetByMonth = new Map(targets.map((t) => [t.month, t]));
+
+  // Month range: from earliest month with data or a target, up to the current month (at least 6 months back)
+  const now = new Date();
+  const monthKeys = [...buckets.keys(), ...targetByMonth.keys()];
+  const currentYm = ym(now);
+  const sixBack = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
+  let start = ym(sixBack);
+  for (const k of monthKeys) if (k < start) start = k;
+
+  const months: string[] = [];
+  let [y, m] = start.split("-").map(Number);
+  while (`${y}-${String(m).padStart(2, "0")}` <= currentYm) {
+    months.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+
+  const rows = months.map((month) => {
+    const a = buckets.get(month) ?? { leads: 0, quotes: 0, orders: 0, revenue: 0 };
+    const t = targetByMonth.get(month) ?? null;
+    return {
+      month,
+      actualLeads: a.leads,
+      actualQuotes: a.quotes,
+      actualOrders: a.orders,
+      actualRevenue: a.revenue,
+      targetLeads: t ? t.targetLeads : null,
+      targetQuotes: t ? t.targetQuotes : null,
+      targetRevenue: t ? Number(t.targetRevenue) : null,
+    };
+  });
+
+  res.json({ user: { id: user.id, name: user.name }, months: rows });
+});
+
+// PUT /v1/kpi/targets — upsert a monthly target for a user
+router.put("/v1/kpi/targets", async (req, res): Promise<void> => {
+  const cid = req.companyId;
+  const { userId, month, targetLeads, targetQuotes, targetRevenue } = req.body ?? {};
+  const uid = parseInt(String(userId ?? ""), 10);
+  if (Number.isNaN(uid) || typeof month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    res.status(400).json({ error: "userId and month (YYYY-MM) are required" });
+    return;
+  }
+  const tl = Math.max(0, parseInt(String(targetLeads ?? 0), 10) || 0);
+  const tq = Math.max(0, parseInt(String(targetQuotes ?? 0), 10) || 0);
+  const tr = Math.max(0, Number(targetRevenue ?? 0) || 0);
+
+  const [user] = await db.select({ id: usersTable.id }).from(usersTable)
+    .where(and(eq(usersTable.companyId, cid), eq(usersTable.id, uid)));
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+  const [row] = await db.insert(salesTargetsTable)
+    .values({ companyId: cid, userId: uid, month, targetLeads: tl, targetQuotes: tq, targetRevenue: String(tr) })
+    .onConflictDoUpdate({
+      target: [salesTargetsTable.companyId, salesTargetsTable.userId, salesTargetsTable.month],
+      set: { targetLeads: tl, targetQuotes: tq, targetRevenue: String(tr), updatedAt: new Date() },
+    })
+    .returning();
+  res.json({ target: row });
 });
 
 export default router;
