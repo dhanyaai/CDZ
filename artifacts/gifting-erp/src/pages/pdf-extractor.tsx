@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { useCreateProduct, useListProducts, useListVendors, getListProductsQueryKey } from "@workspace/api-client-react";
+import { useCreateProduct, useListProducts, useListVendors, useCreateVendor, getListProductsQueryKey, getListVendorsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -204,6 +204,19 @@ export function PdfExtractor() {
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [addingVendor, setAddingVendor] = useState(false);
+  const [newVendorName, setNewVendorName] = useState("");
+  const createVendor = useCreateVendor({
+    mutation: {
+      onSuccess: (vendor: { id: number; name: string }) => {
+        queryClient.invalidateQueries({ queryKey: getListVendorsQueryKey() });
+        setCreateItemForm(f => ({ ...f, vendorId: String(vendor.id) }));
+        setAddingVendor(false); setNewVendorName("");
+        toast({ title: `Vendor "${vendor.name}" created` });
+      },
+      onError: () => toast({ title: "Failed to create vendor", variant: "destructive" }),
+    },
+  });
 
   // Same category source as the Products master: existing product categories + any just-added ones
   const categoryOptions = Array.from(new Set([
@@ -803,7 +816,7 @@ export function PdfExtractor() {
       )}
 
       {/* Create Item dialog */}
-      <Dialog open={createItemOpen} onOpenChange={(open) => { if (!open && !createProduct.isPending) { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); setAddingCategory(false); setNewCategoryName(""); } }}>
+      <Dialog open={createItemOpen} onOpenChange={(open) => { if (!open && !createProduct.isPending) { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); setAddingCategory(false); setNewCategoryName(""); setAddingVendor(false); setNewVendorName(""); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -983,13 +996,40 @@ export function PdfExtractor() {
 
               <div className="space-y-1.5">
                 <Label className="text-sm">Vendor</Label>
-                <Select value={createItemForm.vendorId} onValueChange={v => setCreateItemForm(f => ({ ...f, vendorId: v === "__none__" ? "" : v }))}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="No vendor" /></SelectTrigger>
-                  <SelectContent position="popper">
-                    <SelectItem value="__none__">No vendor</SelectItem>
-                    {(vendors ?? []).map((v: { id: number; name: string }) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                {addingVendor ? (
+                  <div className="flex gap-2">
+                    <Input autoFocus placeholder="New vendor name" className="h-9"
+                      value={newVendorName} onChange={e => setNewVendorName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const v = newVendorName.trim();
+                          if (v) createVendor.mutate({ data: { name: v } });
+                          else { setAddingVendor(false); setNewVendorName(""); }
+                        }
+                        if (e.key === "Escape") { setAddingVendor(false); setNewVendorName(""); }
+                      }} />
+                    <Button type="button" size="sm" className="h-9" disabled={createVendor.isPending} onClick={() => {
+                      const v = newVendorName.trim();
+                      if (v) createVendor.mutate({ data: { name: v } });
+                      else { setAddingVendor(false); setNewVendorName(""); }
+                    }}>
+                      {createVendor.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : newVendorName.trim() ? "Add" : "Cancel"}
+                    </Button>
+                  </div>
+                ) : (
+                  <Select value={createItemForm.vendorId} onValueChange={v => {
+                    if (v === "__add_new__") setAddingVendor(true);
+                    else setCreateItemForm(f => ({ ...f, vendorId: v === "__none__" ? "" : v }));
+                  }}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="No vendor" /></SelectTrigger>
+                    <SelectContent position="popper">
+                      <SelectItem value="__none__">No vendor</SelectItem>
+                      {(vendors ?? []).map((v: { id: number; name: string }) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
+                      <SelectItem value="__add_new__" className="text-primary font-medium">+ Add new vendor…</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -1004,7 +1044,7 @@ export function PdfExtractor() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); setAddingCategory(false); setNewCategoryName(""); }} disabled={createProduct.isPending}>
+            <Button variant="outline" size="sm" onClick={() => { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); setAddingCategory(false); setNewCategoryName(""); setAddingVendor(false); setNewVendorName(""); }} disabled={createProduct.isPending}>
               Cancel
             </Button>
             <Button size="sm" onClick={submitCreateItem} disabled={createProduct.isPending || createItemUploading} className="gap-1.5">
