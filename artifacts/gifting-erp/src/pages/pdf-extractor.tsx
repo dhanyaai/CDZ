@@ -803,7 +803,7 @@ export function PdfExtractor() {
       )}
 
       {/* Create Item dialog */}
-      <Dialog open={createItemOpen} onOpenChange={(open) => { if (!open && !createProduct.isPending) { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); } }}>
+      <Dialog open={createItemOpen} onOpenChange={(open) => { if (!open && !createProduct.isPending) { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); setAddingCategory(false); setNewCategoryName(""); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1004,7 +1004,7 @@ export function PdfExtractor() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); }} disabled={createProduct.isPending}>
+            <Button variant="outline" size="sm" onClick={() => { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); setAddingCategory(false); setNewCategoryName(""); }} disabled={createProduct.isPending}>
               Cancel
             </Button>
             <Button size="sm" onClick={submitCreateItem} disabled={createProduct.isPending || createItemUploading} className="gap-1.5">
