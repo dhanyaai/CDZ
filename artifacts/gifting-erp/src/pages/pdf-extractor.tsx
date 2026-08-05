@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { useCreateProduct, useListVendors, getListProductsQueryKey } from "@workspace/api-client-react";
+import { useCreateProduct, useListProducts, useListVendors, getListProductsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -200,6 +200,17 @@ export function PdfExtractor() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: vendors } = useListVendors();
+  const { data: allProducts } = useListProducts();
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+
+  // Same category source as the Products master: existing product categories + any just-added ones
+  const categoryOptions = Array.from(new Set([
+    ...(((allProducts ?? []).map((p: { category?: string | null }) => p.category).filter(Boolean)) as string[]),
+    ...customCategories,
+  ]));
+  if (!categoryOptions.length) categoryOptions.push(...ITEM_CATEGORIES);
 
   const createProduct = useCreateProduct({
     mutation: {
@@ -841,12 +852,39 @@ export function PdfExtractor() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-sm">Category <span className="text-destructive">*</span></Label>
-                  <Select value={createItemForm.category} onValueChange={v => setCreateItemForm(f => ({ ...f, category: v }))}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Select category…" /></SelectTrigger>
-                    <SelectContent position="popper">
-                      {ITEM_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  {addingCategory ? (
+                    <div className="flex gap-2">
+                      <Input autoFocus placeholder="New category name" className="h-9"
+                        value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const v = newCategoryName.trim();
+                            if (v) { setCustomCategories(prev => prev.includes(v) ? prev : [...prev, v]); setCreateItemForm(f => ({ ...f, category: v })); }
+                            setAddingCategory(false); setNewCategoryName("");
+                          }
+                          if (e.key === "Escape") { setAddingCategory(false); setNewCategoryName(""); }
+                        }} />
+                      <Button type="button" size="sm" className="h-9" onClick={() => {
+                        const v = newCategoryName.trim();
+                        if (v) { setCustomCategories(prev => prev.includes(v) ? prev : [...prev, v]); setCreateItemForm(f => ({ ...f, category: v })); }
+                        setAddingCategory(false); setNewCategoryName("");
+                      }}>
+                        {newCategoryName.trim() ? "Add" : "Cancel"}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select value={createItemForm.category} onValueChange={v => {
+                      if (v === "__add_new__") { setAddingCategory(true); }
+                      else setCreateItemForm(f => ({ ...f, category: v }));
+                    }}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Select category…" /></SelectTrigger>
+                      <SelectContent position="popper">
+                        {categoryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        <SelectItem value="__add_new__" className="text-primary font-medium">+ Add new category…</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm">Product Type</Label>
