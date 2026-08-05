@@ -17,6 +17,25 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat",
+  "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh",
+  "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab",
+  "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh",
+  "Uttarakhand", "West Bengal", "Delhi", "Jammu & Kashmir", "Ladakh",
+];
+const VENDOR_PAYMENT_TERMS = ["Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "Advance", "COD", "LC", "Custom"];
+
+interface NewVendorForm {
+  name: string; contactPerson: string; email: string; phone: string; gstNumber: string;
+  address: string; city: string; state: string; pincode: string; paymentTerms: string;
+  bankAccount: string; leadTimeDays: string;
+}
+const EMPTY_VENDOR: NewVendorForm = {
+  name: "", contactPerson: "", email: "", phone: "", gstNumber: "",
+  address: "", city: "", state: "", pincode: "", paymentTerms: "", bankAccount: "", leadTimeDays: "7",
+};
+
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 interface ExtractedImage {
@@ -205,18 +224,38 @@ export function PdfExtractor() {
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [addingVendor, setAddingVendor] = useState(false);
-  const [newVendorName, setNewVendorName] = useState("");
+  const [newVendorForm, setNewVendorForm] = useState<NewVendorForm>(EMPTY_VENDOR);
   const createVendor = useCreateVendor({
     mutation: {
       onSuccess: (vendor: { id: number; name: string }) => {
         queryClient.invalidateQueries({ queryKey: getListVendorsQueryKey() });
         setCreateItemForm(f => ({ ...f, vendorId: String(vendor.id) }));
-        setAddingVendor(false); setNewVendorName("");
+        setAddingVendor(false); setNewVendorForm(EMPTY_VENDOR);
         toast({ title: `Vendor "${vendor.name}" created` });
       },
       onError: () => toast({ title: "Failed to create vendor", variant: "destructive" }),
     },
   });
+
+  const submitNewVendor = () => {
+    const name = newVendorForm.name.trim();
+    if (!name) { toast({ title: "Vendor name is required", variant: "destructive" }); return; }
+    const payload = {
+      name,
+      contactPerson: newVendorForm.contactPerson || undefined,
+      email: newVendorForm.email || undefined,
+      phone: newVendorForm.phone || undefined,
+      gstNumber: newVendorForm.gstNumber || undefined,
+      address: newVendorForm.address || undefined,
+      city: newVendorForm.city || undefined,
+      state: newVendorForm.state || undefined,
+      pincode: newVendorForm.pincode || undefined,
+      paymentTerms: newVendorForm.paymentTerms || undefined,
+      bankAccount: newVendorForm.bankAccount || undefined,
+      leadTimeDays: newVendorForm.leadTimeDays ? Number(newVendorForm.leadTimeDays) : undefined,
+    };
+    createVendor.mutate({ data: payload });
+  };
 
   // Same category source as the Products master: existing product categories + any just-added ones
   const categoryOptions = Array.from(new Set([
@@ -816,7 +855,7 @@ export function PdfExtractor() {
       )}
 
       {/* Create Item dialog */}
-      <Dialog open={createItemOpen} onOpenChange={(open) => { if (!open && !createProduct.isPending) { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); setAddingCategory(false); setNewCategoryName(""); setAddingVendor(false); setNewVendorName(""); } }}>
+      <Dialog open={createItemOpen} onOpenChange={(open) => { if (!open && !createProduct.isPending) { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); setAddingCategory(false); setNewCategoryName(""); setAddingVendor(false); setNewVendorForm(EMPTY_VENDOR); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -996,40 +1035,17 @@ export function PdfExtractor() {
 
               <div className="space-y-1.5">
                 <Label className="text-sm">Vendor</Label>
-                {addingVendor ? (
-                  <div className="flex gap-2">
-                    <Input autoFocus placeholder="New vendor name" className="h-9"
-                      value={newVendorName} onChange={e => setNewVendorName(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          const v = newVendorName.trim();
-                          if (v) createVendor.mutate({ data: { name: v } });
-                          else { setAddingVendor(false); setNewVendorName(""); }
-                        }
-                        if (e.key === "Escape") { setAddingVendor(false); setNewVendorName(""); }
-                      }} />
-                    <Button type="button" size="sm" className="h-9" disabled={createVendor.isPending} onClick={() => {
-                      const v = newVendorName.trim();
-                      if (v) createVendor.mutate({ data: { name: v } });
-                      else { setAddingVendor(false); setNewVendorName(""); }
-                    }}>
-                      {createVendor.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : newVendorName.trim() ? "Add" : "Cancel"}
-                    </Button>
-                  </div>
-                ) : (
-                  <Select value={createItemForm.vendorId} onValueChange={v => {
-                    if (v === "__add_new__") setAddingVendor(true);
-                    else setCreateItemForm(f => ({ ...f, vendorId: v === "__none__" ? "" : v }));
-                  }}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="No vendor" /></SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="__none__">No vendor</SelectItem>
-                      {(vendors ?? []).map((v: { id: number; name: string }) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
-                      <SelectItem value="__add_new__" className="text-primary font-medium">+ Add new vendor…</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
+                <Select value={createItemForm.vendorId} onValueChange={v => {
+                  if (v === "__add_new__") { setNewVendorForm(EMPTY_VENDOR); setAddingVendor(true); }
+                  else setCreateItemForm(f => ({ ...f, vendorId: v === "__none__" ? "" : v }));
+                }}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="No vendor" /></SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="__none__">No vendor</SelectItem>
+                    {(vendors ?? []).map((v: { id: number; name: string }) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
+                    <SelectItem value="__add_new__" className="text-primary font-medium">+ Add new vendor…</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex items-center gap-2">
@@ -1044,12 +1060,107 @@ export function PdfExtractor() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); setAddingCategory(false); setNewCategoryName(""); setAddingVendor(false); setNewVendorName(""); }} disabled={createProduct.isPending}>
+            <Button variant="outline" size="sm" onClick={() => { setCreateItemOpen(false); setCreateItemForm(EMPTY_ITEM); setAddingCategory(false); setNewCategoryName(""); setAddingVendor(false); setNewVendorForm(EMPTY_VENDOR); }} disabled={createProduct.isPending}>
               Cancel
             </Button>
             <Button size="sm" onClick={submitCreateItem} disabled={createProduct.isPending || createItemUploading} className="gap-1.5">
               {createProduct.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
               {createProduct.isPending ? "Creating…" : "Create Item"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Vendor dialog (full form, same fields as Vendors page) */}
+      <Dialog open={addingVendor} onOpenChange={(open) => { if (!open && !createVendor.isPending) { setAddingVendor(false); setNewVendorForm(EMPTY_VENDOR); } }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>New Vendor</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-sm">Vendor Name <span className="text-destructive">*</span></Label>
+              <Input autoFocus placeholder="Company / supplier name" className="h-9"
+                value={newVendorForm.name} onChange={e => setNewVendorForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">Contact Person</Label>
+                <Input placeholder="Name" className="h-9"
+                  value={newVendorForm.contactPerson} onChange={e => setNewVendorForm(f => ({ ...f, contactPerson: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Phone</Label>
+                <Input placeholder="+91 98765 43210" className="h-9"
+                  value={newVendorForm.phone} onChange={e => setNewVendorForm(f => ({ ...f, phone: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Email</Label>
+              <Input type="email" placeholder="vendor@example.com" className="h-9"
+                value={newVendorForm.email} onChange={e => setNewVendorForm(f => ({ ...f, email: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">GST Number</Label>
+              <Input placeholder="e.g. 27AAPFU0939F1ZV" className="h-9 font-mono uppercase"
+                value={newVendorForm.gstNumber} onChange={e => setNewVendorForm(f => ({ ...f, gstNumber: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Street Address</Label>
+              <Input placeholder="Building, street, area" className="h-9"
+                value={newVendorForm.address} onChange={e => setNewVendorForm(f => ({ ...f, address: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">City</Label>
+                <Input placeholder="City" className="h-9"
+                  value={newVendorForm.city} onChange={e => setNewVendorForm(f => ({ ...f, city: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">State</Label>
+                <Select value={newVendorForm.state || "__none__"} onValueChange={v => setNewVendorForm(f => ({ ...f, state: v === "__none__" ? "" : v }))}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="— State —" /></SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="__none__">— State —</SelectItem>
+                    {INDIAN_STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Pincode</Label>
+                <Input placeholder="400001" className="h-9"
+                  value={newVendorForm.pincode} onChange={e => setNewVendorForm(f => ({ ...f, pincode: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">Payment Terms</Label>
+                <Select value={newVendorForm.paymentTerms || "__none__"} onValueChange={v => setNewVendorForm(f => ({ ...f, paymentTerms: v === "__none__" ? "" : v }))}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="— Select —" /></SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="__none__">— Select —</SelectItem>
+                    {VENDOR_PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Lead Time (days)</Label>
+                <Input type="number" min={0} className="h-9"
+                  value={newVendorForm.leadTimeDays} onChange={e => setNewVendorForm(f => ({ ...f, leadTimeDays: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Bank Account</Label>
+              <Input placeholder="Account details" className="h-9"
+                value={newVendorForm.bankAccount} onChange={e => setNewVendorForm(f => ({ ...f, bankAccount: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" disabled={createVendor.isPending}
+              onClick={() => { setAddingVendor(false); setNewVendorForm(EMPTY_VENDOR); }}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={submitNewVendor} disabled={createVendor.isPending} className="gap-1.5">
+              {createVendor.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              {createVendor.isPending ? "Creating…" : "Create Vendor"}
             </Button>
           </DialogFooter>
         </DialogContent>
